@@ -1,0 +1,408 @@
+package com.example.demo.service;
+
+import com.example.demo.entity.*;
+import com.example.demo.exception.BusinessException;
+import com.example.demo.exception.NotFoundException;
+import com.example.demo.repository.*;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+
+@Slf4j
+@Service
+public class LessonService {
+
+    @Autowired
+    private LessonRepository lessonRepository;
+
+    @Autowired
+    private TutorRepository tutorRepository;
+
+    @Autowired
+    private StudentRepository studentRepository;
+
+    @Autowired
+    private CourseRepository courseRepository;
+
+    @Autowired
+    private PaymentService paymentService;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private LessonConflictChecker conflictChecker;
+
+    public Student getStudentById(Long studentId) {
+        return studentRepository.findByIdWithRates(studentId)
+                .orElseThrow(() -> new NotFoundException("Ученик", "id", studentId));
+    }
+
+    @Transactional
+    public Lesson createLesson(Long tutorId, Long studentId, Long courseId,
+                               LocalDate lessonDate, LocalTime startTime, LocalTime endTime) {
+        log.info("Создание занятия: tutorId={}, studentId={}, date={}, time={}-{}",
+                tutorId, studentId, lessonDate, startTime, endTime);
+
+        Tutor tutor = tutorRepository.findById(tutorId)
+                .orElseThrow(() -> new NotFoundException("Репетитор", "id", tutorId));
+        Student student = studentRepository.findByIdWithRates(studentId)
+                .orElseThrow(() -> new NotFoundException("Ученик", "id", studentId));
+
+        Course course = null;
+        if (courseId != null) {
+            course = courseRepository.findByIdWithStudents(courseId).orElse(null);
+            if (course != null) {
+                boolean alreadyEnrolled = course.getEnrolledStudents().stream()
+                        .anyMatch(s -> s.getId().equals(studentId));
+                if (!alreadyEnrolled) {
+                    course.getEnrolledStudents().add(student);
+                    courseRepository.save(course);
+                    log.info("✅ Ученик {} автоматически записан на курс {}", student.getFullName(), course.getName());
+                }
+            }
+        }
+
+        String conflict = conflictChecker.checkConflicts(
+                tutorId, student.getEmail(), lessonDate, startTime, endTime);
+
+        if (conflict != null) {
+            log.warn("Конфликт при создании занятия: {}", conflict);
+            throw new BusinessException(conflict);
+        }
+
+        Lesson lesson = new Lesson(tutor, student, course, lessonDate, startTime, endTime);
+        Lesson savedLesson = lessonRepository.save(lesson);
+
+        log.info("Занятие успешно создано: id={}", savedLesson.getId());
+        return savedLesson;
+    }
+
+    public List<Lesson> getTodayLessons(Long tutorId) {
+        log.debug("Загрузка занятий на сегодня для репетитора: {}", tutorId);
+        return lessonRepository.findByTutorIdAndLessonDateOrderByStartTimeAsc(tutorId, LocalDate.now());
+    }
+
+    public List<Lesson> getUpcomingLessons(Long tutorId) {
+        log.debug("Загрузка предстоящих занятий для репетитора: {}", tutorId);
+        return lessonRepository.findUpcomingLessons(tutorId, LocalDate.now());
+    }
+
+    public List<Lesson> getAllLessons(Long tutorId) {
+        log.debug("Загрузка всех занятий для репетитора: {}", tutorId);
+        return lessonRepository.findAllByTutorId(tutorId);
+    }
+
+    public List<Lesson> getArchivedLessons(Long tutorId) {
+        log.debug("Загрузка архивных занятий для репетитора: {}", tutorId);
+        return lessonRepository.findArchivedLessons(tutorId);
+    }
+
+    public List<Lesson> getLessonsByStudent(Long studentId) {
+        log.debug("Загрузка занятий для ученика: {}", studentId);
+        return lessonRepository.findByStudentIdOrderByLessonDateAscStartTimeAsc(studentId);
+    }
+
+    // ✅ ИСПРАВЛЕНО: используем оптимизированный запрос
+    public Lesson getLessonById(Long id) {
+        return lessonRepository.findByIdWithDetails(id)
+                .orElseThrow(() -> new NotFoundException("Занятие", "id", id));
+    }
+
+    @Transactional
+    public Lesson completeLesson(Long lessonId, String notes, String nextLessonPlan) {
+        log.info("Завершение занятия: id={}", lessonId);
+
+        Lesson lesson = getLessonById(lessonId);
+        boolean isSubscription = "subscription".equals(lesson.getStudent().getPaymentType());
+
+        if (lesson.getOriginalLesson() != null && "RESCHEDULED".equals(lesson.getStatus())) {
+            return completeRescheduledLesson(lessonId, notes, nextLessonPlan);
+        }
+
+        if (!"SCHEDULED".equals(lesson.getStatus())) {
+            log.warn("Попытка завершить неподходящее занятие. Статус: {}", lesson.getStatus());
+            throw new BusinessException("Можно завершить только запланированное занятие");
+        }
+
+        if (isSubscription) {
+            lesson.setStatus("PAID");
+            lesson.setPaidAt(LocalDateTime.now());
+            log.info("Занятие по абонементу автоматически оплачено");
+        } else {
+            lesson.setStatus("COMPLETED");
+            log.info("Занятие завершено, ожидает оплаты");
+        }
+
+        lesson.setCompletedAt(LocalDateTime.now());
+
+        if (notes != null && !notes.isEmpty()) {
+            lesson.setNotes(notes);
+        }
+        if (nextLessonPlan != null && !nextLessonPlan.isEmpty()) {
+            lesson.setNextLessonPlan(nextLessonPlan);
+        }
+
+        Lesson savedLesson = lessonRepository.save(lesson);
+
+        if (!isSubscription && lesson.getStudent().getParent() != null) {
+            BigDecimal correctRate = lesson.getStudent().getRateForTutor(lesson.getTutor().getId());
+            String message = String.format(
+                    "✅ Урок по %s с %s (%s %s) завершён. Пожалуйста, подтвердите оплату.\nСумма к оплате: %s ₽",
+                    lesson.getCourse() != null ? lesson.getCourse().getName() : "занятию",
+                    lesson.getStudent().getFullName(),
+                    lesson.getLessonDate().toString(),
+                    lesson.getStartTime().toString().substring(0, 5),
+                    correctRate != null ? correctRate.toString() : "не указана"
+            );
+            notificationService.createNotification(
+                    lesson.getStudent().getParent().getId(),
+                    lesson.getId(),
+                    message
+            );
+        }
+
+        log.info("Занятие успешно завершено: id={}, статус={}", lessonId, savedLesson.getStatus());
+        return savedLesson;
+    }
+
+    @Transactional
+    public Lesson completeRescheduledLesson(Long lessonId, String notes, String nextLessonPlan) {
+        log.info("Завершение перенесённого занятия: id={}", lessonId);
+
+        Lesson rescheduledLesson = getLessonById(lessonId);
+
+        if (!"RESCHEDULED".equals(rescheduledLesson.getStatus())) {
+            throw new BusinessException("Можно завершить только перенесённое занятие");
+        }
+
+        Lesson originalLesson = rescheduledLesson.getOriginalLesson();
+        if (originalLesson == null) {
+            throw new BusinessException("Не найдено исходное занятие");
+        }
+
+        boolean isSubscription = "subscription".equals(originalLesson.getStudent().getPaymentType());
+
+        if (notes != null && !notes.isEmpty()) {
+            originalLesson.setNotes(notes);
+        }
+        if (nextLessonPlan != null && !nextLessonPlan.isEmpty()) {
+            originalLesson.setNextLessonPlan(nextLessonPlan);
+        }
+
+        if (isSubscription) {
+            originalLesson.setStatus("PAID");
+            originalLesson.setPaidAt(LocalDateTime.now());
+        } else {
+            originalLesson.setStatus("COMPLETED");
+        }
+
+        originalLesson.setCompletedAt(LocalDateTime.now());
+
+        lessonRepository.delete(rescheduledLesson);
+        Lesson savedOriginal = lessonRepository.save(originalLesson);
+
+        log.info("Перенесённое занятие успешно завершено: исходное id={}", savedOriginal.getId());
+
+        return savedOriginal;
+    }
+
+    @Transactional
+    public Lesson confirmPayment(Long lessonId) {
+        log.info("Подтверждение оплаты занятия: id={}", lessonId);
+
+        Lesson lesson = getLessonById(lessonId);
+
+        if (!"COMPLETED".equals(lesson.getStatus())) {
+            log.warn("Попытка оплатить неподходящее занятие. Статус: {}", lesson.getStatus());
+            throw new BusinessException("Оплатить можно только проведённое занятие");
+        }
+
+        if ("PAID".equals(lesson.getStatus())) {
+            throw new BusinessException("Занятие уже оплачено");
+        }
+
+        lesson.setStatus("PAID");
+        lesson.setPaidAt(LocalDateTime.now());
+
+        Lesson savedLesson = lessonRepository.save(lesson);
+        paymentService.createPaymentForLesson(savedLesson);
+
+        log.info("Оплата подтверждена для занятия: id={}", lessonId);
+        return savedLesson;
+    }
+
+    @Deprecated
+    @Transactional
+    public Lesson confirmLesson(Long lessonId) {
+        Lesson lesson = getLessonById(lessonId);
+        lesson.setStatus("CONFIRMED");
+        return lessonRepository.save(lesson);
+    }
+
+    @Transactional
+    public Lesson cancelLesson(Long lessonId, String reason) {
+        log.info("Отмена занятия: id={}, причина={}", lessonId, reason);
+
+        Lesson lesson = getLessonById(lessonId);
+
+        if ("PAID".equals(lesson.getStatus())) {
+            log.warn("Попытка отменить оплаченное занятие: id={}", lessonId);
+            throw new BusinessException("Нельзя отменить уже оплаченное занятие");
+        }
+
+        if ("COMPLETED".equals(lesson.getStatus())) {
+            log.warn("Попытка отменить проведённое занятие: id={}", lessonId);
+            throw new BusinessException("Нельзя отменить уже проведённое занятие");
+        }
+
+        lesson.setStatus("CANCELLED");
+
+        if (reason != null && !reason.isEmpty()) {
+            String newNotes = "❌ Отменено: " + reason;
+            if (lesson.getNotes() != null) {
+                lesson.setNotes(newNotes + "\n\n" + lesson.getNotes());
+            } else {
+                lesson.setNotes(newNotes);
+            }
+        }
+
+        if (lesson.getStudent().getParent() != null) {
+            String message = String.format(
+                    "❌ Урок по %s с %s (%s %s) отменён. Причина: %s",
+                    lesson.getCourse() != null ? lesson.getCourse().getName() : "занятию",
+                    lesson.getStudent().getFullName(),
+                    lesson.getLessonDate().toString(),
+                    lesson.getStartTime().toString().substring(0, 5),
+                    reason != null ? reason : "не указана"
+            );
+            notificationService.createNotification(
+                    lesson.getStudent().getParent().getId(),
+                    lesson.getId(),
+                    message
+            );
+        }
+
+        Lesson cancelledLesson = lessonRepository.save(lesson);
+        log.info("Занятие отменено: id={}", lessonId);
+
+        return cancelledLesson;
+    }
+
+    @Transactional
+    public Lesson addNotes(Long lessonId, String notes, String nextLessonPlan) {
+        log.debug("Добавление заметок к занятию: id={}", lessonId);
+
+        Lesson lesson = getLessonById(lessonId);
+
+        if (notes != null) {
+            lesson.setNotes(notes);
+        }
+        if (nextLessonPlan != null) {
+            lesson.setNextLessonPlan(nextLessonPlan);
+        }
+
+        return lessonRepository.save(lesson);
+    }
+
+    @Transactional
+    public Lesson rescheduleLesson(Long lessonId, LocalDate newDate, LocalTime newStartTime, LocalTime newEndTime) {
+        log.info("Перенос занятия: id={}, новая дата={}, новое время={}-{}",
+                lessonId, newDate, newStartTime, newEndTime);
+
+        Lesson original = getLessonById(lessonId);
+
+        if (original.isRescheduled()) {
+            log.warn("Попытка перенести уже перенесённое занятие: id={}", lessonId);
+            throw new BusinessException("Нельзя перенести уже перенесённое занятие");
+        }
+
+        if ("PAID".equals(original.getStatus())) {
+            throw new BusinessException("Нельзя перенести уже оплаченное занятие");
+        }
+
+        if ("COMPLETED".equals(original.getStatus())) {
+            throw new BusinessException("Нельзя перенести уже проведённое занятие");
+        }
+
+        String conflict = conflictChecker.checkConflictsForReschedule(
+                lessonId,
+                original.getTutor().getId(),
+                original.getStudent().getEmail(),
+                newDate,
+                newStartTime,
+                newEndTime
+        );
+
+        if (conflict != null) {
+            log.warn("Конфликт при переносе занятия: {}", conflict);
+            throw new BusinessException(conflict);
+        }
+
+        Lesson newLesson = new Lesson(
+                original.getTutor(),
+                original.getStudent(),
+                original.getCourse(),
+                newDate,
+                newStartTime,
+                newEndTime
+        );
+        newLesson.setOriginalLesson(original);
+        newLesson.setNotes(original.getNotes());
+        newLesson.setNextLessonPlan(original.getNextLessonPlan());
+        newLesson.setStatus("RESCHEDULED");
+
+        original.setStatus("RESCHEDULED");
+        original.setUpdatedAt(LocalDateTime.now());
+
+        lessonRepository.save(original);
+        Lesson savedNewLesson = lessonRepository.save(newLesson);
+
+        if (original.getStudent().getParent() != null) {
+            String message = String.format(
+                    "🔄 Занятие по %s с %s перенесено с %s %s на %s %s",
+                    original.getCourse() != null ? original.getCourse().getName() : "занятию",
+                    original.getStudent().getFullName(),
+                    original.getLessonDate().toString(),
+                    original.getStartTime().toString().substring(0, 5),
+                    newDate.toString(),
+                    newStartTime.toString().substring(0, 5)
+            );
+            notificationService.createNotification(
+                    original.getStudent().getParent().getId(),
+                    savedNewLesson.getId(),
+                    message
+            );
+        }
+
+        log.info("Занятие успешно перенесено: исходное id={}, новое id={}", lessonId, savedNewLesson.getId());
+        return savedNewLesson;
+    }
+
+    @Transactional
+    public void deleteLesson(Long id) {
+        log.info("Удаление занятия: id={}", id);
+
+        Lesson lesson = getLessonById(id);
+
+        if ("PAID".equals(lesson.getStatus())) {
+            log.warn("Попытка удалить оплаченное занятие: id={}", id);
+            throw new BusinessException("Нельзя удалить оплаченное занятие");
+        }
+
+        if ("COMPLETED".equals(lesson.getStatus())) {
+            log.warn("Попытка удалить проведённое занятие: id={}", id);
+            throw new BusinessException("Нельзя удалить проведённое занятие");
+        }
+
+        lessonRepository.delete(lesson);
+        log.info("Занятие удалено: id={}", id);
+    }
+}

@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # 1. База данных PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: lmstutor-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tutor_workspace
+      POSTGRES_USER: tutor_user
+      POSTGRES_PASSWORD: tutor_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - lmstutor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tutor_user -d tutor_workspace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Бэкенд (Spring Boot)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lmstutor-backend
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/tutor_workspace
+      DB_USERNAME: tutor_user
+      DB_PASSWORD: tutor_password
+      SERVER_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: 86400000
+      STEPIK_CLIENT_ID: ${STEPIK_CLIENT_ID}
+      STEPIK_CLIENT_SECRET: ${STEPIK_CLIENT_SECRET}
+      STEPIK_REDIRECT_URI: ${STEPIK_REDIRECT_URI}
+      YANDEX_API_KEY: ${YANDEX_API_KEY}
+      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      APP_BASE_URL: ${APP_BASE_URL}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      JITSI_DOMAIN: meet.jit.si
+      EXCALIDRAW_URL: https://excalidraw.com
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - lmstutor-network
+
+  # 3. Фронтенд (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: lmstutor-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - lmstutor-network
+
+# Тома для хранения данных (чтобы БД не терялась при перезапуске)
+volumes:
+  postgres_data:
+
+# Внутренняя сеть для общения контейнеров
+networks:
+  lmstutor-network:
+    driver: bridge

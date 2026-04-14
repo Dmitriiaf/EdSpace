@@ -1,0 +1,4 @@
+2026-04-14 08:06:06.841 [http-nio-8080-exec-4] ERROR o.h.e.jdbc.spi.SqlExceptionHelper - ОШИБКА: повторяющееся значение ключа нарушает ограничение уникальности "student_pkey"
+  Подробности: Ключ "(id)=(3)" уже существует.
+2026-04-14 08:28:04.061 [http-nio-8080-exec-8] ERROR o.h.e.jdbc.spi.SqlExceptionHelper - ОШИБКА: значение не умещается в тип character varying(255)
+2026-04-14 08:28:15.983 [http-nio-8080-exec-1] ERROR o.h.e.jdbc.spi.SqlExceptionHelper - ОШИБКА: значение не умещается в тип character varying(255)
