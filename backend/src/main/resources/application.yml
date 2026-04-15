@@ -78,8 +78,8 @@ yandex:
     id: ${YANDEX_FOLDER_ID}
 
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
-
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://72.56.238.224,http://ed-space.ru}
+  
 jitsi:
   domain: ${JITSI_DOMAIN:meet.jit.si}
 
