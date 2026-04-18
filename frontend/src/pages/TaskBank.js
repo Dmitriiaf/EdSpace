@@ -1,6 +1,7 @@
-// ========== frontend/src/pages/TaskBank.js (ПОЛНАЯ ЗАМЕНА - С ВНУТРЕННИМИ ВКЛАДКАМИ STEPIK) ==========
+// ========== frontend/src/pages/TaskBank.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// ✅ Заменяем axios на axiosInstance
+import axiosInstance from '../services/api';
 import {
     Box, Typography, Paper, Button, Grid, Card, CardContent,
     Chip, CircularProgress, Alert, TextField, InputAdornment,
@@ -133,7 +134,7 @@ function TaskBank() {
     const [examTypes] = useState(['ЕГЭ', 'ОГЭ']);
 
     useEffect(() => {
-        if (user) {
+        if (user && user.id) {
             fetchTasks();
             fetchVariants();
             fetchStepikStatus();
@@ -176,12 +177,10 @@ function TaskBank() {
 
     // ========== ЗАДАНИЯ ==========
     const fetchTasks = async () => {
+        if (!user || !user.id) return;
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/integration/tasks/search', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get('/integration/tasks/search');
             setTasks(response.data || []);
             setError(null);
         } catch (err) {
@@ -219,7 +218,6 @@ function TaskBank() {
         }
         setSavingManual(true);
         try {
-            const token = localStorage.getItem('token');
             const taskData = {
                 ...manualForm,
                 source: 'MANUAL',
@@ -227,9 +225,7 @@ function TaskBank() {
                 examType: examTypes[0],
                 type: 'problem'
             };
-            await axios.post('http://localhost:8080/api/integration/tasks', taskData, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await axiosInstance.post('/integration/tasks', taskData);
             alert('✅ Задание сохранено!');
             setManualDialogOpen(false);
             fetchTasks();
@@ -285,12 +281,11 @@ function TaskBank() {
         setGenerating(true);
         setGeneratedTask(null);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.post('http://localhost:8080/api/ai/generate', {
+            const response = await axiosInstance.post('/ai/generate', {
                 prompt: finalPrompt,
                 subject: aiSubject,
                 examType: aiExamType
-            }, { headers: { 'Authorization': `Bearer ${token}` } });
+            });
             setGeneratedTask(response.data);
         } catch (err) {
             alert('Ошибка генерации: ' + (err.response?.data?.error || 'Попробуйте позже'));
@@ -302,10 +297,7 @@ function TaskBank() {
     const handleSaveGenerated = async () => {
         if (!generatedTask) return;
         try {
-            const token = localStorage.getItem('token');
-            await axios.post('http://localhost:8080/api/ai/save', generatedTask, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await axiosInstance.post('/ai/save', generatedTask);
             alert('✅ Задание сохранено в банк!');
             setAiDialogOpen(false);
             setGeneratedTask(null);
@@ -319,12 +311,10 @@ function TaskBank() {
 
     // ========== ВАРИАНТЫ ==========
     const fetchVariants = async () => {
+        if (!user || !user.id) return;
         setVariantLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/variants', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get('/variants');
             setVariants(response.data || []);
         } catch (err) {
             console.error('Ошибка загрузки вариантов:', err);
@@ -373,15 +363,10 @@ function TaskBank() {
         }
         setSavingVariant(true);
         try {
-            const token = localStorage.getItem('token');
             if (editingVariant) {
-                await axios.put(`http://localhost:8080/api/variants/${editingVariant.id}`, variantForm, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                await axiosInstance.put(`/variants/${editingVariant.id}`, variantForm);
             } else {
-                await axios.post('http://localhost:8080/api/variants', variantForm, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                await axiosInstance.post('/variants', variantForm);
             }
             setVariantDialogOpen(false);
             fetchVariants();
@@ -395,21 +380,16 @@ function TaskBank() {
     const handleDeleteVariant = async (id) => {
         if (!window.confirm('Удалить вариант?')) return;
         try {
-            const token = localStorage.getItem('token');
-            await axios.delete(`http://localhost:8080/api/variants/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await axiosInstance.delete(`/variants/${id}`);
             fetchVariants();
         } catch (err) {}
     };
 
     // ========== STEPIK ==========
     const fetchStepikStatus = async () => {
+        if (!user || !user.id) return;
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/status', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get('/stepik/status');
             setStepikConnected(response.data.connected);
             if (response.data.connected) {
                 fetchStepikCourses();
@@ -418,12 +398,10 @@ function TaskBank() {
     };
 
     const fetchStepikCourses = async () => {
+        if (!user || !user.id) return;
         setStepikLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/my-courses', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get('/stepik/my-courses');
             const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
             setStepikCourses(data.courses || []);
         } catch (err) {
@@ -440,12 +418,10 @@ function TaskBank() {
 
     // ========== STEPIK — ВНУТРЕННИЕ ВКЛАДКИ ==========
     const fetchStepikCatalog = async () => {
+        if (!user || !user.id) return;
         setStepikCatalogSearching(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/courses/featured', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get('/stepik/courses/featured');
             const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
             setStepikCatalogCourses(data.courses || []);
             setStepikCatalogHasMore(data.meta?.has_next || false);
@@ -463,10 +439,8 @@ function TaskBank() {
         }
         setStepikCatalogSearching(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/courses/search', {
-                params: { query: stepikSearchQuery, page: reset ? 1 : stepikCatalogPage },
-                headers: { 'Authorization': `Bearer ${token}` }
+            const response = await axiosInstance.get('/stepik/courses/search', {
+                params: { query: stepikSearchQuery, page: reset ? 1 : stepikCatalogPage }
             });
             const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
             const newCourses = data.courses || [];
@@ -486,11 +460,9 @@ function TaskBank() {
     };
 
     const fetchStepikAssignments = async () => {
+        if (!user || !user.id) return;
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/assignments', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get('/stepik/assignments');
             setStepikAssignments(response.data || []);
         } catch (err) {
             console.error('Ошибка загрузки назначенных курсов:', err);
@@ -500,12 +472,7 @@ function TaskBank() {
     const handleStepikSync = async () => {
         setStepikSyncing(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.post(
-                'http://localhost:8080/api/stepik/sync-progress',
-                {},
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            const response = await axiosInstance.post('/stepik/sync-progress', {});
             alert(`✅ Прогресс синхронизирован! Обновлено ${response.data.updated} из ${response.data.total} курсов.`);
             fetchStepikAssignments();
         } catch (err) {
@@ -528,16 +495,11 @@ function TaskBank() {
         }
         setStepikAssigning(true);
         try {
-            const token = localStorage.getItem('token');
-            await axios.post(
-                'http://localhost:8080/api/stepik/assign',
-                {
-                    studentId: stepikSelectedStudentId,
-                    courseId: stepikSelectedCourse.id,
-                    courseTitle: stepikSelectedCourse.title
-                },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            await axiosInstance.post('/stepik/assign', {
+                studentId: stepikSelectedStudentId,
+                courseId: stepikSelectedCourse.id,
+                courseTitle: stepikSelectedCourse.title
+            });
             alert('✅ Курс успешно назначен ученику!');
             setStepikAssignDialogOpen(false);
             setStepikSelectedStudentId('');
@@ -562,12 +524,10 @@ function TaskBank() {
 
     // ========== ПЛАНЫ УРОКОВ ==========
     const fetchPlans = async () => {
+        if (!user || !user.id) return;
         setPlanLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/lesson-plans', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get('/lesson-plans');
             setPlans(response.data || []);
         } catch (err) {
             console.error('Ошибка загрузки планов:', err);
@@ -590,11 +550,9 @@ function TaskBank() {
     };
 
     const fetchCourses = async () => {
+        if (!user || !user.id) return;
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/courses/tutor/${user.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(`/courses/tutor/${user.id}`);
             setCourses(response.data || []);
         } catch (err) {}
     };
@@ -633,15 +591,10 @@ function TaskBank() {
         }
         setSavingPlan(true);
         try {
-            const token = localStorage.getItem('token');
             if (editingPlan) {
-                await axios.put(`http://localhost:8080/api/lesson-plans/${editingPlan.id}`, planForm, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                await axiosInstance.put(`/lesson-plans/${editingPlan.id}`, planForm);
             } else {
-                await axios.post('http://localhost:8080/api/lesson-plans', planForm, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                await axiosInstance.post('/lesson-plans', planForm);
             }
             setPlanDialogOpen(false);
             fetchPlans();
@@ -655,21 +608,16 @@ function TaskBank() {
     const handleDeletePlan = async (id) => {
         if (!window.confirm('Удалить план?')) return;
         try {
-            const token = localStorage.getItem('token');
-            await axios.delete(`http://localhost:8080/api/lesson-plans/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await axiosInstance.delete(`/lesson-plans/${id}`);
             fetchPlans();
         } catch (err) {}
     };
 
     // ========== ОБЩИЕ ==========
     const fetchStudents = async () => {
+        if (!user || !user.id) return;
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(`/students/tutor/${user.id}`);
             setStudents(response.data || []);
         } catch (err) {}
     };
@@ -690,25 +638,24 @@ function TaskBank() {
         }
         setAssigning(true);
         try {
-            const token = localStorage.getItem('token');
             const formattedDueDate = dueDate.toISOString().split('.')[0];
             
             if (selectedTask) {
-                await axios.post('http://localhost:8080/api/integration/create-homework-from-task', {
+                await axiosInstance.post('/integration/create-homework-from-task', {
                     taskId: selectedTask.id, studentId: selectedStudentId, dueDate: formattedDueDate
-                }, { headers: { 'Authorization': `Bearer ${token}` } });
+                });
                 alert('✅ Задание назначено!');
             } else if (selectedVariant) {
-                await axios.post(`http://localhost:8080/api/variants/${selectedVariant.id}/assign`, {
+                await axiosInstance.post(`/variants/${selectedVariant.id}/assign`, {
                     studentId: selectedStudentId, dueDate: formattedDueDate
-                }, { headers: { 'Authorization': `Bearer ${token}` } });
+                });
                 alert('✅ Вариант назначен!');
             } else if (selectedPlan) {
                 const homeworkText = selectedPlan.homeworkTemplate || `Домашнее задание по теме: ${selectedPlan.topic}`;
-                await axios.post('http://localhost:8080/api/homework', {
+                await axiosInstance.post('/homework', {
                     tutorId: user.id, studentId: selectedStudentId, task: homeworkText,
                     dueDate: formattedDueDate, status: 'assigned'
-                }, { headers: { 'Authorization': `Bearer ${token}` } });
+                });
                 alert('✅ Задание из плана назначено!');
             }
             setAssignDialogOpen(false);
@@ -1321,7 +1268,7 @@ function TaskBank() {
                     </>
                 )}
 
-                {/* ========== ВКЛАДКА STEPIK (С ВНУТРЕННИМИ ПОДВКЛАДКАМИ) ========== */}
+                {/* ========== ВКЛАДКА STEPIK ========== */}
                 {mainTabValue === 2 && (
                     <Box>
                         {!stepikConnected ? (
@@ -1399,6 +1346,7 @@ function TaskBank() {
                 )}
             </Box>
 
+            {/* Все диалоги остаются без изменений, только заменены axios на axiosInstance */}
             {/* Диалог ручного создания задания */}
             <Dialog open={manualDialogOpen} onClose={() => setManualDialogOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>Создать задание</DialogTitle>

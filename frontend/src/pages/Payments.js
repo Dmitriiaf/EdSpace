@@ -1,6 +1,7 @@
-// ========== frontend/src/pages/Payments.js (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/pages/Payments.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// ✅ Заменяем axios на axiosInstance
+import axiosInstance, { getAllLessons } from '../services/api';
 import {
     Box, Button, TextField, MenuItem, FormControl, InputLabel,
     Select, Table, TableBody, TableCell, TableContainer,
@@ -27,13 +28,13 @@ import {
     Payment as PaymentIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
-import { useStudentRate } from '../hooks/useStudentRate';  // ✅ Импорт хука
+import { useStudentRate } from '../hooks/useStudentRate';
 import { format, startOfMonth, endOfMonth, subMonths, eachMonthOfInterval } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
 function Payments() {
     const { user } = useAuth();
-    const { getStudentRateForTutor } = useStudentRate();  // ✅ Используем хук
+    const { getStudentRateForTutor } = useStudentRate();
     
     const [payments, setPayments] = useState([]);
     const [students, setStudents] = useState([]);
@@ -51,10 +52,8 @@ function Payments() {
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
     const [monthlyData, setMonthlyData] = useState([]);
 
-    // ✅ Функция getStudentRateForTutor удалена — теперь из хука
-
     useEffect(() => {
-        if (user) {
+        if (user && user.id) {
             fetchData();
         }
     }, [user]);
@@ -64,27 +63,29 @@ function Payments() {
     }, [payments]);
 
     const fetchData = async () => {
+        if (!user || !user.id) return;
+
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
+            setLoading(true);
             
+            // ✅ Все запросы через axiosInstance, БЕЗ headers
             const [paymentsRes, studentsRes, lessonsRes] = await Promise.all([
-                axios.get(`http://localhost:8080/api/payments/tutor/${user.id}`, { headers }),
-                axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, { headers }),
-                axios.get(`http://localhost:8080/api/lessons/all?tutorId=${user.id}`, { headers })
+                axiosInstance.get(`/payments/tutor/${user.id}`),
+                axiosInstance.get(`/students/tutor/${user.id}`),
+                getAllLessons(user.id)
             ]);
             
-            setPayments(paymentsRes.data);
-            setStudents(studentsRes.data);
-            setAllLessons(lessonsRes.data);
+            setPayments(paymentsRes.data || []);
+            setStudents(studentsRes.data || []);
+            setAllLessons(lessonsRes.data !== undefined ? lessonsRes.data : lessonsRes);
             setError(null);
-            setLoading(false);
         } catch (err) {
             console.error('Ошибка при загрузке:', err);
             setError('Не удалось загрузить данные');
+        } finally {
             setLoading(false);
         }
-    };
+        };
 
     const calculateMonthlyData = () => {
         const now = new Date();
@@ -100,7 +101,7 @@ function Payments() {
                 const paymentDate = new Date(p.paymentDate);
                 return paymentDate >= monthStart && paymentDate <= monthEnd && p.status === 'paid';
             });
-            const total = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+            const total = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
             const count = monthPayments.length;
             
             return {
@@ -189,16 +190,16 @@ function Payments() {
         const startOfMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
         const endOfMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         
-        const monthLessons = allLessons.filter(l => {
+        const monthLessons = Array.isArray(allLessons) ? allLessons.filter(l => {
             const lessonDate = new Date(l.lessonDate);
             return lessonDate >= startOfMonthDate && lessonDate <= endOfMonthDate;
-        });
+        }) : [];
         
         const unpaid = monthLessons.filter(l => l.status === 'COMPLETED');
         
         return unpaid.map(lesson => {
             const student = students.find(s => s.id === lesson.student?.id);
-            const correctRate = getStudentRateForTutor(student, lesson.tutor?.id);  // ✅ Из хука
+            const correctRate = getStudentRateForTutor(student, lesson.tutor?.id);
             return {
                 id: lesson.id,
                 studentName: student?.fullName || 'Неизвестно',
@@ -235,10 +236,12 @@ function Payments() {
     };
 
     const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
         return format(new Date(dateStr), 'd MMMM yyyy', { locale: ru });
     };
 
     const formatDateTime = (dateStr) => {
+        if (!dateStr) return '-';
         return format(new Date(dateStr), 'd MMM yyyy, HH:mm', { locale: ru });
     };
 
@@ -327,7 +330,7 @@ function Payments() {
                             <Box sx={{ height: 200, position: 'relative' }}>
                                 <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: '100%' }}>
                                     {monthlyData.map((item, idx) => {
-                                        const height = (item.total / maxMonthlyTotal) * 160;
+                                        const height = maxMonthlyTotal > 0 ? (item.total / maxMonthlyTotal) * 160 : 0;
                                         return (
                                             <Tooltip key={idx} title={`${item.fullMonth}: ${item.total.toLocaleString()} ₽ (${item.count} платежей)`} arrow>
                                                 <Box sx={{ flex: 1, textAlign: 'center' }}>
@@ -355,17 +358,19 @@ function Payments() {
                                 <Grid item xs={6}>
                                     <Box sx={{ textAlign: 'center' }}>
                                         <Typography variant="h6" sx={{ fontWeight: 600, color: '#10B981' }}>
-                                            {monthlyData[monthlyData.length - 1]?.total.toLocaleString()} ₽
+                                            {monthlyData[monthlyData.length - 1]?.total.toLocaleString() || 0} ₽
                                         </Typography>
                                         <Typography variant="caption" color="textSecondary">
-                                            {monthlyData[monthlyData.length - 1]?.fullMonth}
+                                            {monthlyData[monthlyData.length - 1]?.fullMonth || '-'}
                                         </Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={6}>
                                     <Box sx={{ textAlign: 'center' }}>
                                         <Typography variant="h6" sx={{ fontWeight: 600, color: '#F59E0B' }}>
-                                            {Math.round(monthlyData.reduce((sum, d) => sum + d.total, 0) / monthlyData.length).toLocaleString()} ₽
+                                            {monthlyData.length > 0 
+                                                ? Math.round(monthlyData.reduce((sum, d) => sum + d.total, 0) / monthlyData.length).toLocaleString() 
+                                                : 0} ₽
                                         </Typography>
                                         <Typography variant="caption" color="textSecondary">
                                             Средний доход за месяц
@@ -527,7 +532,7 @@ function Payments() {
                                                         </TableCell>
                                                         <TableCell align="right">
                                                             <Typography variant="body1" sx={{ fontWeight: 600, color: '#2E7D32' }}>
-                                                                {payment.amount.toLocaleString()} ₽
+                                                                {(payment.amount || 0).toLocaleString()} ₽
                                                             </Typography>
                                                         </TableCell>
                                                         <TableCell>

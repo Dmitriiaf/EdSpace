@@ -1,6 +1,6 @@
 // ========== frontend/src/pages/Subscriptions.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// ✅ Убираем import axios from 'axios'
 import {
     Box, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, MenuItem, FormControl, InputLabel,
@@ -32,8 +32,8 @@ import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
 import { format, startOfMonth, endOfMonth, differenceInDays, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
-// ✅ Импорт из объединённого API
-import { getAllLessons } from '../services/api';
+// ✅ Импортируем ТОЛЬКО axiosInstance и getAllLessons
+import axiosInstance, { getAllLessons } from '../services/api';
 
 function Subscriptions() {
     const { user } = useAuth();
@@ -56,35 +56,32 @@ function Subscriptions() {
     });
 
     useEffect(() => {
-        if (user) {
+        if (user && user.id) {
             fetchData();
         }
     }, [user]);
 
     const fetchData = async () => {
+        if (!user || !user.id) return;
+        
         try {
             setLoading(true);
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
             
             const [studentsRes, lessonsRes] = await Promise.all([
-                axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, { headers }),
-                // ✅ Заменено на API-функцию
+                axiosInstance.get(`/students/tutor/${user.id}`),
                 getAllLessons(user.id)
             ]);
-            setStudents(studentsRes.data);
-            // ✅ Правильно извлекаем данные
+            
+            const studentsData = studentsRes.data || [];
+            setStudents(studentsData);
             setAllLessons(lessonsRes.data !== undefined ? lessonsRes.data : lessonsRes);
             
             let allSubscriptions = [];
-            const subscriptionStudents = studentsRes.data.filter(s => s.paymentType === 'subscription');
+            const subscriptionStudents = studentsData.filter(s => s.paymentType === 'subscription');
             
             for (const student of subscriptionStudents) {
                 try {
-                    const subsRes = await axios.get(
-                        `http://localhost:8080/api/subscriptions/student/${student.id}`,
-                        { headers }
-                    );
+                    const subsRes = await axiosInstance.get(`/subscriptions/student/${student.id}`);
                     allSubscriptions = [...allSubscriptions, ...subsRes.data.map(sub => ({
                         ...sub,
                         studentName: student.fullName,
@@ -98,26 +95,24 @@ function Subscriptions() {
             
             allSubscriptions.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
             setSubscriptions(allSubscriptions);
-            setLoading(false);
+            setError(null);
         } catch (err) {
             console.error('Ошибка загрузки данных:', err);
             setError('Ошибка загрузки данных');
+        } finally {
             setLoading(false);
         }
     };
 
     const handleCreateSubscription = async () => {
         try {
-            const token = localStorage.getItem('token');
-            await axios.post('http://localhost:8080/api/subscriptions', {
+            await axiosInstance.post('/subscriptions', {
                 tutorId: user.id,
                 studentId: selectedStudent,
                 lessonsCount: parseInt(formData.lessonsCount),
                 price: parseFloat(formData.price),
                 startDate: formData.startDate,
                 endDate: formData.endDate
-            }, {
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             
             showSnackbar('Абонемент создан', 'success');
@@ -133,10 +128,7 @@ function Subscriptions() {
     const handleDeleteSubscription = async (id) => {
         if (window.confirm('Удалить абонемент?')) {
             try {
-                const token = localStorage.getItem('token');
-                await axios.delete(`http://localhost:8080/api/subscriptions/${id}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                await axiosInstance.delete(`/subscriptions/${id}`);
                 showSnackbar('Абонемент удалён', 'success');
                 fetchData();
             } catch (err) {
@@ -175,19 +167,6 @@ function Subscriptions() {
         return (used / total) * 100;
     };
 
-    const getStudentLessonsInPeriod = (studentId, startDate, endDate) => {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const lessons = allLessons.filter(l => {
-            const lessonDate = new Date(l.lessonDate);
-            return l.student?.id === studentId && 
-                   lessonDate >= start && 
-                   lessonDate <= end &&
-                   l.status !== 'CANCELLED';
-        });
-        return lessons.length;
-    };
-
     const getFilteredSubscriptions = () => {
         if (viewMode === 'active') {
             return subscriptions.filter(s => s.status === 'active' || s.status === 'pending');
@@ -202,7 +181,7 @@ function Subscriptions() {
         active: subscriptions.filter(s => s.status === 'active').length,
         pending: subscriptions.filter(s => s.status === 'pending').length,
         completed: subscriptions.filter(s => s.status === 'completed').length,
-        totalLessons: subscriptions.reduce((sum, s) => sum + s.lessonsCount, 0),
+        totalLessons: subscriptions.reduce((sum, s) => sum + (s.lessonsCount || 0), 0),
         usedLessons: subscriptions.reduce((sum, s) => sum + (s.lessonsUsed || 0), 0),
         totalRevenue: subscriptions.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0)
     };
@@ -259,7 +238,7 @@ function Subscriptions() {
                         <Card sx={{ borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                             <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
                                 <Typography variant="h5" sx={{ fontWeight: 600, color: '#8B5CF6' }}>
-                                    {Math.round(stats.usedLessons / stats.totalLessons * 100) || 0}%
+                                    {stats.totalLessons > 0 ? Math.round((stats.usedLessons / stats.totalLessons) * 100) : 0}%
                                 </Typography>
                                 <Typography variant="caption" color="textSecondary">
                                     Использовано
@@ -348,7 +327,7 @@ function Subscriptions() {
                                                             {sub.studentName}
                                                         </Typography>
                                                         <Typography variant="caption" color="textSecondary">
-                                                            Ставка: {sub.ratePerLesson?.toLocaleString()} ₽/занятие
+                                                            Ставка: {sub.ratePerLesson?.toLocaleString() || 0} ₽/занятие
                                                         </Typography>
                                                     </Box>
                                                 </Box>
@@ -381,7 +360,7 @@ function Subscriptions() {
                                                 <Grid item xs={4}>
                                                     <Box sx={{ textAlign: 'center' }}>
                                                         <Typography variant="h6" sx={{ fontWeight: 600, color: '#F59E0B' }}>
-                                                            {sub.lessonsCount - (sub.lessonsUsed || 0)}
+                                                            {(sub.lessonsCount || 0) - (sub.lessonsUsed || 0)}
                                                         </Typography>
                                                         <Typography variant="caption" color="textSecondary">
                                                             Осталось
@@ -410,12 +389,12 @@ function Subscriptions() {
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                     <CalendarIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                                                     <Typography variant="body2" color="textSecondary">
-                                                        {format(new Date(sub.startDate), 'd MMM yyyy', { locale: ru })} — 
-                                                        {format(new Date(sub.endDate), 'd MMM yyyy', { locale: ru })}
+                                                        {sub.startDate ? format(new Date(sub.startDate), 'd MMM yyyy', { locale: ru }) : '-'} — 
+                                                        {sub.endDate ? format(new Date(sub.endDate), 'd MMM yyyy', { locale: ru }) : '-'}
                                                     </Typography>
                                                 </Box>
                                                 <Typography variant="h6" sx={{ fontWeight: 600, color: '#2E7D32' }}>
-                                                    {parseFloat(sub.price).toLocaleString()} ₽
+                                                    {parseFloat(sub.price || 0).toLocaleString()} ₽
                                                 </Typography>
                                             </Box>
 
@@ -425,7 +404,7 @@ function Subscriptions() {
                                                     <Typography variant="caption" color="textSecondary">
                                                         {remainingDays === 0 ? 'Абонемент просрочен' : 
                                                          remainingDays <= 7 ? `Осталось ${remainingDays} дней` : 
-                                                         `Действует до ${format(new Date(sub.endDate), 'd MMM yyyy', { locale: ru })}`}
+                                                         `Действует до ${sub.endDate ? format(new Date(sub.endDate), 'd MMM yyyy', { locale: ru }) : '-'}`}
                                                     </Typography>
                                                 </Box>
                                             )}

@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Finance.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/pages/Finance.js (ФИНАЛЬНАЯ ВЕРСИЯ БЕЗ ОПЕЧАТОК) ==========
 import React, { useState, useEffect } from 'react';
 import {
     Box, Tabs, Tab, Typography, Paper,
@@ -18,12 +18,11 @@ import {
     TrendingDown as TrendingDownIcon,
     AttachMoney as MoneyIcon,
     School as SchoolIcon,
-    CalendarToday as CalendarIcon,
+    Receipt as ReceiptIcon,
+    Timeline as TimelineIcon,
     Download as DownloadIcon,
     Refresh as RefreshIcon,
-    MoreVert as MoreVertIcon,
-    Receipt as ReceiptIcon,
-    Timeline as TimelineIcon
+    MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -33,9 +32,8 @@ import { startOfMonth, endOfMonth, format, eachMonthOfInterval, subMonths } from
 import { ru } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
-import axios from 'axios';
-// ✅ Импорт из объединённого API
-import { getAllLessons } from '../services/api';
+// ✅ Импортируем axiosInstance
+import axiosInstance, { getAllLessons } from '../services/api';
 import Payments from './Payments';
 import Subscriptions from './Subscriptions';
 
@@ -75,31 +73,40 @@ function Finance() {
     const [yearlyData, setYearlyData] = useState([]);
 
     useEffect(() => {
-        if (user) {
+        if (user && user.id) {
             fetchFinanceData();
         }
     }, [user, selectedMonth]);
 
     const fetchFinanceData = async () => {
+        if (!user || !user.id) {
+            console.error('fetchFinanceData: user или user.id отсутствует');
+            return;
+        }
+        
         try {
             setLoading(true);
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
+            setError(null);
 
+            // ✅ ВСЕ запросы через axiosInstance, БЕЗ опечаток
             const [paymentsRes, studentsRes, lessonsRes] = await Promise.all([
-                axios.get(`http://localhost:8080/api/payments/tutor/${user.id}`, { headers }),
-                axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, { headers }),
-                // ✅ Заменено на API-функцию
-                getAllLessons(user.id)
+                axiosInstance.get(`/payments/tutor/${user.id}`),
+                axiosInstance.get(`/students/tutor/${user.id}`),
+                getAllLessons(user.id)  // ← Здесь вызывается правильная функция
             ]);
             
-            const payments = paymentsRes.data;
-            const students = studentsRes.data;
-            // ✅ Правильно извлекаем данные
+            const payments = paymentsRes.data || [];
+            const studentsList = studentsRes.data || [];
             const allLessons = lessonsRes.data !== undefined ? lessonsRes.data : lessonsRes;
             
+            console.log('📊 Finance data loaded:', {
+                payments: payments.length,
+                students: studentsList.length,
+                lessons: Array.isArray(allLessons) ? allLessons.length : 'not array'
+            });
+            
             setAllPayments(payments);
-            setStudents(students);
+            setStudents(studentsList);
 
             const monthStart = startOfMonth(selectedMonth);
             const monthEnd = endOfMonth(selectedMonth);
@@ -109,20 +116,20 @@ function Finance() {
                 return paymentDate >= monthStart && paymentDate <= monthEnd && p.status === 'paid';
             });
 
-            const totalIncome = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+            const totalIncome = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
             
             let subscriptionIncome = 0;
             let singleIncome = 0;
             
             monthPayments.forEach(p => {
                 if (p.paymentType === 'subscription' || (p.courseName && p.courseName.includes('Абонемент'))) {
-                    subscriptionIncome += p.amount;
+                    subscriptionIncome += p.amount || 0;
                 } else {
-                    singleIncome += p.amount;
+                    singleIncome += p.amount || 0;
                 }
             });
             
-            const activeStudents = students.filter(s => {
+            const activeStudents = studentsList.filter(s => {
                 const rate = getStudentRateForTutor(s, user.id);
                 return rate !== null;
             });
@@ -133,10 +140,12 @@ function Finance() {
             const paidStudentsIds = [...new Set(monthPayments.map(p => p.student?.id).filter(id => id))];
             const paidStudents = paidStudentsIds.length;
             
-            const monthLessons = allLessons.filter(l => {
-                const lessonDate = new Date(l.lessonDate);
-                return lessonDate >= monthStart && lessonDate <= monthEnd;
-            });
+            const monthLessons = Array.isArray(allLessons) 
+                ? allLessons.filter(l => {
+                    const lessonDate = new Date(l.lessonDate);
+                    return lessonDate >= monthStart && lessonDate <= monthEnd;
+                  })
+                : [];
             const totalLessons = monthLessons.length;
             
             const prevMonthStart = startOfMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1));
@@ -145,7 +154,7 @@ function Finance() {
                 const paymentDate = new Date(p.paymentDate);
                 return paymentDate >= prevMonthStart && paymentDate <= prevMonthEnd && p.status === 'paid';
             });
-            const prevTotal = prevMonthPayments.reduce((sum, p) => sum + p.amount, 0);
+            const prevTotal = prevMonthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
             const growth = prevTotal > 0 ? ((totalIncome - prevTotal) / prevTotal) * 100 : 0;
 
             setMonthlyStats({
@@ -172,7 +181,7 @@ function Finance() {
                     const paymentDate = new Date(p.paymentDate);
                     return paymentDate >= monthStart && paymentDate <= monthEnd && p.status === 'paid';
                 });
-                const monthIncome = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+                const monthIncome = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
                 
                 yearlyStats.push({
                     month: format(month, 'LLLL yyyy', { locale: ru }),
@@ -182,7 +191,6 @@ function Finance() {
             });
             
             setYearlyData(yearlyStats);
-            setError(null);
         } catch (err) {
             console.error('Ошибка загрузки статистики:', err);
             setError('Не удалось загрузить статистику');
@@ -192,26 +200,20 @@ function Finance() {
     };
 
     const calculateForecast = async () => {
+        if (!user || !user.id) {
+            console.error('calculateForecast: user или user.id отсутствует');
+            return;
+        }
+        
         setForecastLoading(true);
         setForecastResult(null);
 
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            
             const monthStart = startOfMonth(forecastMonth);
             const monthEnd = endOfMonth(forecastMonth);
             
-            console.log(`📊 ПРОГНОЗ на ${format(forecastMonth, 'LLLL yyyy', { locale: ru })}`);
-            console.log(`   Период: ${format(monthStart, 'dd.MM.yyyy')} - ${format(monthEnd, 'dd.MM.yyyy')}`);
-            
-            const templatesRes = await axios.get(
-                `http://localhost:8080/api/weekly-template/tutor/${user.id}`,
-                { headers }
-            );
-            const templates = templatesRes.data;
-            
-            console.log(`   Найдено шаблонов: ${templates.length}`);
+            const templatesRes = await axiosInstance.get(`/weekly-template/tutor/${user.id}`);
+            const templates = templatesRes.data || [];
             
             const studentTemplates = {};
             templates.forEach(t => {
@@ -279,9 +281,6 @@ function Finance() {
                     dayTotal: dayData.dayTotal
                 });
             }
-            
-            console.log(`   Дней с занятиями: ${dailyForecast.length}`);
-            console.log(`   ИТОГО прогноз: ${totalForecast} ₽`);
             
             setForecastResult({
                 totalForecast: totalForecast,

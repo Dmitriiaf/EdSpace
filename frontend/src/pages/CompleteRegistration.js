@@ -15,7 +15,8 @@ import {
     VisibilityOff as VisibilityOffIcon,
     School as SchoolIcon
 } from '@mui/icons-material';
-import axios from 'axios';
+// ✅ Правильный импорт
+import axiosInstance from '../api/axiosConfig';
 
 function CompleteRegistration() {
     const navigate = useNavigate();
@@ -47,7 +48,8 @@ function CompleteRegistration() {
 
     const validateToken = async () => {
         try {
-            const response = await axios.get(`http://localhost:8080/api/invitations/validate?token=${token}`);
+            // ✅ Исправлено: добавлен /api/ и axiosInstance
+            const response = await axiosInstance.get(`/invitations/validate?token=${token}`);
             setInvitationData(response.data);
             setError('');
         } catch (err) {
@@ -78,7 +80,8 @@ function CompleteRegistration() {
         setError('');
 
         try {
-            await axios.post('http://localhost:8080/api/invitations/complete-student', {
+            // ✅ Исправлено: добавлен /api/ и axiosInstance
+            await axiosInstance.post('/invitations/complete-student', {
                 token,
                 phone: formData.phone,
                 birthday: formData.birthday,

@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ExternalIntegrationService {
@@ -29,8 +30,10 @@ public class ExternalIntegrationService {
      * Имитация импорта заданий из КЕГЭ
      */
     @Transactional
-    public List<TaskBank> importFromKEGE(String subject, String examType) {
+    public List<TaskBank> importFromKEGE(String subject, String examType, Long tutorId) {
         List<TaskBank> importedTasks = new ArrayList<>();
+        Tutor tutor = tutorRepository.findById(tutorId)
+                .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
 
         List<TaskBank> demoTasks = getDemoKEGETasks(subject, examType);
 
@@ -41,6 +44,7 @@ public class ExternalIntegrationService {
                             t.getSource().equals("KEGE"));
 
             if (!exists) {
+                task.setTutor(tutor);
                 importedTasks.add(taskBankRepository.save(task));
             }
         }
@@ -52,8 +56,10 @@ public class ExternalIntegrationService {
      * Имитация импорта заданий из Решу ЕГЭ
      */
     @Transactional
-    public List<TaskBank> importFromReshUEGE(String subject, String examType) {
+    public List<TaskBank> importFromReshUEGE(String subject, String examType, Long tutorId) {
         List<TaskBank> importedTasks = new ArrayList<>();
+        Tutor tutor = tutorRepository.findById(tutorId)
+                .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
 
         List<TaskBank> demoTasks = getDemoReshUEGETasks(subject, examType);
 
@@ -64,6 +70,7 @@ public class ExternalIntegrationService {
                             t.getSource().equals("RESHUEGE"));
 
             if (!exists) {
+                task.setTutor(tutor);
                 importedTasks.add(taskBankRepository.save(task));
             }
         }
@@ -154,7 +161,7 @@ public class ExternalIntegrationService {
                     "В треугольнике ABC угол C равен 90°, AB = 10, BC = 6. Найдите синус угла A.",
                     "Математика", "problem", examType);
             task1.setExternalId("RESHUEGE_MATH_1");
-            task1.setAnswer("0.8");
+            task1.setAnswer("0.6");
             task1.setExplanation("sin A = противолежащий катет / гипотенуза = BC/AB = 6/10 = 0.6");
             task1.setDifficulty(2);
             task1.setMaxScore(1);
@@ -167,10 +174,17 @@ public class ExternalIntegrationService {
     }
 
     /**
-     * Поиск заданий в банке
+     * Поиск заданий в банке с фильтрацией по репетитору
      */
-    public List<TaskBank> searchTasks(String query, String subject, String examType, String source) {
+    public List<TaskBank> searchTasks(String query, String subject, String examType, String source, Long tutorId) {
         List<TaskBank> results = taskBankRepository.search(query);
+
+        // ✅ ФИЛЬТРАЦИЯ ПО РЕПЕТИТОРУ
+        results = results.stream()
+                .filter(t -> t.getTutor() == null ||
+                        t.getTutor().getId().equals(tutorId) ||
+                        Boolean.TRUE.equals(t.getIsPublic()))
+                .collect(Collectors.toList());
 
         if (subject != null && !subject.isEmpty()) {
             results = results.stream()

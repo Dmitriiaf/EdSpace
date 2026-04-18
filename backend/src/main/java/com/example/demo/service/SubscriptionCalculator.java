@@ -1,4 +1,4 @@
-// ========== backend/src/main/java/com/example/demo/service/SubscriptionCalculator.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== backend/src/main/java/com/example/demo/service/SubscriptionCalculator.java (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -14,7 +14,7 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Slf4j  // ✅ Добавлена аннотация Lombok для логирования
+@Slf4j
 @Service
 public class SubscriptionCalculator {
 
@@ -37,7 +37,9 @@ public class SubscriptionCalculator {
         LocalDate startDate = month.atDay(1);
         LocalDate endDate = month.atEndOfMonth();
 
-        int lessonsCount = lessonRepository.countLessonsInMonth(studentId, startDate, endDate);
+        // ✅ Исправлено: используем startDate и endDate, приводим long к int
+        long count = lessonRepository.countLessonsInMonth(studentId, startDate, endDate);
+        int lessonsCount = (int) count;
 
         if (lessonsCount == 0) {
             lessonsCount = countTemplatesInMonth(studentId, month);

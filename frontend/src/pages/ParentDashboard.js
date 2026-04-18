@@ -1,6 +1,7 @@
 // ========== frontend/src/pages/ParentDashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// ✅ Правильный импорт
+import axiosInstance from '../api/axiosConfig';
 import {
     Box, Grid, Card, CardContent, Typography,
     Paper, Chip, CircularProgress, Alert, Button,
@@ -61,7 +62,7 @@ function ParentDashboard() {
     const [selectedLessonNotes, setSelectedLessonNotes] = useState({ notes: '', nextLessonPlan: '' });
 
     useEffect(() => {
-        if (user?.children && user.children.length > 0) {
+        if (user && user.children && user.children.length > 0) {
             const childrenListFromAuth = user.children.map(child => ({
                 id: child.id,
                 fullName: child.fullName,
@@ -82,25 +83,17 @@ function ParentDashboard() {
 
     const fetchPendingSubscriptions = async (children) => {
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            
             let allPending = [];
             let allActive = [];
             
             for (const child of children) {
                 try {
-                    const studentRes = await axios.get(
-                        `http://localhost:8080/api/students/${child.id}`,
-                        { headers }
-                    );
+                    // ✅ Исправлено: axiosInstance и правильный URL
+                    const studentRes = await axiosInstance.get(`/students/${child.id}`);
                     const student = studentRes.data;
                     
                     if (student.paymentType === 'subscription') {
-                        const response = await axios.get(
-                            `http://localhost:8080/api/subscriptions/student/${child.id}`,
-                            { headers }
-                        );
+                        const response = await axiosInstance.get(`/subscriptions/student/${child.id}`);
                         
                         const pending = response.data.filter(s => s.status === 'pending');
                         const active = response.data.filter(s => s.status === 'active');
@@ -135,26 +128,17 @@ function ParentDashboard() {
 
     const checkPartiallyPaidSubscriptions = async (children) => {
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            
             let allPartiallyPaid = [];
             
             for (const child of children) {
                 try {
-                    const response = await axios.get(
-                        `http://localhost:8080/api/subscriptions/student/${child.id}`,
-                        { headers }
-                    );
+                    const response = await axiosInstance.get(`/subscriptions/student/${child.id}`);
                     
                     const subscriptions = response.data;
                     
                     for (const sub of subscriptions) {
                         if (sub.status === 'active') {
-                            const paymentsRes = await axios.get(
-                                `http://localhost:8080/api/payments/student/${child.id}`,
-                                { headers }
-                            );
+                            const paymentsRes = await axiosInstance.get(`/payments/student/${child.id}`);
                             
                             const paidAmount = paymentsRes.data
                                 .filter(p => p.subscriptionId === sub.id && p.status === 'paid')
@@ -190,12 +174,9 @@ function ParentDashboard() {
         }
         
         try {
-            const token = localStorage.getItem('token');
-            await axios.post(
-                `http://localhost:8080/api/subscriptions/${subscription.id}/additional-pay`,
-                { amount: subscription.remainingAmount },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            await axiosInstance.post(`/subscriptions/${subscription.id}/additional-pay`, { 
+                amount: subscription.remainingAmount 
+            });
             
             alert('✅ Доплата произведена успешно!');
             
@@ -210,12 +191,7 @@ function ParentDashboard() {
 
     const handlePaySubscription = async (subscriptionId) => {
         try {
-            const token = localStorage.getItem('token');
-            await axios.post(
-                `http://localhost:8080/api/subscriptions/${subscriptionId}/pay`,
-                {},
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            await axiosInstance.post(`/subscriptions/${subscriptionId}/pay`, {});
             alert('✅ Абонемент оплачен!');
             await fetchPendingSubscriptions(childrenList);
             await fetchAllData(childrenList);
@@ -228,25 +204,21 @@ function ParentDashboard() {
     const fetchAllData = async (children) => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            
+            // ✅ Исправлено: axiosInstance
             try {
-                const notificationsRes = await axios.get(
-                    `http://localhost:8080/api/notifications/parent/${user.id}`,
-                    { headers }
-                );
-                setNotifications(notificationsRes.data);
+                const notificationsRes = await axiosInstance.get(`/notifications/parent/${user.id}`);
+                setNotifications(notificationsRes.data || []);
             } catch (err) {
                 console.error('Ошибка загрузки уведомлений:', err);
-                setNotifications([]); // Пустой массив при ошибке
+                setNotifications([]);
             }
             
-            const unreadRes = await axios.get(
-                `http://localhost:8080/api/notifications/parent/${user.id}/unread-count`,
-                { headers }
-            );
-            setUnreadCount(unreadRes.data.count);
+            try {
+                const unreadRes = await axiosInstance.get(`/notifications/parent/${user.id}/unread-count`);
+                setUnreadCount(unreadRes.data.count || 0);
+            } catch (err) {
+                setUnreadCount(0);
+            }
             
             let allLessonsData = [];
             let allPaymentsData = [];
@@ -256,7 +228,7 @@ function ParentDashboard() {
                 
                 for (const studentId of allStudentIds) {
                     try {
-                        // ✅ Заменено на API-функцию
+                        // ✅ Исправлено: API-функция
                         const lessonsRes = await getLessonsByStudent(studentId);
                         const lessonsArray = lessonsRes.data !== undefined ? lessonsRes.data : lessonsRes;
                         const lessonsWithChild = lessonsArray.map(lesson => ({
@@ -271,10 +243,8 @@ function ParentDashboard() {
                     }
                     
                     try {
-                        const paymentsRes = await axios.get(
-                            `http://localhost:8080/api/payments/student/${studentId}`,
-                            { headers }
-                        );
+                        // ✅ Исправлено: axiosInstance
+                        const paymentsRes = await axiosInstance.get(`/payments/student/${studentId}`);
                         const paymentsWithChild = paymentsRes.data.map(payment => ({
                             ...payment,
                             childId: child.id,
@@ -322,18 +292,10 @@ function ParentDashboard() {
 
     const markAllAsRead = async () => {
         try {
-            const token = localStorage.getItem('token');
-            await axios.patch(
-                `http://localhost:8080/api/notifications/parent/${user.id}/read-all`,
-                {},
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            await axiosInstance.patch(`/notifications/parent/${user.id}/read-all`, {});
             setUnreadCount(0);
-            const notificationsRes = await axios.get(
-                `http://localhost:8080/api/notifications/parent/${user.id}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
-            setNotifications(notificationsRes.data);
+            const notificationsRes = await axiosInstance.get(`/notifications/parent/${user.id}`);
+            setNotifications(notificationsRes.data || []);
         } catch (err) {
             console.error('Ошибка при отметке прочитанных:', err);
         }
@@ -341,12 +303,7 @@ function ParentDashboard() {
 
     const handlePayLesson = async (lesson) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.post(
-                `http://localhost:8080/api/payments/create-for-lesson/${lesson.id}`,
-                {},
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            const response = await axiosInstance.post(`/payments/create-for-lesson/${lesson.id}`, {});
             
             // ✅ Перенаправляем на платёжную страницу ЮKassa
             if (response.data.paymentUrl) {
@@ -364,7 +321,7 @@ function ParentDashboard() {
         if (!selectedLesson) return;
         
         try {
-            // ✅ Заменено на API-функцию
+            // ✅ Исправлено: API-функция
             await confirmPayment(selectedLesson.id);
             setOpenPaymentDialog(false);
             setSelectedLesson(null);
@@ -450,6 +407,7 @@ function ParentDashboard() {
     };
 
     const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
         const date = new Date(dateStr);
         return date.toLocaleDateString('ru-RU', { 
             day: 'numeric', 

@@ -14,7 +14,11 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/integration")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {
+        "http://localhost:3000",
+        "http://72.56.238.224",
+        "http://ed-space.ru"
+}, allowCredentials = "true")
 public class IntegrationController {
 
     @Autowired
@@ -22,12 +26,13 @@ public class IntegrationController {
 
     @PostMapping("/import/kege")
     @PreAuthorize("hasRole('TUTOR')")
-    public ResponseEntity<?> importFromKEGE(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> importFromKEGE(@RequestBody Map<String, String> request,
+                                            @RequestAttribute("userId") Long tutorId) {
         try {
             String subject = request.get("subject");
             String examType = request.get("examType");
 
-            List<TaskBank> imported = integrationService.importFromKEGE(subject, examType);
+            List<TaskBank> imported = integrationService.importFromKEGE(subject, examType, tutorId);
 
             return ResponseEntity.ok(Map.of(
                     "message", "Импортировано заданий: " + imported.size(),
@@ -41,12 +46,13 @@ public class IntegrationController {
 
     @PostMapping("/import/reshuege")
     @PreAuthorize("hasRole('TUTOR')")
-    public ResponseEntity<?> importFromReshUEGE(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> importFromReshUEGE(@RequestBody Map<String, String> request,
+                                                @RequestAttribute("userId") Long tutorId) {
         try {
             String subject = request.get("subject");
             String examType = request.get("examType");
 
-            List<TaskBank> imported = integrationService.importFromReshUEGE(subject, examType);
+            List<TaskBank> imported = integrationService.importFromReshUEGE(subject, examType, tutorId);
 
             return ResponseEntity.ok(Map.of(
                     "message", "Импортировано заданий: " + imported.size(),
@@ -63,13 +69,15 @@ public class IntegrationController {
     public ResponseEntity<?> searchTasks(@RequestParam(required = false) String query,
                                          @RequestParam(required = false) String subject,
                                          @RequestParam(required = false) String examType,
-                                         @RequestParam(required = false) String source) {
+                                         @RequestParam(required = false) String source,
+                                         @RequestAttribute("userId") Long tutorId) {
         try {
             List<TaskBank> tasks = integrationService.searchTasks(
                     query != null ? query : "",
                     subject,
                     examType,
-                    source
+                    source,
+                    tutorId
             );
             return ResponseEntity.ok(tasks);
         } catch (Exception e) {
@@ -79,9 +87,18 @@ public class IntegrationController {
 
     @GetMapping("/tasks/{id}")
     @PreAuthorize("hasRole('TUTOR')")
-    public ResponseEntity<?> getTaskById(@PathVariable Long id) {
+    public ResponseEntity<?> getTaskById(@PathVariable Long id,
+                                         @RequestAttribute("userId") Long tutorId) {
         try {
             TaskBank task = integrationService.getTaskForHomework(id);
+
+            // ✅ IDOR FIX: Проверяем, что задание принадлежит репетитору или публичное
+            if (task.getTutor() != null &&
+                    !task.getTutor().getId().equals(tutorId) &&
+                    !Boolean.TRUE.equals(task.getIsPublic())) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
             return ResponseEntity.ok(task);
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
@@ -91,10 +108,18 @@ public class IntegrationController {
     @PostMapping("/create-homework-from-task")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createHomeworkFromTask(@RequestBody Map<String, Object> request,
-                                                    @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                                    @RequestAttribute("userId") Long currentUserId) {
         try {
             Long taskId = Long.parseLong(request.get("taskId").toString());
             Long studentId = Long.parseLong(request.get("studentId").toString());
+
+            // ✅ IDOR FIX: Проверяем, что задание принадлежит репетитору или публичное
+            TaskBank task = integrationService.getTaskForHomework(taskId);
+            if (task.getTutor() != null &&
+                    !task.getTutor().getId().equals(currentUserId) &&
+                    !Boolean.TRUE.equals(task.getIsPublic())) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
 
             LocalDateTime dueDate = null;
             if (request.get("dueDate") != null) {

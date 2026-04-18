@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "tutor")
@@ -47,10 +48,15 @@ public class Tutor {
     @Column(nullable = false)
     private String role = "ROLE_TUTOR";
 
-    // Удаляем или комментируем эту связь, так как теперь Student использует @ManyToMany
-    // @OneToMany(mappedBy = "tutor")
-    // @JsonIgnore
-    // private List<Student> students = new ArrayList<>();
+    @Column(name = "reset_token")
+    private String resetToken;
+
+    @Column(name = "reset_token_expiry")
+    private LocalDateTime resetTokenExpiry;
+
+    // ✅ НОВОЕ ПОЛЕ: Персональная видеокомната репетитора
+    @Column(name = "video_room_name", unique = true)
+    private String videoRoomName = "edspace-tutor-" + UUID.randomUUID().toString().substring(0, 8);
 
     @OneToMany(mappedBy = "tutor")
     @JsonIgnore
@@ -66,6 +72,7 @@ public class Tutor {
         this.createdAt = LocalDateTime.now();
         this.isActive = true;
         this.role = "ROLE_TUTOR";
+        this.videoRoomName = "edspace-tutor-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     // Геттеры
@@ -79,10 +86,12 @@ public class Tutor {
     public String getCity() { return city; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public Boolean getIsActive() { return isActive; }
-    // public List<Student> getStudents() { return students; }
     public List<Course> getCourses() { return courses; }
     public String getAvatar() { return avatar; }
     public String getRole() { return role; }
+    public String getResetToken() { return resetToken; }
+    public LocalDateTime getResetTokenExpiry() { return resetTokenExpiry; }
+    public String getVideoRoomName() { return videoRoomName; }  // ✅ Геттер
 
     // Сеттеры
     public void setEmail(String email) { this.email = email; }
@@ -93,8 +102,10 @@ public class Tutor {
     public void setAbout(String about) { this.about = about; }
     public void setCity(String city) { this.city = city; }
     public void setIsActive(Boolean isActive) { this.isActive = isActive; }
-    // public void setStudents(List<Student> students) { this.students = students; }
     public void setCourses(List<Course> courses) { this.courses = courses; }
     public void setAvatar(String avatar) { this.avatar = avatar; }
     public void setRole(String role) { this.role = role; }
+    public void setResetToken(String resetToken) { this.resetToken = resetToken; }
+    public void setResetTokenExpiry(LocalDateTime resetTokenExpiry) { this.resetTokenExpiry = resetTokenExpiry; }
+    public void setVideoRoomName(String videoRoomName) { this.videoRoomName = videoRoomName; }  // ✅ Сеттер
 }

@@ -1,9 +1,8 @@
-// frontend/src/pages/StudentProfile.js
 import React, { useState, useEffect } from 'react';
 import {
     Box, Paper, Typography, TextField, Button, Avatar,
     Grid, Divider, Alert, Snackbar, CircularProgress,
-    Card, CardContent, Chip, InputAdornment
+    Chip, InputAdornment, Card
 } from '@mui/material';
 import {
     Save as SaveIcon,
@@ -12,11 +11,11 @@ import {
     Email as EmailIcon,
     Phone as PhoneIcon,
     School as SchoolIcon,
-    Badge as BadgeIcon,
-    AttachMoney as MoneyIcon
+    Badge as BadgeIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
+// ✅ Правильный импорт
+import axiosInstance from '../api/axiosConfig';
 
 const StudentProfile = () => {
     const { user } = useAuth();
@@ -28,39 +27,41 @@ const StudentProfile = () => {
         fullName: '',
         email: '',
         phone: '',
-        tutorName: '',
-        tutorEmail: '',
-        ratePerLesson: '',
         paymentType: ''
     });
     
-    const [studentData, setStudentData] = useState(null);
+    const [tutors, setTutors] = useState([]);
 
     useEffect(() => {
         fetchStudentProfile();
     }, []);
 
     const fetchStudentProfile = async () => {
+        console.log('🚀 fetchStudentProfile вызвана');  // ← ДОБАВЬ ЭТО
+        console.log('👤 user:', user);  // ← ДОБАВЬ ЭТО
+    
+        if (!user || !user.id) {
+            console.error('❌ user или user.id отсутствует');
+            return;
+        }
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/students/${user.id}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Используем axiosInstance
+            const response = await axiosInstance.get(`/students/${user.id}`);
             
             const student = response.data;
-            setStudentData(student);
-            
+            console.log('Student data:', student);
             setProfile({
                 fullName: student.fullName || '',
                 email: student.email || '',
                 phone: student.phone || '',
-                tutorName: student.tutor?.fullName || 'Не назначен',
-                tutorEmail: student.tutor?.email || '',
-                ratePerLesson: student.ratePerLesson || '',
                 paymentType: student.paymentType === 'subscription' ? 'Абонемент' : 'Поурочная оплата'
             });
+            
+            // ✅ Получаем список репетиторов
+            if (student.tutors && student.tutors.length > 0) {
+                setTutors(student.tutors);
+            }
         } catch (err) {
             console.error('Ошибка загрузки профиля:', err);
             showSnackbar('Ошибка при загрузке профиля', 'error');
@@ -72,21 +73,17 @@ const StudentProfile = () => {
     const handleSaveProfile = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            await axios.put(
-                `http://localhost:8080/api/students/${user.id}`,
-                {
-                    fullName: profile.fullName,
-                    phone: profile.phone
-                },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Используем axiosInstance
+            await axiosInstance.put(`/students/${user.id}`, {
+                fullName: profile.fullName,
+                phone: profile.phone
+            });
             
             setEditMode(false);
             showSnackbar('Профиль успешно обновлён', 'success');
         } catch (err) {
             console.error('Ошибка сохранения:', err);
-            showSnackbar('Ошибка при сохранении профиля', 'error');
+            showSnackbar(err.response?.data?.error || 'Ошибка при сохранении профиля', 'error');
         } finally {
             setLoading(false);
         }
@@ -96,7 +93,7 @@ const StudentProfile = () => {
         setSnackbar({ open: true, message, severity });
     };
 
-    if (loading && !studentData) return (
+    if (loading && !profile.fullName) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
             <CircularProgress />
         </Box>
@@ -117,12 +114,16 @@ const StudentProfile = () => {
                                 height: 120,
                                 mx: 'auto',
                                 mb: 2,
-                                bgcolor: '#ff6b6b',
+                                bgcolor: '#6366F1',
                                 fontSize: 48
                             }}
                         >
                             {profile.fullName?.charAt(0) || 'У'}
                         </Avatar>
+                        
+                        <Typography variant="h6" gutterBottom>
+                            {profile.fullName}
+                        </Typography>
                         
                         <Divider sx={{ my: 2 }} />
                         
@@ -131,14 +132,6 @@ const StudentProfile = () => {
                             label={`ID: ${user?.id}`}
                             variant="outlined"
                             sx={{ mb: 1 }}
-                        />
-                        
-                        <Chip
-                            icon={<MoneyIcon />}
-                            label={profile.ratePerLesson ? `${profile.ratePerLesson} ₽/занятие` : 'Ставка не указана'}
-                            variant="outlined"
-                            color="success"
-                            sx={{ mb: 1, mt: 1 }}
                         />
                         
                         <Chip
@@ -239,50 +232,34 @@ const StudentProfile = () => {
                         </Grid>
                     </Paper>
                     
-                    {/* Информация о репетиторе */}
-                    <Paper sx={{ p: 3, mt: 3, borderRadius: 3, bgcolor: '#f5f5f5' }}>
-                        <Typography variant="h6" gutterBottom>
-                            <SchoolIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                            Мой репетитор
-                        </Typography>
-                        <Grid container spacing={2}>
-                            <Grid item xs={12}>
-                                <TextField
-                                    fullWidth
-                                    label="ФИО репетитора"
-                                    value={profile.tutorName}
-                                    disabled
-                                    InputProps={{
-                                        startAdornment: (
-                                            <InputAdornment position="start">
-                                                <PersonIcon color="action" />
-                                            </InputAdornment>
-                                        )
-                                    }}
-                                />
+                    {/* Информация о репетиторах */}
+                    {tutors.length > 0 && (
+                        <Paper sx={{ p: 3, mt: 3, borderRadius: 3, bgcolor: '#f5f5f5' }}>
+                            <Typography variant="h6" gutterBottom>
+                                <SchoolIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                                {tutors.length === 1 ? 'Мой репетитор' : 'Мои репетиторы'}
+                            </Typography>
+                            <Grid container spacing={2}>
+                                {tutors.map((tutor, index) => (
+                                    <Grid item xs={12} key={tutor.id}>
+                                        <Card variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                                {tutor.fullName}
+                                            </Typography>
+                                            <Typography variant="body2" color="textSecondary">
+                                                {tutor.email}
+                                            </Typography>
+                                            {tutor.phone && (
+                                                <Typography variant="body2" color="textSecondary">
+                                                    {tutor.phone}
+                                                </Typography>
+                                            )}
+                                        </Card>
+                                    </Grid>
+                                ))}
                             </Grid>
-                            <Grid item xs={12}>
-                                <TextField
-                                    fullWidth
-                                    label="Email репетитора"
-                                    value={profile.tutorEmail}
-                                    disabled
-                                    InputProps={{
-                                        startAdornment: (
-                                            <InputAdornment position="start">
-                                                <EmailIcon color="action" />
-                                            </InputAdornment>
-                                        )
-                                    }}
-                                />
-                            </Grid>
-                            <Grid item xs={12}>
-                                <Alert severity="info" sx={{ mt: 1 }}>
-                                    По всем вопросам обращайтесь к вашему репетитору.
-                                </Alert>
-                            </Grid>
-                        </Grid>
-                    </Paper>
+                        </Paper>
+                    )}
                 </Grid>
             </Grid>
             

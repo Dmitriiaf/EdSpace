@@ -1,6 +1,5 @@
 // frontend/src/pages/Courses.js
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import {
     Box, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, Table, TableBody, TableCell,
@@ -19,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import ColorPicker from '../components/ColorPicker';
 import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import axiosInstance from '../api/axiosConfig';
 
 function Courses() {
     const { user } = useAuth();
@@ -56,10 +56,10 @@ function Courses() {
             const headers = { 'Authorization': `Bearer ${token}` };
 
             const [coursesRes, studentsRes, lessonsRes, paymentsRes] = await Promise.all([
-                axios.get(`http://localhost:8080/api/courses/tutor/${user.id}`, { headers }),
-                axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, { headers }),
-                axios.get(`http://localhost:8080/api/lessons/all?tutorId=${user.id}`, { headers }),
-                axios.get(`http://localhost:8080/api/payments/tutor/${user.id}`, { headers })
+                axiosInstance.get(`/courses/tutor/${user.id}`, { headers }),
+                axiosInstance.get(`/students/tutor/${user.id}`, { headers }),
+                axiosInstance.get(`/lessons/all?tutorId=${user.id}`, { headers }),
+                axiosInstance.get(`/payments/tutor/${user.id}`, { headers })
             ]);
 
             setCourses(coursesRes.data);
@@ -189,10 +189,10 @@ function Courses() {
             const headers = { 'Authorization': `Bearer ${token}` };
             
             if (editingCourse) {
-                await axios.put(`http://localhost:8080/api/courses/${editingCourse.id}`, formData, { headers });
+                await axiosInstance.put(`/courses/${editingCourse.id}`, formData, { headers });
                 showSnackbar('Курс обновлён', 'success');
             } else {
-                await axios.post('http://localhost:8080/api/courses', formData, { headers });
+                await axiosInstance.post('/courses', formData, { headers });
                 showSnackbar('Курс добавлен', 'success');
             }
             
@@ -208,7 +208,7 @@ function Courses() {
         if (window.confirm('Вы уверены, что хотите удалить курс?')) {
             try {
                 const token = localStorage.getItem('token');
-                await axios.delete(`http://localhost:8080/api/courses/${id}`, {
+                await axiosInstance.delete(`/courses/${id}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 showSnackbar('Курс удалён', 'success');

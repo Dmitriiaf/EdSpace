@@ -27,6 +27,9 @@ public class Subscription {
     @Column(name = "lessons_used")
     private Integer lessonsUsed = 0;
 
+    @Column(name = "debt_lessons")
+    private Integer debtLessons = 0;
+
     @Column(precision = 10, scale = 2)
     private BigDecimal price;
 
@@ -69,11 +72,13 @@ public class Subscription {
     public LocalDate getStartDate() { return startDate; }
     public LocalDate getEndDate() { return endDate; }
     public String getStatus() { return status; }
+    public Integer getDebtLessons() { return debtLessons; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getPaidAt() { return paidAt; }
 
     // Сеттеры
     public void setTutor(Tutor tutor) { this.tutor = tutor; }
+    public void setDebtLessons(Integer debtLessons) { this.debtLessons = debtLessons; }
     public void setStudent(Student student) { this.student = student; }
     public void setLessonsCount(Integer lessonsCount) { this.lessonsCount = lessonsCount; }
     public void setLessonsUsed(Integer lessonsUsed) { this.lessonsUsed = lessonsUsed; }

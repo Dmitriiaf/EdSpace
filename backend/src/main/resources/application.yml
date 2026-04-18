@@ -23,17 +23,19 @@ spring:
       max-file-size: 50MB
       max-request-size: 50MB
   mail:
-    host: smtp.gmail.com
-    port: 587
+    host: ${MAIL_HOST:smtp.yandex.ru}
+    port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
+    protocol: ${MAIL_PROTOCOL:smtps}
     properties:
       mail:
         smtp:
           auth: true
-          starttls:
+          ssl:
             enable: true
-            required: true
+          starttls:
+            enable: false
 
 logging:
   level:

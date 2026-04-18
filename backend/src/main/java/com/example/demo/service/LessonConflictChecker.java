@@ -1,4 +1,4 @@
-// ========== backend/src/main/java/com/example/demo/service/LessonConflictChecker.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== backend/src/main/java/com/example/demo/service/LessonConflictChecker.java (ЖЁСТКОЕ РЕШЕНИЕ) ==========
 package com.example.demo.service;
 
 import com.example.demo.repository.LessonRepository;
@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
-@Slf4j  // ✅ Добавлена аннотация Lombok для логирования
+@Slf4j
 @Service
 public class LessonConflictChecker {
 
@@ -29,21 +29,21 @@ public class LessonConflictChecker {
         log.info("Ученик email: {}", studentEmail);
         log.info("Дата: {}, время: {}-{}", date, startTime, endTime);
 
-        List<Long> allStudentIds = studentRepository.findStudentIdsByEmail(studentEmail);
+        List<Long> studentIdsForTutor = studentRepository.findStudentIdsByTutorIdAndEmail(tutorId, studentEmail);
 
-        if (allStudentIds.isEmpty()) {
-            log.warn("⚠️ Ученик с email {} не найден в БД", studentEmail);
+        if (studentIdsForTutor.isEmpty()) {
+            log.warn("⚠️ Ученик с email {} не привязан к репетитору {}", studentEmail, tutorId);
             return null;
         }
 
-        log.info("Все ID ученика: {}", allStudentIds);
+        log.info("ID ученика, привязанного к репетитору: {}", studentIdsForTutor);
 
-        boolean studentBusy = lessonRepository.isStudentSlotOverlapping(
-                allStudentIds, date, startTime, endTime);
+        boolean studentBusy = lessonRepository.isStudentSlotOverlappingForTutor(
+                studentIdsForTutor, tutorId, date, startTime, endTime);
 
         if (studentBusy) {
-            log.warn("❌ КОНФЛИКТ: У ученика уже есть занятие в это время с другим репетитором");
-            return "У этого ученика уже есть занятие в это время с другим репетитором";
+            log.warn("❌ КОНФЛИКТ: У ученика уже есть занятие в это время у этого репетитора");
+            return "У этого ученика уже есть занятие в это время";
         }
 
         boolean tutorBusy = lessonRepository.isTutorSlotOverlapping(
@@ -67,24 +67,23 @@ public class LessonConflictChecker {
         log.info("Ученик email: {}", studentEmail);
         log.info("Новая дата: {}, время: {}-{}", date, startTime, endTime);
 
-        List<Long> allStudentIds = studentRepository.findStudentIdsByEmail(studentEmail);
+        List<Long> studentIdsForTutor = studentRepository.findStudentIdsByTutorIdAndEmail(tutorId, studentEmail);
 
-        if (allStudentIds.isEmpty()) {
-            log.warn("⚠️ Ученик с email {} не найден в БД", studentEmail);
+        if (studentIdsForTutor.isEmpty()) {
+            log.warn("⚠️ Ученик с email {} не привязан к репетитору {}", studentEmail, tutorId);
             return null;
         }
 
-        log.info("Все ID ученика: {}", allStudentIds);
+        log.info("ID ученика, привязанного к репетитору: {}", studentIdsForTutor);
 
-        boolean studentBusy = lessonRepository.isStudentSlotOverlappingExcluding(
-                allStudentIds, date, startTime, endTime, lessonId);
+        boolean studentBusy = lessonRepository.isStudentSlotOverlappingForTutorExcluding(
+                studentIdsForTutor, tutorId, date, startTime, endTime, lessonId);
 
         if (studentBusy) {
-            log.warn("❌ КОНФЛИКТ: У ученика уже есть занятие в это время с другим репетитором");
-            return "У этого ученика уже есть занятие в это время с другим репетитором";
+            log.warn("❌ КОНФЛИКТ: У ученика уже есть занятие в это время у этого репетитора");
+            return "У этого ученика уже есть занятие в это время";
         }
 
-        // ✅ ИСПРАВЛЕНО: используем метод с исключением для репетитора
         boolean tutorBusy = lessonRepository.isTutorSlotOverlappingExcluding(
                 tutorId, date, startTime, endTime, lessonId);
 

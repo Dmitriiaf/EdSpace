@@ -1,14 +1,13 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.InvitationToken;
+import com.example.demo.entity.PasswordResetToken;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-import com.example.demo.entity.PasswordResetToken;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 
@@ -30,9 +29,6 @@ public class EmailService {
 
     @Value("${spring.mail.username}")
     private String username;
-
-    @Value("${spring.mail.username}")
-    private String fromEmail;
 
     /**
      * Отправить приглашение ученику
@@ -61,12 +57,12 @@ public class EmailService {
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>🎓 LMS Tutor</h1>
+                        <h1>🎓 EdSpace</h1>
                         <p>Персональная платформа для обучения</p>
                     </div>
                     <div class="content">
                         <h2>Здравствуйте, %s!</h2>
-                        <p><strong>%s</strong> приглашает вас присоединиться к платформе LMS Tutor.</p>
+                        <p><strong>%s</strong> приглашает вас присоединиться к платформе EdSpace.</p>
                         
                         <div class="info">
                             <strong>📋 Детали:</strong><br>
@@ -84,7 +80,7 @@ public class EmailService {
                         <p><small>⏰ Ссылка действительна 7 дней.</small></p>
                     </div>
                     <div class="footer">
-                        <p>© 2026 LMS Tutor. Это письмо отправлено автоматически.</p>
+                        <p>© 2026 EdSpace. Это письмо отправлено автоматически.</p>
                     </div>
                 </div>
             </body>
@@ -107,7 +103,7 @@ public class EmailService {
      */
     public void sendParentInvitation(InvitationToken token, String studentName, String tutorName) {
         String inviteUrl = baseUrl + "/parent-registration?token=" + token.getToken();
-        String subject = "👨‍👩‍👧 Приглашение в LMS Tutor от " + tutorName;
+        String subject = "👨‍👩‍👧 Приглашение в EdSpace от " + tutorName;
 
         String htmlMessage = String.format("""
             <!DOCTYPE html>
@@ -127,7 +123,7 @@ public class EmailService {
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>👨‍👩‍👧 LMS Tutor</h1>
+                        <h1>👨‍👩‍👧 EdSpace</h1>
                         <p>Кабинет родителя</p>
                     </div>
                     <div class="content">
@@ -153,7 +149,7 @@ public class EmailService {
                         <p><small>⏰ Ссылка действительна 7 дней.</small></p>
                     </div>
                     <div class="footer">
-                        <p>© 2026 LMS Tutor. Это письмо отправлено автоматически.</p>
+                        <p>© 2026 EdSpace. Это письмо отправлено автоматически.</p>
                     </div>
                 </div>
             </body>
@@ -166,6 +162,65 @@ public class EmailService {
 
         sendHtmlEmail(token.getEmail(), subject, htmlMessage);
         log.info("📧 Приглашение отправлено родителю на email {}", token.getEmail());
+    }
+
+    /**
+     * Отправить письмо для восстановления пароля (HTML)
+     */
+    public void sendPasswordResetEmail(String email, String userName, String resetToken) {
+        String resetUrl = baseUrl + "/reset-password?token=" + resetToken;
+        String subject = "🔐 EdSpace — Восстановление пароля";
+
+        String htmlMessage = String.format("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #F59E0B 0%%, #D97706 100%%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                    .button { display: inline-block; background: #F59E0B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+                    .warning { background: #FEF3C7; padding: 15px; border-radius: 5px; border-left: 4px solid #F59E0B; margin: 20px 0; }
+                    .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🔐 EdSpace</h1>
+                        <p>Восстановление пароля</p>
+                    </div>
+                    <div class="content">
+                        <h2>Здравствуйте, %s!</h2>
+                        <p>Вы запросили восстановление пароля для вашего аккаунта на платформе EdSpace.</p>
+                        
+                        <center><a href="%s" class="button">🔑 Установить новый пароль</a></center>
+                        
+                        <p>Или перейдите по ссылке:<br>
+                        <a href="%s">%s</a></p>
+                        
+                        <div class="warning">
+                            <strong>⚠️ Важно:</strong>
+                            <ul>
+                                <li>Ссылка действительна 24 часа</li>
+                                <li>Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 EdSpace. Это письмо отправлено автоматически.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """,
+                userName, resetUrl, resetUrl, resetUrl
+        );
+
+        sendHtmlEmail(email, subject, htmlMessage);
+        log.info("📧 Письмо для восстановления пароля отправлено на {}", email);
     }
 
     /**
@@ -186,55 +241,8 @@ public class EmailService {
             mailSender.send(message);
             log.info("✅ Письмо успешно отправлено на {}", to);
         } catch (MessagingException e) {
-            log.error("❌ Ошибка отправки email на {}: {} (Код ошибки: {})",
-                    to, e.getMessage(), e.getCause() != null ? e.getCause().getMessage() : "нет");
-            log.error("   SMTP host: {}, port: {}, username: {}", host, port, username);
-            e.printStackTrace();
+            log.error("❌ Ошибка отправки email на {}: {}", to, e.getMessage());
             throw new RuntimeException("Не удалось отправить email: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * Отправить простое текстовое письмо (для тестов)
-     */
-    public void sendSimpleEmail(String to, String subject, String text) {
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromEmail);
-            message.setTo(to);
-            message.setSubject(subject);
-            message.setText(text);
-            mailSender.send(message);
-            log.info("📧 Письмо отправлено на {}", to);
-        } catch (Exception e) {
-            log.error("Ошибка отправки email: {}", e.getMessage(), e);
-        }
-    }
-
-    public void sendPasswordResetEmail(PasswordResetToken token, String userName) {
-        String resetUrl = baseUrl + "/reset-password?token=" + token.getToken();
-        String userTypeText = switch (token.getUserType()) {
-            case "TUTOR" -> "репетитора";
-            case "STUDENT" -> "ученика";
-            case "PARENT" -> "родителя";
-            default -> "пользователя";
-        };
-
-        String htmlMessage = String.format("""
-        <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-            body { font-family: Arial; } .container { max-width:600px; margin:0 auto; padding:20px; }
-            .header { background:#F59E0B; color:white; padding:30px; text-align:center; border-radius:10px 10px 0 0; }
-            .content { background:#f9f9f9; padding:30px; border-radius:0 0 10px 10px; }
-            .button { background:#F59E0B; color:white; padding:12px 30px; text-decoration:none; border-radius:5px; font-weight:bold; }
-            .warning { background:#FEF3C7; padding:15px; border-radius:5px; border-left:4px solid #F59E0B; }
-        </style></head><body><div class="container">
-            <div class="header"><h1>🔐 LMS Tutor</h1><p>Восстановление пароля</p></div>
-            <div class="content"><h2>Здравствуйте, %s!</h2><p>Вы запросили восстановление пароля для аккаунта %s.</p>
-            <center><a href="%s" class="button">🔑 Установить новый пароль</a></center>
-            <div class="warning"><strong>⚠️ Важно:</strong><ul><li>Ссылка действительна 1 час</li><li>Если вы не запрашивали сброс пароля, проигнорируйте письмо</li></ul></div>
-            </div></div></body></html>
-        """, userName, userTypeText, resetUrl);
-
-        sendHtmlEmail(token.getEmail(), "🔐 Восстановление пароля LMS Tutor", htmlMessage);
     }
 }

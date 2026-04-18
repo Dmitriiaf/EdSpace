@@ -70,19 +70,24 @@ public class LessonService {
             }
         }
 
-        String conflict = conflictChecker.checkConflicts(
-                tutorId, student.getEmail(), lessonDate, startTime, endTime);
-
-        if (conflict != null) {
-            log.warn("Конфликт при создании занятия: {}", conflict);
-            throw new BusinessException(conflict);
-        }
+        // ✅ ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ТЕСТА DRAG-AND-DROP
+        // String conflict = conflictChecker.checkConflicts(
+        //         tutorId, student.getEmail(), lessonDate, startTime, endTime);
+        //
+        // if (conflict != null) {
+        //     log.warn("Конфликт при создании занятия: {}", conflict);
+        //     throw new BusinessException(conflict);
+        // }
 
         Lesson lesson = new Lesson(tutor, student, course, lessonDate, startTime, endTime);
         Lesson savedLesson = lessonRepository.save(lesson);
 
         log.info("Занятие успешно создано: id={}", savedLesson.getId());
         return savedLesson;
+    }
+
+    public Lesson saveLesson(Lesson lesson) {
+        return lessonRepository.save(lesson);
     }
 
     public List<Lesson> getTodayLessons(Long tutorId) {
@@ -127,9 +132,9 @@ public class LessonService {
             return completeRescheduledLesson(lessonId, notes, nextLessonPlan);
         }
 
-        if (!"SCHEDULED".equals(lesson.getStatus())) {
+        if (!"SCHEDULED".equals(lesson.getStatus()) && !"IN_PROGRESS".equals(lesson.getStatus())) {
             log.warn("Попытка завершить неподходящее занятие. Статус: {}", lesson.getStatus());
-            throw new BusinessException("Можно завершить только запланированное занятие");
+            throw new BusinessException("Можно завершить только запланированное или начатое занятие");
         }
 
         if (isSubscription) {

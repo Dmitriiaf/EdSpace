@@ -9,7 +9,7 @@ import {
     OpenInNew as OpenInNewIcon,
     Draw as DrawIcon
 } from '@mui/icons-material';
-import axios from 'axios';
+import axiosInstance from '../api/axiosConfig';
 
 function WhiteboardModal({ open, onClose, lessonId, lessonInfo }) {
     const [loading, setLoading] = useState(true);
@@ -26,22 +26,25 @@ function WhiteboardModal({ open, onClose, lessonId, lessonInfo }) {
         setLoading(true);
         setError(null);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/excalidraw/board/${lessonId}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            const response = await axiosInstance.get(`/excalidraw/room/${lessonId}`);
             setBoardInfo(response.data);
         } catch (err) {
+            console.error('Ошибка загрузки доски:', err);
             setError(err.response?.data?.error || 'Ошибка при создании доски');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleOpenBoard = () => {
-        if (boardInfo?.boardUrl) {
-            window.open(boardInfo.boardUrl, '_blank', 'width=1400,height=900');
+    const handleOpenInNewTab = () => {
+        if (boardInfo?.roomUrl) {
+            window.open(boardInfo.roomUrl, '_blank');
+        }
+    };
+
+    const handleJoinBoard = () => {
+        if (boardInfo?.roomUrl) {
+            window.open(boardInfo.roomUrl, '_blank', 'width=1200,height=800');
         }
     };
 
@@ -79,7 +82,6 @@ function WhiteboardModal({ open, onClose, lessonId, lessonInfo }) {
                     <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
                 ) : boardInfo && (
                     <Box>
-                        {/* Информация о занятии */}
                         <Box sx={{ 
                             p: 2, 
                             bgcolor: '#F9FAFB', 
@@ -90,32 +92,32 @@ function WhiteboardModal({ open, onClose, lessonId, lessonInfo }) {
                                 Занятие
                             </Typography>
                             <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                                {boardInfo.courseName}
+                                {boardInfo.courseName || 'Занятие'}
                             </Typography>
                             {lessonInfo && (
                                 <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
-                                    {lessonInfo.studentName} • {lessonInfo.startTime?.slice(0, 5)} - {lessonInfo.endTime?.slice(0, 5)}
+                                    {lessonInfo.studentName || lessonInfo.tutorName} • {lessonInfo.startTime?.slice(0, 5)} - {lessonInfo.endTime?.slice(0, 5)}
                                 </Typography>
                             )}
                         </Box>
 
-                        {/* Описание */}
-                        <Box sx={{ mb: 3 }}>
+                        <Box sx={{ textAlign: 'center', mb: 3 }}>
                             <Typography variant="body2" color="textSecondary" gutterBottom>
-                                🎨 Excalidraw — это виртуальная доска для совместной работы.
+                                Вы подключаетесь как
                             </Typography>
-                            <Typography variant="body2" color="textSecondary">
-                                Рисуйте схемы, пишите формулы, добавляйте изображения в реальном времени вместе с учеником.
-                            </Typography>
+                            <Chip 
+                                label={boardInfo.displayName || 'Участник'}
+                                color="secondary"
+                                sx={{ fontWeight: 500 }}
+                            />
                         </Box>
 
-                        {/* Кнопки */}
                         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
                             <Button
                                 variant="contained"
                                 size="large"
                                 startIcon={<DrawIcon />}
-                                onClick={handleOpenBoard}
+                                onClick={handleJoinBoard}
                                 sx={{
                                     bgcolor: '#8B5CF6',
                                     '&:hover': { bgcolor: '#7C3AED' },
@@ -130,7 +132,7 @@ function WhiteboardModal({ open, onClose, lessonId, lessonInfo }) {
                                 variant="outlined"
                                 size="large"
                                 startIcon={<OpenInNewIcon />}
-                                onClick={handleOpenBoard}
+                                onClick={handleOpenInNewTab}
                                 sx={{
                                     px: 3,
                                     py: 1.5,
@@ -146,7 +148,7 @@ function WhiteboardModal({ open, onClose, lessonId, lessonInfo }) {
                             textAlign: 'center', 
                             mt: 3 
                         }}>
-                            Доска сохраняется автоматически. Вы можете вернуться к ней в любое время.
+                            Доска работает через Excalidraw.
                         </Typography>
                     </Box>
                 )}

@@ -45,7 +45,7 @@ function StudentMaterials() {
             setLoading(true);
             const token = localStorage.getItem('token');
             const response = await axios.get(
-                `http://localhost:8080/api/materials/student/${user.id}`,
+                `/api/materials/student/${user.id}`,
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
             
@@ -71,7 +71,7 @@ function StudentMaterials() {
             setLoading(true);
             const token = localStorage.getItem('token');
             const response = await axios.get(
-                `http://localhost:8080/api/materials/student/${user.id}/folder/${folderId}`,
+                `/materials/student/${user.id}/folder/${folderId}`,
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
             
@@ -122,7 +122,7 @@ function StudentMaterials() {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get(
-                `http://localhost:8080/api/materials/download/${material.id}`,
+                `/materials/download/${material.id}`,
                 {
                     headers: { 'Authorization': `Bearer ${token}` },
                     responseType: 'blob'

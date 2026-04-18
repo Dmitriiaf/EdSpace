@@ -12,7 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -235,6 +235,21 @@ public class StudentService {
         }
 
         studentRepository.delete(student);
+    }
+
+    public Parent findOrCreateParent(String email, String studentFullName) {
+        Parent parent = parentRepository.findByEmail(email).orElse(null);
+
+        if (parent == null) {
+            parent = new Parent();
+            parent.setEmail(email);
+            parent.setFullName("Родитель " + studentFullName);
+            parent.setRole("ROLE_PARENT");
+            parent.setCreatedAt(LocalDateTime.now());
+            parent = parentRepository.save(parent);
+        }
+
+        return parent;
     }
 
     @Transactional

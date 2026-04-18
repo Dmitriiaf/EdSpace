@@ -22,7 +22,6 @@ public interface TaskBankRepository extends JpaRepository<TaskBank, Long> {
             "LOWER(t.tags) LIKE LOWER(CONCAT('%', :query, '%'))")
     List<TaskBank> search(@Param("query") String query);
 
-    // НОВЫЙ МЕТОД для RAG
     @Query("SELECT t FROM TaskBank t WHERE t.subject = :subject AND t.taskNumber = :taskNumber")
     List<TaskBank> findSimilarTasks(@Param("subject") String subject, @Param("taskNumber") Integer taskNumber);
 
@@ -34,4 +33,8 @@ public interface TaskBankRepository extends JpaRepository<TaskBank, Long> {
 
     @Query("SELECT DISTINCT t.topic FROM TaskBank t WHERE t.subject = :subject")
     List<String> findTopicsBySubject(@Param("subject") String subject);
+
+    // ✅ НОВЫЙ МЕТОД ДЛЯ ИЗОЛЯЦИИ
+    @Query("SELECT t FROM TaskBank t WHERE t.tutor.id = :tutorId OR t.isPublic = true")
+    List<TaskBank> findByTutorIdOrPublic(@Param("tutorId") Long tutorId);
 }

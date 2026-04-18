@@ -35,6 +35,7 @@ import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
 import VideoCallModal from '../components/VideoCallModal';
 import WhiteboardModal from '../components/WhiteboardModal';
+import axiosInstance from '../api/axiosConfig';
 import {
     getAllLessons,
     completeLesson,
@@ -69,21 +70,17 @@ function Dashboard() {
     const [selectedDateForReschedule, setSelectedDateForReschedule] = useState(new Date());
     const [selectedTime, setSelectedTime] = useState('');
     const [availableSlots, setAvailableSlots] = useState([]);
-    const [rescheduleLesson, setRescheduleLesson] = useState(null);
+    const [lessonToReschedule, setLessonToReschedule] = useState(null);
     
-    // Jitsi Meet состояния
     const [videoCallOpen, setVideoCallOpen] = useState(false);
     const [selectedLessonForCall, setSelectedLessonForCall] = useState(null);
     
-    // Excalidraw состояния
     const [whiteboardOpen, setWhiteboardOpen] = useState(false);
     const [selectedLessonForBoard, setSelectedLessonForBoard] = useState(null);
     
-    // Планы уроков
     const [lessonPlans, setLessonPlans] = useState([]);
     const [selectedPlanId, setSelectedPlanId] = useState('');
     
-    // Варианты
     const [variants, setVariants] = useState([]);
     const [selectedVariantId, setSelectedVariantId] = useState('');
     const [applyType, setApplyType] = useState('none');
@@ -379,6 +376,7 @@ function Dashboard() {
 
     const handleCancelClick = (lesson) => {
         setSelectedLesson(lesson);
+        setCancelReason('');
         setOpenCancelDialog(true);
     };
 
@@ -399,7 +397,7 @@ function Dashboard() {
     };
 
     const handleRescheduleClick = (lesson) => {
-        setRescheduleLesson(lesson);
+        setLessonToReschedule(lesson);
         const lessonDate = new Date(lesson.lessonDate);
         setSelectedDateForReschedule(lessonDate);
         
@@ -448,23 +446,23 @@ function Dashboard() {
 
     const handleDateChange = (date) => {
         setSelectedDateForReschedule(date);
-        if (rescheduleLesson) {
-            checkAvailableSlots(date, rescheduleLesson);
+        if (lessonToReschedule) {
+            checkAvailableSlots(date, lessonToReschedule);
         }
     };
 
     const handleRescheduleConfirm = async () => {
-        if (!rescheduleLesson || !selectedTime) return;
+        if (!lessonToReschedule || !selectedTime) return;
         
         try {
             const timeFrom = selectedTime + ':00';
             const timeTo = (parseInt(selectedTime.split(':')[0]) + 1).toString().padStart(2, '0') + ':00';
             const newDate = selectedDateForReschedule.toISOString().split('T')[0];
             
-            await rescheduleLesson(rescheduleLesson.id, newDate, timeFrom, timeTo);
+            await rescheduleLesson(lessonToReschedule.id, newDate, timeFrom, timeTo);
             
             setOpenRescheduleDialog(false);
-            setRescheduleLesson(null);
+            setLessonToReschedule(null);
             setSelectedTime('');
             await loadAllData();
             showSnackbar('✅ Занятие успешно перенесено', 'success');
@@ -473,6 +471,22 @@ function Dashboard() {
             console.error('Ошибка при переносе:', err);
             showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
         }
+    };
+
+    const handleStartLesson = async (lesson) => {
+        try {
+            await axiosInstance.post(`/lessons/${lesson.id}/start`);
+            showSnackbar('✅ Урок начат!', 'success');
+            await loadAllData();
+        } catch (err) {
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        }
+    };
+
+    const handleStudentNoShow = (lesson) => {
+        setSelectedLesson(lesson);
+        setCancelReason('Ученик не пришёл');
+        setOpenCancelDialog(true);
     };
 
     const goToPreviousDay = () => {
@@ -495,6 +509,7 @@ function Dashboard() {
         if (lesson.status === 'CANCELLED') return 'error';
         if (lesson.status === 'PAID') return 'success';
         if (lesson.status === 'COMPLETED') return 'warning';
+        if (lesson.status === 'IN_PROGRESS') return 'info';
         if (lesson.status === 'RESCHEDULED') return 'secondary';
         return 'info';
     };
@@ -503,6 +518,7 @@ function Dashboard() {
         if (lesson.status === 'CANCELLED') return 'Отменено';
         if (lesson.status === 'PAID') return 'Оплачено';
         if (lesson.status === 'COMPLETED') return 'Проведено (ждёт оплаты)';
+        if (lesson.status === 'IN_PROGRESS') return 'В процессе';
         if (lesson.status === 'RESCHEDULED') return 'Перенесено';
         return 'Запланировано';
     };
@@ -522,11 +538,11 @@ function Dashboard() {
         const isRescheduledNew = lesson.originalLesson !== null && lesson.status === 'RESCHEDULED';
         const isRescheduledOriginal = lesson.status === 'RESCHEDULED' && lesson.originalLesson === null;
         
-        const canStart = lesson.status === 'SCHEDULED' || isRescheduledNew;
         const isCompleted = lesson.status === 'COMPLETED';
         const isPaid = lesson.status === 'PAID';
         const isCancelled = lesson.status === 'CANCELLED';
-        const isPastLesson = new Date(lesson.lessonDate) < new Date();
+        const isInProgress = lesson.status === 'IN_PROGRESS';
+        const isScheduled = lesson.status === 'SCHEDULED';
         
         const getRescheduledTarget = () => {
             if (!isRescheduledOriginal) return null;
@@ -541,8 +557,9 @@ function Dashboard() {
                     mb: 2,
                     borderLeft: 6,
                     borderColor: `${getLessonColor(lesson)}.main`,
-                    bgcolor: lesson.status === 'SCHEDULED' ? '#fff3e0' : 
-                             lesson.status === 'COMPLETED' ? '#fff8e1' : 'white',
+                    bgcolor: isScheduled ? '#fff3e0' : 
+                             isInProgress ? '#e3f2fd' :
+                             isCompleted ? '#fff8e1' : 'white',
                     transition: 'transform 0.2s',
                     '&:hover': { transform: 'translateX(4px)' }
                 }}
@@ -628,15 +645,15 @@ function Dashboard() {
                                         ❌ ПРИЧИНА ОТМЕНЫ:
                                     </Typography>
                                     <Typography variant="body1" color="error">
-                                        {lesson.notes.replace('❌ Отменено: ', '')}
+                                        {lesson.notes.replace('❌ Отменено: ', '').replace('❌ Ученик не пришёл: ', '')}
                                     </Typography>
                                 </Paper>
                             )}
                         </Box>
                         
                         <Box sx={{ display: 'flex', gap: 1, ml: 2, flexDirection: 'column' }}>
-                            {/* КНОПКА ВИДЕОЗВОНКА */}
-                            {(canStart || isPastLesson) && !isCancelled && (
+                            {/* Видеозвонок */}
+                            {(isScheduled || isInProgress) && !isCancelled && (
                                 <Button
                                     size="small"
                                     variant="outlined"
@@ -652,8 +669,8 @@ function Dashboard() {
                                 </Button>
                             )}
                             
-                            {/* КНОПКА ОНЛАЙН-ДОСКИ */}
-                            {(canStart || isPastLesson) && !isCancelled && (
+                            {/* Онлайн-доска */}
+                            {(isScheduled || isInProgress) && !isCancelled && (
                                 <Button
                                     size="small"
                                     variant="outlined"
@@ -669,31 +686,45 @@ function Dashboard() {
                                 </Button>
                             )}
                             
-                            {isPastLesson && canStart && (
-                                <Button
-                                    size="small"
-                                    variant="contained"
-                                    color="success"
-                                    startIcon={<CheckIcon />}
-                                    onClick={() => handleOpenComplete(lesson)}
-                                >
-                                    Отметить проведённым
-                                </Button>
-                            )}
-                            
-                            {!isPastLesson && canStart && (
+                            {/* Начать урок (только для SCHEDULED) */}
+                            {isScheduled && (
                                 <Button
                                     size="small"
                                     variant="contained"
                                     color="primary"
                                     startIcon={<PlayIcon />}
-                                    onClick={() => handleOpenComplete(lesson)}
+                                    onClick={() => handleStartLesson(lesson)}
                                 >
                                     Начать урок
                                 </Button>
                             )}
                             
-                            {lesson.status === 'SCHEDULED' && (
+                            {/* Завершить урок и Ученик не пришёл (только для IN_PROGRESS) */}
+                            {isInProgress && (
+                                <>
+                                    <Button
+                                        size="small"
+                                        variant="contained"
+                                        color="success"
+                                        startIcon={<CheckIcon />}
+                                        onClick={() => handleOpenComplete(lesson)}
+                                    >
+                                        Завершить урок
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="warning"
+                                        startIcon={<CancelIcon />}
+                                        onClick={() => handleStudentNoShow(lesson)}
+                                    >
+                                        Ученик не пришёл
+                                    </Button>
+                                </>
+                            )}
+                            
+                            {/* Перенести и Отмена (только для SCHEDULED) */}
+                            {isScheduled && (
                                 <>
                                     <Button
                                         size="small"
@@ -716,6 +747,7 @@ function Dashboard() {
                                 </>
                             )}
                             
+                            {/* Заметки (для COMPLETED и PAID) */}
                             {(isCompleted || isPaid) && (
                                 <Button
                                     size="small"
@@ -1058,23 +1090,30 @@ function Dashboard() {
                 </Dialog>
 
                 <Dialog open={openCancelDialog} onClose={() => setOpenCancelDialog(false)}>
-                    <DialogTitle>Отмена занятия</DialogTitle>
+                    <DialogTitle>
+                        {cancelReason === 'Ученик не пришёл' ? 'Ученик не пришёл' : 'Отмена занятия'}
+                    </DialogTitle>
                     <DialogContent>
                         <TextField
                             autoFocus
                             margin="dense"
-                            label="Причина отмены"
+                            label={cancelReason === 'Ученик не пришёл' ? 'Примечание (необязательно)' : 'Причина отмены'}
                             fullWidth
                             multiline
                             rows={3}
-                            value={cancelReason}
+                            value={cancelReason === 'Ученик не пришёл' ? '' : cancelReason}
                             onChange={(e) => setCancelReason(e.target.value)}
                         />
+                        {cancelReason === 'Ученик не пришёл' && (
+                            <Alert severity="info" sx={{ mt: 2 }}>
+                                Занятие будет отменено. У ученика появится задолженность на 1 занятие.
+                            </Alert>
+                        )}
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={() => setOpenCancelDialog(false)}>Назад</Button>
                         <Button onClick={handleCancelConfirm} color="error" variant="contained">
-                            Отменить занятие
+                            {cancelReason === 'Ученик не пришёл' ? 'Подтвердить' : 'Отменить занятие'}
                         </Button>
                     </DialogActions>
                 </Dialog>
@@ -1141,7 +1180,6 @@ function Dashboard() {
                     </DialogActions>
                 </Dialog>
 
-                {/* МОДАЛЬНОЕ ОКНО ВИДЕОЗВОНКА */}
                 <VideoCallModal 
                     open={videoCallOpen} 
                     onClose={() => {
@@ -1156,7 +1194,6 @@ function Dashboard() {
                     } : null}
                 />
 
-                {/* МОДАЛЬНОЕ ОКНО ОНЛАЙН-ДОСКИ */}
                 <WhiteboardModal 
                     open={whiteboardOpen} 
                     onClose={() => {

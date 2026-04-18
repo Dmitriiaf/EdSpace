@@ -15,7 +15,8 @@ import {
     Badge as BadgeIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
+// ✅ Правильный импорт
+import axiosInstance from '../api/axiosConfig';
 
 const ParentProfile = () => {
     const { user } = useAuth();
@@ -31,17 +32,16 @@ const ParentProfile = () => {
     });
 
     useEffect(() => {
-        fetchParentProfile();
-        fetchChildren();
-    }, []);
+        if (user && user.id) {
+            fetchParentProfile();
+            fetchChildren();
+        }
+    }, [user]);
 
     const fetchParentProfile = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/parents/${user.id}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Исправлено: axiosInstance и без /api
+            const response = await axiosInstance.get(`/parents/${user.id}`);
             
             setProfile({
                 fullName: response.data.fullName || user?.fullName,
@@ -55,12 +55,9 @@ const ParentProfile = () => {
 
     const fetchChildren = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/students/parent/${user.id}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
-            setChildren(response.data);
+            // ✅ Исправлено: axiosInstance и правильный URL
+            const response = await axiosInstance.get(`/students/parent/${user.id}`);
+            setChildren(response.data || []);
         } catch (err) {
             console.error('Ошибка загрузки детей:', err);
         }
@@ -69,21 +66,17 @@ const ParentProfile = () => {
     const handleSaveProfile = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            await axios.put(
-                `http://localhost:8080/api/parents/${user.id}`,
-                {
-                    fullName: profile.fullName,
-                    phone: profile.phone
-                },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Исправлено: axiosInstance
+            await axiosInstance.put(`/parents/${user.id}`, {
+                fullName: profile.fullName,
+                phone: profile.phone
+            });
             
             setEditMode(false);
             showSnackbar('Профиль успешно обновлён', 'success');
         } catch (err) {
             console.error('Ошибка сохранения:', err);
-            showSnackbar('Ошибка при сохранении профиля', 'error');
+            showSnackbar(err.response?.data?.error || 'Ошибка при сохранении профиля', 'error');
         } finally {
             setLoading(false);
         }
@@ -114,12 +107,16 @@ const ParentProfile = () => {
                                 height: 120,
                                 mx: 'auto',
                                 mb: 2,
-                                bgcolor: '#ff6b6b',
+                                bgcolor: '#10B981',
                                 fontSize: 48
                             }}
                         >
                             {profile.fullName?.charAt(0) || 'Р'}
                         </Avatar>
+                        
+                        <Typography variant="h6" gutterBottom>
+                            {profile.fullName}
+                        </Typography>
                         
                         <Divider sx={{ my: 2 }} />
                         
@@ -229,7 +226,7 @@ const ParentProfile = () => {
                         </Typography>
                         
                         {children.length === 0 ? (
-                            <Alert severity="info">У вас пока нет детей</Alert>
+                            <Alert severity="info">У вас пока нет привязанных детей</Alert>
                         ) : (
                             <List>
                                 {children.map((child, index) => (
@@ -237,7 +234,7 @@ const ParentProfile = () => {
                                         <ListItem>
                                             <ListItemText
                                                 primary={child.fullName}
-                                                secondary={`${child.email || 'Email не указан'} | Ставка: ${child.ratePerLesson || 'не указана'} ₽ | ${child.paymentType === 'subscription' ? 'Абонемент' : 'Поурочная оплата'}`}
+                                                secondary={`${child.email || 'Email не указан'} | ${child.paymentType === 'subscription' ? 'Абонемент' : 'Поурочная оплата'}`}
                                             />
                                         </ListItem>
                                         {index < children.length - 1 && <Divider />}

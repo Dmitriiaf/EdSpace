@@ -50,7 +50,7 @@ function StepikPage() {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/status', {
+            const response = await axios.get('/stepik/status', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -119,7 +119,7 @@ function StepikPage() {
     const fetchMyCourses = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/my-courses', {
+            const response = await axios.get('/stepik/my-courses', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -134,7 +134,7 @@ function StepikPage() {
     const fetchAssignments = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/assignments', {
+            const response = await axios.get('/stepik/assignments', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setAssignments(response.data || []);
@@ -149,7 +149,7 @@ function StepikPage() {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                'http://localhost:8080/api/stepik/sync-progress',
+                '/stepik/sync-progress',
                 {},
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
@@ -168,7 +168,7 @@ function StepikPage() {
         setSearching(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/courses/featured', {
+            const response = await axios.get('/stepik/courses/featured', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -195,7 +195,7 @@ function StepikPage() {
         setSearching(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8080/api/stepik/courses/search', {
+            const response = await axios.get('/stepik/courses/search', {
                 params: { query: searchQuery, page: reset ? 1 : page },
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -232,7 +232,7 @@ function StepikPage() {
     const fetchStudents = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, {
+            const response = await axios.get(`/students/tutor/${user.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setStudents(response.data);
@@ -259,7 +259,7 @@ function StepikPage() {
         try {
             const token = localStorage.getItem('token');
             await axios.post(
-                'http://localhost:8080/api/stepik/assign',
+                '/stepik/assign',
                 {
                     studentId: selectedStudentId,
                     courseId: selectedCourse.id,

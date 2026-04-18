@@ -35,25 +35,42 @@ public class InvitationController {
      */
     @GetMapping("/validate")
     public ResponseEntity<?> validateToken(@RequestParam String token) {
-        InvitationToken invitation = tokenRepository.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Токен не найден"));
+        try {
+            InvitationToken invitation = tokenRepository.findByToken(token)
+                    .orElseThrow(() -> new RuntimeException("Токен не найден"));
 
-        if (invitation.getUsed()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Приглашение уже использовано"));
-        }
+            if (Boolean.TRUE.equals(invitation.getUsed())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Приглашение уже использовано"));
+            }
 
-        if (invitation.isExpired()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Срок действия приглашения истёк"));
-        }
+            if (invitation.isExpired()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Срок действия приглашения истёк"));
+            }
 
-        return ResponseEntity.ok(Map.of(
-                "email", invitation.getEmail(),
-                "userType", invitation.getUserType(),
-                "studentName", invitation.getStudentName(),
-                "tutorName", tutorRepository.findById(invitation.getTutorId())
+            // ✅ Безопасное получение имени репетитора
+            String tutorName = "Репетитор";
+            if (invitation.getTutorId() != null) {
+                tutorName = tutorRepository.findById(invitation.getTutorId())
                         .map(t -> t.getFullName())
-                        .orElse("Репетитор")
-        ));
+                        .orElse("Репетитор");
+            }
+
+            // ✅ Безопасное получение имени ученика
+            String studentName = invitation.getStudentName();
+            if (studentName == null) {
+                studentName = "Ученик";
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "email", invitation.getEmail() != null ? invitation.getEmail() : "",
+                    "userType", invitation.getUserType() != null ? invitation.getUserType() : "STUDENT",
+                    "studentName", studentName,
+                    "tutorName", tutorName
+            ));
+        } catch (Exception e) {
+            log.error("Ошибка валидации токена: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of("error", "Недействительный токен"));
+        }
     }
 
     /**

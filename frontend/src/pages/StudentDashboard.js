@@ -1,6 +1,6 @@
-// ========== frontend/src/pages/StudentDashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/pages/StudentDashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ С ВИДЕОЗВОНКОМ) ==========
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import axiosInstance from '../api/axiosConfig';
 import {
     Box, Grid, Card, CardContent, Typography,
     Paper, Chip, CircularProgress, Alert, Tabs, Tab,
@@ -17,12 +17,9 @@ import {
     School as SchoolIcon,
     Person as PersonIcon,
     Close as CloseIcon,
-    Edit as EditIcon,
     CheckCircle as CheckIcon,
     Cancel as CancelIcon,
     Schedule as ScheduleIcon,
-    TrendingUp as TrendingUpIcon,
-    Info as InfoIcon,
     Folder as FolderIcon,
     Download as DownloadIcon,
     Description as FileIcon,
@@ -31,11 +28,7 @@ import {
     VideoLibrary as VideoIcon,
     Audiotrack as AudioIcon,
     NavigateNext as NavigateNextIcon,
-    Star as StarIcon,
-    StarHalf as StarHalfIcon,
-    StarBorder as StarBorderIcon,
     Assessment as AssessmentIcon,
-    AccessTime as AccessTimeIcon,
     ArrowForward as ArrowForwardIcon,
     Circle as CircleIcon,
     Assignment as AssignmentIcon,
@@ -43,8 +36,12 @@ import {
     ExpandLess as ExpandLessIcon,
     OpenInNew as OpenInNewIcon,
     Refresh as RefreshIcon,
-    Link as LinkIcon
+    Link as LinkIcon,
+    Info as InfoIcon,
+    Videocam as VideocamIcon
 } from '@mui/icons-material';
+import WhiteboardModal from '../components/WhiteboardModal';
+import { Draw as DrawIcon } from '@mui/icons-material';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { PickersDay } from '@mui/x-date-pickers/PickersDay';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -53,8 +50,8 @@ import ruLocale from 'date-fns/locale/ru';
 import { format, isSameDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
-// ✅ Импорт из объединённого API
 import { getLessonsByStudent, getStudentProgressStats, getProgressTimeline } from '../services/api';
+import VideoCallModal from '../components/VideoCallModal';
 
 const FileTypeIcon = ({ fileName, size = 40 }) => {
     const ext = fileName?.split('.').pop()?.toLowerCase();
@@ -106,14 +103,14 @@ function StudentDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [mainTabValue, setMainTabValue] = useState(0);
-    
+    const [whiteboardOpen, setWhiteboardOpen] = useState(false);
+    const [selectedLessonForBoard, setSelectedLessonForBoard] = useState(null);
     const [allLessons, setAllLessons] = useState([]);
     const [homeworkStats, setHomeworkStats] = useState(null);
     const [progressTimeline, setProgressTimeline] = useState([]);
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedLesson, setSelectedLesson] = useState(null);
     const [selectedTutorId, setSelectedTutorId] = useState('all');
-    const [openLessonDialog, setOpenLessonDialog] = useState(false);
     const [expandedLessonId, setExpandedLessonId] = useState(null);
     
     const [materials, setMaterials] = useState([]);
@@ -129,6 +126,9 @@ function StudentDashboard() {
     const [homeworkList, setHomeworkList] = useState([]);
     const [homeworkLoading, setHomeworkLoading] = useState(false);
 
+    const [videoCallOpen, setVideoCallOpen] = useState(false);
+    const [selectedLessonForCall, setSelectedLessonForCall] = useState(null);
+
     const getAgeText = (age) => {
         if (age % 10 === 1 && age % 100 !== 11) return 'год';
         if (age % 10 >= 2 && age % 10 <= 4 && (age % 100 < 10 || age % 100 >= 20)) return 'года';
@@ -143,6 +143,11 @@ function StudentDashboard() {
             isBirthday: today.getDate() === birthday.getDate() && today.getMonth() === birthday.getMonth(),
             age: today.getFullYear() - birthday.getFullYear()
         };
+    };
+
+    const handleOpenWhiteboard = (lesson) => {
+        setSelectedLessonForBoard(lesson);
+        setWhiteboardOpen(true);
     };
 
     const birthdayInfo = checkBirthday();
@@ -217,7 +222,7 @@ function StudentDashboard() {
     };
 
     useEffect(() => {
-        if (user) {
+        if (user && user.id) {
             fetchAllData();
             fetchStepikCourses();
             fetchHomeworkList();
@@ -238,12 +243,8 @@ function StudentDashboard() {
     const fetchStepikCourses = async () => {
         setStepikLoading(true);
         try {
-            const token = localStorage.getItem('token');
             const studentId = user?.allIds?.[0] || user?.id;
-            
-            const response = await axios.get(`http://localhost:8080/api/stepik/student/${studentId}/courses`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(`/stepik/student/${studentId}/courses`);
             setStepikCourses(response.data || []);
         } catch (err) {
             console.error('Ошибка загрузки курсов Stepik:', err);
@@ -255,11 +256,8 @@ function StudentDashboard() {
     const fetchHomeworkList = async () => {
         setHomeworkLoading(true);
         try {
-            const token = localStorage.getItem('token');
             const studentId = user?.allIds?.[0] || user?.id;
-            const response = await axios.get(`http://localhost:8080/api/homework/student/${studentId}/all`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(`/homework/student/${studentId}/all`);
             setHomeworkList(response.data || []);
         } catch (err) {
             console.error('Ошибка загрузки заданий:', err);
@@ -276,7 +274,6 @@ function StudentDashboard() {
             
             for (const studentId of allStudentIds) {
                 try {
-                    // ✅ Заменено на API-функцию
                     const response = await getLessonsByStudent(studentId);
                     const lessonsArray = response.data !== undefined ? response.data : response;
                     allLessonsData = [...allLessonsData, ...lessonsArray];
@@ -300,10 +297,7 @@ function StudentDashboard() {
 
     const fetchMaterials = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/materials/student/${user.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(`/materials/student/${user.id}`);
             const data = { materials: response.data.materials || [], folders: response.data.folders || [] };
             setAllMaterialsData(data);
             filterMaterialsByTutor(data, selectedTutorId);
@@ -324,10 +318,7 @@ function StudentDashboard() {
 
     const loadFolderContent = async (folderId) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/materials/student/${user.id}/folder/${folderId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(`/materials/student/${user.id}/folder/${folderId}`);
             const data = { materials: response.data.materials || [], folders: response.data.folders || [] };
             filterMaterialsByTutor(data, selectedTutorId);
         } catch (err) {}
@@ -335,7 +326,6 @@ function StudentDashboard() {
 
     const fetchHomeworkStats = async () => {
         try {
-            // ✅ Заменено на API-функции
             const statsRes = await getStudentProgressStats(user.id);
             const timelineRes = await getProgressTimeline(user.id);
             
@@ -384,9 +374,7 @@ function StudentDashboard() {
 
     const handleDownload = async (material) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/materials/download/${material.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` },
+            const response = await axiosInstance.get(`/materials/download/${material.id}`, {
                 responseType: 'blob'
             });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -398,39 +386,10 @@ function StudentDashboard() {
         } catch (err) {}
     };
 
-    const renderStars = (grade) => {
-        const stars = [];
-        const fullStars = Math.floor(grade);
-        const hasHalfStar = grade % 1 >= 0.5;
-        
-        for (let i = 0; i < fullStars; i++) {
-            stars.push(<StarIcon key={i} sx={{ color: '#FFD700', fontSize: 20 }} />);
-        }
-        if (hasHalfStar) {
-            stars.push(<StarHalfIcon key="half" sx={{ color: '#FFD700', fontSize: 20 }} />);
-        }
-        for (let i = stars.length; i < 5; i++) {
-            stars.push(<StarBorderIcon key={i} sx={{ color: '#FFD700', fontSize: 20 }} />);
-        }
-        return stars;
+    const handleOpenVideoCall = (lesson) => {
+        setSelectedLessonForCall(lesson);
+        setVideoCallOpen(true);
     };
-
-    const upcomingLessons = filteredLessons.filter(l => {
-        const lessonDate = new Date(l.lessonDate);
-        const lessonDateTime = new Date(
-            lessonDate.getFullYear(),
-            lessonDate.getMonth(),
-            lessonDate.getDate(),
-            parseInt(l.startTime?.split(':')[0] || '0'),
-            parseInt(l.startTime?.split(':')[1] || '0')
-        );
-        const now = new Date();
-        
-        return lessonDateTime > now && 
-               l.status !== 'CANCELLED' && 
-               l.status !== 'COMPLETED' && 
-               l.status !== 'PAID';
-    }).slice(0, 5);
 
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
@@ -453,7 +412,6 @@ function StudentDashboard() {
                 bgcolor: '#F9FAFB',
                 minHeight: '100vh'
             }}>
-                {/* Поздравление с днём рождения */}
                 {birthdayInfo.isBirthday && (
                     <Fade in={true} timeout={800}>
                         <Paper 
@@ -491,7 +449,6 @@ function StudentDashboard() {
                     </Fade>
                 )}
 
-                {/* Верхняя панель */}
                 <Box sx={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -538,7 +495,6 @@ function StudentDashboard() {
                     </FormControl>
                 </Box>
 
-                {/* Карточки статистики */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     {[
                         { label: 'Всего занятий', value: stats.total, icon: CalendarIcon, color: '#6366F1', bg: '#EEF2FF' },
@@ -585,7 +541,6 @@ function StudentDashboard() {
                     })}
                 </Grid>
 
-                {/* Следующее занятие */}
                 {stats.nextLesson && (
                     <Card sx={{ 
                         mb: 3, 
@@ -640,7 +595,6 @@ function StudentDashboard() {
                     </Card>
                 )}
 
-                {/* Календарь и занятия */}
                 <Grid container spacing={3} sx={{ mb: 3 }}>
                     <Grid item xs={12} md={5}>
                         <Paper sx={{ 
@@ -750,6 +704,8 @@ function StudentDashboard() {
                                         {lessonsOnSelectedDate.map(lesson => {
                                             const homework = getHomeworkForLesson(lesson);
                                             const isExpanded = expandedLessonId === lesson.id;
+                                            const isPastLesson = new Date(lesson.lessonDate) < new Date();
+                                            const canJoin = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
                                             
                                             return (
                                                 <Card 
@@ -790,6 +746,37 @@ function StudentDashboard() {
                                                                 <Typography variant="caption" sx={{ color: '#6B7280', display: 'block' }}>
                                                                     {lesson.tutor?.fullName}
                                                                 </Typography>
+                                                                
+                                                                {(canJoin || isPastLesson) && lesson.status !== 'CANCELLED' && (
+                                                                    <>
+                                                                        <Button
+                                                                            size="small"
+                                                                            variant="outlined"
+                                                                            color="primary"
+                                                                            startIcon={<VideocamIcon />}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenVideoCall(lesson);
+                                                                            }}
+                                                                            sx={{ mt: 1, mr: 1 }}
+                                                                        >
+                                                                            Видеозвонок
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="small"
+                                                                            variant="outlined"
+                                                                            color="secondary"
+                                                                            startIcon={<DrawIcon />}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenWhiteboard(lesson);
+                                                                            }}
+                                                                            sx={{ mt: 1 }}
+                                                                        >
+                                                                            Онлайн-доска
+                                                                        </Button>
+                                                                    </>
+                                                                )}
                                                                 
                                                                 {homework && (
                                                                     <Box sx={{ mt: 1.5 }}>
@@ -847,7 +834,6 @@ function StudentDashboard() {
                     </Grid>
                 </Grid>
 
-                {/* Вкладки */}
                 <Paper sx={{ borderRadius: 4, overflow: 'hidden', border: '1px solid #F3F4F6' }}>
                     <Tabs 
                         value={mainTabValue} 
@@ -874,7 +860,6 @@ function StudentDashboard() {
                         <Tab icon={<SchoolIcon />} iconPosition="start" label="Stepik" />
                     </Tabs>
 
-                    {/* Материалы */}
                     <TabPanel value={mainTabValue} index={0}>
                         <Box sx={{ p: 2 }}>
                             <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 2 }}>
@@ -1010,7 +995,6 @@ function StudentDashboard() {
                         </Box>
                     </TabPanel>
 
-                    {/* Задания */}
                     <TabPanel value={mainTabValue} index={1}>
                         <Box sx={{ p: 2 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -1165,7 +1149,6 @@ function StudentDashboard() {
                         </Box>
                     </TabPanel>
 
-                    {/* Успеваемость */}
                     <TabPanel value={mainTabValue} index={2}>
                         <Box sx={{ p: 2 }}>
                             {!homeworkStats ? (
@@ -1268,7 +1251,6 @@ function StudentDashboard() {
                         </Box>
                     </TabPanel>
 
-                    {/* История */}
                     <TabPanel value={mainTabValue} index={3}>
                         <Box sx={{ p: 2 }}>
                             <TableContainer component={Paper} sx={{ boxShadow: 'none', border: '1px solid #F3F4F6', borderRadius: 3 }}>
@@ -1313,7 +1295,6 @@ function StudentDashboard() {
                         </Box>
                     </TabPanel>
 
-                    {/* Stepik */}
                     <TabPanel value={mainTabValue} index={4}>
                         <Box sx={{ p: 2 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -1431,7 +1412,6 @@ function StudentDashboard() {
                     </TabPanel>
                 </Paper>
 
-                {/* Диалог с деталями занятия */}
                 <Dialog 
                     open={!!selectedLesson} 
                     onClose={() => setSelectedLesson(null)}
@@ -1503,7 +1483,36 @@ function StudentDashboard() {
                         </>
                     )}
                 </Dialog>
+
+                <VideoCallModal 
+                    open={videoCallOpen} 
+                    onClose={() => {
+                        setVideoCallOpen(false);
+                        setSelectedLessonForCall(null);
+                    }}
+                    lessonId={selectedLessonForCall?.id}
+                    lessonInfo={selectedLessonForCall ? {
+                        studentName: selectedLessonForCall.student?.fullName,
+                        startTime: selectedLessonForCall.startTime,
+                        endTime: selectedLessonForCall.endTime,
+                        tutorName: selectedLessonForCall.tutor?.fullName
+                    } : null}
+                />
             </Box>
+                        <WhiteboardModal 
+                open={whiteboardOpen} 
+                onClose={() => {
+                    setWhiteboardOpen(false);
+                    setSelectedLessonForBoard(null);
+                }}
+                lessonId={selectedLessonForBoard?.id}
+                lessonInfo={selectedLessonForBoard ? {
+                    studentName: selectedLessonForBoard.student?.fullName,
+                    tutorName: selectedLessonForBoard.tutor?.fullName,
+                    startTime: selectedLessonForBoard.startTime,
+                    endTime: selectedLessonForBoard.endTime
+                } : null}
+            />
         </LocalizationProvider>
     );
 }

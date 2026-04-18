@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -13,145 +14,67 @@ import java.util.Optional;
 @Repository
 public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
-    // ✅ ОПТИМИЗИРОВАННЫЕ ЗАПРОСЫ С JOIN FETCH
+    List<Lesson> findByTutorIdAndLessonDateOrderByStartTimeAsc(Long tutorId, LocalDate date);
 
-    @Query("SELECT l FROM Lesson l " +
-            "JOIN FETCH l.student s " +
-            "JOIN FETCH l.tutor t " +
-            "LEFT JOIN FETCH l.course c " +
-            "WHERE l.tutor.id = :tutorId " +
-            "ORDER BY l.lessonDate ASC, l.startTime ASC")
+    @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND l.lessonDate >= :today AND l.status IN ('SCHEDULED', 'RESCHEDULED') ORDER BY l.lessonDate ASC, l.startTime ASC")
+    List<Lesson> findUpcomingLessons(@Param("tutorId") Long tutorId, @Param("today") LocalDate today);
+
+    @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId ORDER BY l.lessonDate DESC, l.startTime DESC")
     List<Lesson> findAllByTutorId(@Param("tutorId") Long tutorId);
 
-    @Query("SELECT l FROM Lesson l " +
-            "JOIN FETCH l.student s " +
-            "JOIN FETCH l.tutor t " +
-            "LEFT JOIN FETCH l.course c " +
-            "WHERE l.student.id = :studentId " +
-            "ORDER BY l.lessonDate ASC, l.startTime ASC")
-    List<Lesson> findByStudentIdOrderByLessonDateAscStartTimeAsc(@Param("studentId") Long studentId);
-
-    @Query("SELECT l FROM Lesson l " +
-            "JOIN FETCH l.student s " +
-            "JOIN FETCH l.tutor t " +
-            "LEFT JOIN FETCH l.course c " +
-            "WHERE l.tutor.id = :tutorId AND l.lessonDate = :date " +
-            "ORDER BY l.startTime ASC")
-    List<Lesson> findByTutorIdAndLessonDateOrderByStartTimeAsc(@Param("tutorId") Long tutorId,
-                                                               @Param("date") LocalDate date);
-
-    @Query("SELECT l FROM Lesson l " +
-            "JOIN FETCH l.student s " +
-            "JOIN FETCH l.tutor t " +
-            "LEFT JOIN FETCH l.course c " +
-            "WHERE l.student.id = :studentId AND l.lessonDate = :date " +
-            "ORDER BY l.startTime ASC")
-    List<Lesson> findByStudentIdAndLessonDateOrderByStartTimeAsc(@Param("studentId") Long studentId,
-                                                                 @Param("date") LocalDate date);
-
-    @Query("SELECT l FROM Lesson l " +
-            "JOIN FETCH l.student s " +
-            "JOIN FETCH l.tutor t " +
-            "LEFT JOIN FETCH l.course c " +
-            "WHERE l.tutor.id = :tutorId AND l.lessonDate >= :date " +
-            "AND l.status != 'CANCELLED' " +
-            "ORDER BY l.lessonDate ASC, l.startTime ASC")
-    List<Lesson> findUpcomingLessons(@Param("tutorId") Long tutorId, @Param("date") LocalDate date);
-
-    @Query("SELECT l FROM Lesson l " +
-            "JOIN FETCH l.student s " +
-            "JOIN FETCH l.tutor t " +
-            "LEFT JOIN FETCH l.course c " +
-            "WHERE l.tutor.id = :tutorId " +
-            "AND l.status IN ('PAID', 'COMPLETED', 'CANCELLED') " +
-            "ORDER BY l.lessonDate DESC, l.startTime DESC")
+    @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND (l.status = 'COMPLETED' OR l.status = 'PAID' OR l.status = 'CANCELLED') ORDER BY l.lessonDate DESC, l.startTime DESC")
     List<Lesson> findArchivedLessons(@Param("tutorId") Long tutorId);
 
-    // Обычный findById с JOIN FETCH
-    @Query("SELECT l FROM Lesson l " +
-            "JOIN FETCH l.student s " +
-            "JOIN FETCH l.tutor t " +
-            "LEFT JOIN FETCH l.course c " +
-            "WHERE l.id = :id")
+    List<Lesson> findByStudentIdOrderByLessonDateAscStartTimeAsc(Long studentId);
+
+    @Query("SELECT l FROM Lesson l LEFT JOIN FETCH l.course WHERE l.id = :id")
     Optional<Lesson> findByIdWithDetails(@Param("id") Long id);
 
-    // ========== ПРОВЕРКИ КОНФЛИКТОВ (БЕЗ JOIN FETCH ДЛЯ СКОРОСТИ) ==========
+    // ✅ ВОЗВРАЩЁННЫЙ МЕТОД
+    boolean existsByTutorIdAndLessonDateAndStartTime(Long tutorId, LocalDate date, LocalTime startTime);
 
-    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.student.id = :studentId " +
-            "AND l.lessonDate = :date AND l.startTime = :startTime " +
-            "AND l.status != 'CANCELLED'")
-    boolean isSlotBusy(@Param("studentId") Long studentId,
-                       @Param("date") LocalDate date,
-                       @Param("startTime") LocalTime startTime);
+    // ✅ ВОЗВРАЩЁННЫЙ МЕТОД
+    @Query("SELECT COUNT(l) FROM Lesson l WHERE l.student.id = :studentId AND l.lessonDate BETWEEN :startDate AND :endDate")
+    long countLessonsInMonth(@Param("studentId") Long studentId,
+                             @Param("startDate") LocalDate startDate,
+                             @Param("endDate") LocalDate endDate);
 
-    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.student.id IN :studentIds " +
-            "AND l.lessonDate = :date AND l.startTime = :startTime " +
-            "AND l.status != 'CANCELLED'")
-    boolean isSlotBusyForStudents(@Param("studentIds") List<Long> studentIds,
-                                  @Param("date") LocalDate date,
-                                  @Param("startTime") LocalTime startTime);
-
-    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.tutor.id = :tutorId " +
-            "AND l.lessonDate = :date " +
-            "AND l.status != 'CANCELLED' " +
-            "AND ((l.startTime <= :startTime AND l.endTime > :startTime) " +
-            "     OR (l.startTime < :endTime AND l.endTime >= :endTime) " +
-            "     OR (l.startTime >= :startTime AND l.endTime <= :endTime))")
+    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.tutor.id = :tutorId AND l.lessonDate = :date AND l.status != 'CANCELLED' AND " +
+            "(l.startTime < :endTime AND l.endTime > :startTime)")
     boolean isTutorSlotOverlapping(@Param("tutorId") Long tutorId,
                                    @Param("date") LocalDate date,
                                    @Param("startTime") LocalTime startTime,
                                    @Param("endTime") LocalTime endTime);
 
-    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.tutor.id = :tutorId " +
-            "AND l.lessonDate = :date " +
-            "AND l.id != :excludeId " +
-            "AND l.status != 'CANCELLED' " +
-            "AND ((l.startTime <= :startTime AND l.endTime > :startTime) " +
-            "     OR (l.startTime < :endTime AND l.endTime >= :endTime) " +
-            "     OR (l.startTime >= :startTime AND l.endTime <= :endTime))")
-    boolean isTutorSlotOverlappingExcluding(@Param("tutorId") Long tutorId,
-                                            @Param("date") LocalDate date,
-                                            @Param("startTime") LocalTime startTime,
-                                            @Param("endTime") LocalTime endTime,
-                                            @Param("excludeId") Long excludeId);
-
-    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.student.id IN :studentIds " +
-            "AND l.lessonDate = :date " +
-            "AND l.status != 'CANCELLED' " +
-            "AND ((l.startTime <= :startTime AND l.endTime > :startTime) " +
-            "     OR (l.startTime < :endTime AND l.endTime >= :endTime) " +
-            "     OR (l.startTime >= :startTime AND l.endTime <= :endTime))")
+    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.student.id IN :studentIds AND l.lessonDate = :date AND l.status != 'CANCELLED' AND " +
+            "(l.startTime < :endTime AND l.endTime > :startTime)")
     boolean isStudentSlotOverlapping(@Param("studentIds") List<Long> studentIds,
                                      @Param("date") LocalDate date,
                                      @Param("startTime") LocalTime startTime,
                                      @Param("endTime") LocalTime endTime);
 
-    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.student.id IN :studentIds " +
-            "AND l.lessonDate = :date " +
-            "AND l.id != :excludeId " +
-            "AND l.status != 'CANCELLED' " +
-            "AND ((l.startTime <= :startTime AND l.endTime > :startTime) " +
-            "     OR (l.startTime < :endTime AND l.endTime >= :endTime) " +
-            "     OR (l.startTime >= :startTime AND l.endTime <= :endTime))")
-    boolean isStudentSlotOverlappingExcluding(@Param("studentIds") List<Long> studentIds,
-                                              @Param("date") LocalDate date,
-                                              @Param("startTime") LocalTime startTime,
-                                              @Param("endTime") LocalTime endTime,
-                                              @Param("excludeId") Long excludeId);
+    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.student.id IN :studentIds AND l.tutor.id = :tutorId AND l.lessonDate = :date AND l.status != 'CANCELLED' AND " +
+            "(l.startTime < :endTime AND l.endTime > :startTime)")
+    boolean isStudentSlotOverlappingForTutor(@Param("studentIds") List<Long> studentIds,
+                                             @Param("tutorId") Long tutorId,
+                                             @Param("date") LocalDate date,
+                                             @Param("startTime") LocalTime startTime,
+                                             @Param("endTime") LocalTime endTime);
 
-    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.tutor.id = :tutorId " +
-            "AND l.lessonDate = :date " +
-            "AND l.startTime = :startTime")
-    boolean existsByTutorIdAndLessonDateAndStartTime(@Param("tutorId") Long tutorId,
-                                                     @Param("date") LocalDate date,
-                                                     @Param("startTime") LocalTime startTime);
+    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.student.id IN :studentIds AND l.tutor.id = :tutorId AND l.lessonDate = :date AND l.status != 'CANCELLED' AND l.id != :excludeLessonId AND " +
+            "(l.startTime < :endTime AND l.endTime > :startTime)")
+    boolean isStudentSlotOverlappingForTutorExcluding(@Param("studentIds") List<Long> studentIds,
+                                                      @Param("tutorId") Long tutorId,
+                                                      @Param("date") LocalDate date,
+                                                      @Param("startTime") LocalTime startTime,
+                                                      @Param("endTime") LocalTime endTime,
+                                                      @Param("excludeLessonId") Long excludeLessonId);
 
-    @Query("SELECT COUNT(l) FROM Lesson l WHERE l.student.id = :studentId " +
-            "AND l.lessonDate BETWEEN :startDate AND :endDate " +
-            "AND l.status != 'CANCELLED'")
-    int countLessonsInMonth(@Param("studentId") Long studentId,
-                            @Param("startDate") LocalDate startDate,
-                            @Param("endDate") LocalDate endDate);
-
-    void deleteByStudentId(Long studentId);
+    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.tutor.id = :tutorId AND l.lessonDate = :date AND l.status != 'CANCELLED' AND l.id != :excludeLessonId AND " +
+            "(l.startTime < :endTime AND l.endTime > :startTime)")
+    boolean isTutorSlotOverlappingExcluding(@Param("tutorId") Long tutorId,
+                                            @Param("date") LocalDate date,
+                                            @Param("startTime") LocalTime startTime,
+                                            @Param("endTime") LocalTime endTime,
+                                            @Param("excludeLessonId") Long excludeLessonId);
 }

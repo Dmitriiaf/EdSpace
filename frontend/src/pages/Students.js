@@ -1,6 +1,7 @@
-// ========== frontend/src/pages/Students.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ С УПРОЩЁННОЙ ФОРМОЙ) ==========
+// ========== frontend/src/pages/Students.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ С DRAG-AND-DROP) ==========
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// ✅ Правильный импорт
+import axiosInstance, { getAllLessons } from '../services/api';
 import {
     Box, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, Paper, IconButton, Alert, Snackbar,
@@ -16,15 +17,14 @@ import {
     Phone, Email, 
     School, AttachMoney,
     CheckCircle, Cake, Schedule,
-    ExpandMore, ExpandLess, TrendingUp
+    ExpandMore, ExpandLess, TrendingUp,
+    Warning as WarningIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-// ✅ Импорт из объединённого API
-import { getAllLessons } from '../services/api';
 
 function Students() {
     const navigate = useNavigate();
@@ -46,7 +46,6 @@ function Students() {
     const [allLessons, setAllLessons] = useState([]);
     const [subscriptions, setSubscriptions] = useState([]);
     
-    // ✅ УПРОЩЁННАЯ ФОРМА
     const [formData, setFormData] = useState({
         fullName: '', 
         email: '', 
@@ -80,10 +79,7 @@ function Students() {
 
     const fetchStudents = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(`/students/tutor/${user.id}`);
             setStudents(response.data);
             setError(null);
         } catch (err) { setError('Не удалось загрузить учеников'); } finally { setLoading(false); }
@@ -100,10 +96,7 @@ function Students() {
 
     const fetchSubscriptions = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/subscriptions/tutor/${user.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(`/subscriptions/tutor/${user.id}`);
             setSubscriptions(response.data);
         } catch (err) {}
     };
@@ -127,9 +120,8 @@ function Students() {
         });
         const total = monthLessons.length;
         const completed = monthLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID').length;
-        const cancelled = monthLessons.filter(l => l.status === 'CANCELLED').length;
         const upcoming = monthLessons.filter(l => { const lessonDate = new Date(l.lessonDate); return lessonDate >= now && l.status === 'SCHEDULED'; }).length;
-        return { total, completed, cancelled, upcoming };
+        return { total, completed, upcoming };
     };
 
     const getNextLesson = (studentEmail) => {
@@ -148,7 +140,8 @@ function Students() {
         const used = studentSub.lessonsUsed || 0;
         const total = studentSub.lessonsCount;
         const percent = total > 0 ? (used / total) * 100 : 0;
-        return { used, total, percent };
+        const debt = studentSub.debtLessons || 0;
+        return { used, total, percent, debt };
     };
 
     const getUpcomingBirthdays = () => {
@@ -163,20 +156,34 @@ function Students() {
     };
 
     const checkExistingStudent = async (email) => {
-        if (!email) return null;
+        if (!email) return;
         setCheckingEmail(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8080/api/students/search-by-email?email=${email}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.data) { 
-                setExistingStudent(response.data); 
-                setShowExistingDialog(true); 
-                return response.data; 
+            const response = await axiosInstance.get(`/students/search-by-email?email=${email}`);
+            
+            const data = response.data;
+            console.log('Search response:', data);
+            
+            if (data && data.exists === true) {
+                if (data.alreadyLinked) {
+                    showSnackbar(`Ученик ${data.fullName} уже привязан к вам`, 'warning');
+                    setExistingStudent(null);
+                    setShowExistingDialog(false);
+                } else {
+                    setExistingStudent(data);
+                    setShowExistingDialog(true);
+                }
+            } else {
+                setExistingStudent(null);
+                setShowExistingDialog(false);
             }
-        } catch (err) {} finally { setCheckingEmail(false); }
-        return null;
+        } catch (err) {
+            console.log('Search error:', err);
+            setExistingStudent(null);
+            setShowExistingDialog(false);
+        } finally {
+            setCheckingEmail(false);
+        }
     };
 
     const handleEmailBlur = async () => { 
@@ -239,10 +246,6 @@ function Students() {
 
     const handleSubmit = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            
-            // ✅ УПРОЩЁННЫЙ requestData
             const requestData = {
                 fullName: formData.fullName, 
                 email: formData.email,
@@ -253,10 +256,10 @@ function Students() {
             };
             
             if (editingStudent) {
-                await axios.put(`http://localhost:8080/api/students/${editingStudent.id}`, requestData, { headers });
+                await axiosInstance.put(`/students/${editingStudent.id}`, requestData);
                 showSnackbar('Ученик обновлён', 'success');
             } else {
-                await axios.post('http://localhost:8080/api/students', requestData, { headers });
+                await axiosInstance.post('/students', requestData);
                 showSnackbar('📧 Приглашение отправлено ученику на email', 'success');
             }
             handleCloseDialog();
@@ -271,10 +274,7 @@ function Students() {
     const handleDelete = async (id) => {
         if (window.confirm('Вы уверены, что хотите удалить ученика?')) {
             try {
-                const token = localStorage.getItem('token');
-                await axios.delete(`http://localhost:8080/api/students/${id}`, { 
-                    headers: { 'Authorization': `Bearer ${token}` } 
-                });
+                await axiosInstance.delete(`/students/${id}`);
                 showSnackbar('Ученик удалён', 'success');
                 fetchStudents(); fetchAllLessons(); fetchSubscriptions();
             } catch (err) { showSnackbar('Ошибка при удалении ученика', 'error'); }
@@ -400,11 +400,40 @@ function Students() {
                                             <Chip label={getPaymentTypeLabel(student.paymentType)} color={getPaymentTypeColor(student.paymentType)} size="small" sx={{ borderRadius: 1.5, fontWeight: 500 }} />
                                         </Box>
                                         <Divider sx={{ my: 1.5 }} />
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5, p: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}>
+                                        
+                                        {/* ✅ ОБНОВЛЁННЫЙ БЛОК: ОТОБРАЖЕНИЕ ДОЛГОВ С DRAG-AND-DROP */}
+                                        {subscriptionProgress && subscriptionProgress.debt > 0 && (
+                                            <Box 
+                                                sx={{ 
+                                                    mb: 1.5, p: 1, bgcolor: '#FFF3E0', borderRadius: 2, 
+                                                    border: '1px solid #FFB74D', cursor: 'grab',
+                                                    '&:active': { cursor: 'grabbing', opacity: 0.7 }
+                                                }}
+                                                draggable
+                                                onDragStart={(e) => {
+                                                    const dragData = JSON.stringify({
+                                                        id: student.id,
+                                                        fullName: student.fullName,
+                                                        debt: subscriptionProgress.debt
+                                                    });
+                                                    e.dataTransfer.setData('text/plain', dragData);
+                                                    e.dataTransfer.effectAllowed = 'move';
+                                                }}
+                                            >
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <WarningIcon sx={{ color: '#E65100', fontSize: 18 }} />
+                                                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#E65100' }}>
+                                                        Пропущено занятий: {subscriptionProgress.debt}
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        )}
+                                        
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-around', mb: 1.5, p: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}>
                                             <Box sx={{ textAlign: 'center', flex: 1 }}><Typography variant="h6" sx={{ fontWeight: 600, color: '#6366F1' }}>{stats.total}</Typography><Typography variant="caption" color="textSecondary">Всего</Typography></Box>
                                             <Box sx={{ textAlign: 'center', flex: 1 }}><Typography variant="h6" sx={{ fontWeight: 600, color: '#10B981' }}>{stats.completed}</Typography><Typography variant="caption" color="textSecondary">Проведено</Typography></Box>
-                                            <Box sx={{ textAlign: 'center', flex: 1 }}><Typography variant="h6" sx={{ fontWeight: 600, color: '#EF4444' }}>{stats.cancelled}</Typography><Typography variant="caption" color="textSecondary">Отменено</Typography></Box>
                                         </Box>
+                                        
                                         {nextLesson && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, p: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}><Schedule sx={{ fontSize: 16, color: '#F59E0B' }} /><Typography variant="body2" sx={{ fontSize: '0.75rem' }}>След. занятие: {format(new Date(nextLesson.lessonDate), 'd MMM', { locale: ru })} в {nextLesson.startTime?.slice(0,5)}</Typography></Box>}
                                         {subscriptionProgress && (
                                             <Box sx={{ mb: 1.5 }}>
@@ -441,7 +470,6 @@ function Students() {
                 </Grid>
             )}
 
-            {/* ✅ УПРОЩЁННЫЙ ДИАЛОГ ДОБАВЛЕНИЯ УЧЕНИКА */}
             <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
                 <DialogTitle>{editingStudent ? 'Редактировать ученика' : 'Добавить нового ученика'}</DialogTitle>
                 <DialogContent>

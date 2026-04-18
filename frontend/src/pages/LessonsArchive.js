@@ -1,6 +1,7 @@
 // ========== frontend/src/pages/LessonsArchive.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// ✅ Заменяем axios на axiosInstance
+import axiosInstance, { getArchivedLessons } from '../services/api';
 import {
     Box, Paper, Typography, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Chip,
@@ -9,8 +10,7 @@ import {
     DialogTitle, DialogContent, DialogActions,
     Card, CardContent, IconButton, Tooltip,
     Tabs, Tab, TableSortLabel, InputAdornment,
-    TextField, Pagination, Avatar, Fade, Divider,
-    Badge
+    TextField, Pagination, Avatar, Divider
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -20,15 +20,10 @@ import { startOfMonth, endOfMonth, format, subMonths, eachMonthOfInterval } from
 import { ru } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
-// ✅ Импорт из объединённого API
-import { getArchivedLessons } from '../services/api';
 import {
-    Edit as EditIcon,
     Search as SearchIcon,
     Refresh as RefreshIcon,
-    Download as DownloadIcon,
     CalendarToday as CalendarIcon,
-    Person as PersonIcon,
     School as SchoolIcon,
     CheckCircle as CheckIcon,
     Cancel as CancelIcon,
@@ -58,11 +53,12 @@ function LessonsArchive() {
     const [orderBy, setOrderBy] = useState('lessonDate');
     const [order, setOrder] = useState('desc');
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [rowsPerPage] = useState(10);
     const [viewMode, setViewMode] = useState('table');
     const [openNotesDialog, setOpenNotesDialog] = useState(false);
     const [selectedLessonNotes, setSelectedLessonNotes] = useState({ notes: '', nextLessonPlan: '' });
     const [topAbsentStudents, setTopAbsentStudents] = useState([]);
+    const [filteredLessons, setFilteredLessons] = useState([]);
     const [stats, setStats] = useState({
         total: 0,
         completed: 0,
@@ -72,7 +68,7 @@ function LessonsArchive() {
     });
 
     useEffect(() => {
-        if (user) {
+        if (user && user.id) {
             fetchData();
         }
     }, [user]);
@@ -83,35 +79,36 @@ function LessonsArchive() {
     }, [lessons, filterStatus, filterStudent, selectedMonth, searchTerm]);
 
     const fetchData = async () => {
+        if (!user || !user.id) return;
+        
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
+            setLoading(true);
             
-            // ✅ Правильно извлекаем данные из ответа API
-            const lessonsRes = await getArchivedLessons(user.id);
+            // ✅ Все запросы через axiosInstance
+            const [lessonsRes, studentsRes, coursesRes] = await Promise.all([
+                getArchivedLessons(user.id),
+                axiosInstance.get(`/students/tutor/${user.id}`),
+                axiosInstance.get(`/courses/tutor/${user.id}`)
+            ]);
+            
             const lessonsData = lessonsRes.data !== undefined ? lessonsRes.data : lessonsRes;
             
-            const studentsRes = await axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, { headers });
-            const coursesRes = await axios.get(`http://localhost:8080/api/courses/tutor/${user.id}`, { headers });
-            
-            // ✅ Гарантируем, что lessons - массив
             setLessons(Array.isArray(lessonsData) ? lessonsData : []);
-            setStudents(studentsRes.data);
-            setCourses(coursesRes.data);
-            setLoading(false);
+            setStudents(studentsRes.data || []);
+            setCourses(coursesRes.data || []);
+            setError(null);
         } catch (err) {
             console.error('Ошибка загрузки:', err);
             setError('Ошибка загрузки данных');
+        } finally {
             setLoading(false);
         }
     };
 
     const calculateTopAbsentStudents = () => {
-        const filtered = getFilteredLessonsInternal();
-        
         const studentAbsences = {};
         
-        filtered.forEach(lesson => {
+        filteredLessons.forEach(lesson => {
             if (lesson.status === 'CANCELLED') {
                 const studentId = lesson.student?.id;
                 if (studentId) {
@@ -141,12 +138,10 @@ function LessonsArchive() {
     };
 
     const calculateStats = () => {
-        const filtered = getFilteredLessonsInternal();
-        
-        const total = filtered.length;
-        const completed = filtered.filter(l => l.status === 'COMPLETED').length;
-        const paid = filtered.filter(l => l.status === 'PAID').length;
-        const cancelled = filtered.filter(l => l.status === 'CANCELLED').length;
+        const total = filteredLessons.length;
+        const completed = filteredLessons.filter(l => l.status === 'COMPLETED').length;
+        const paid = filteredLessons.filter(l => l.status === 'PAID').length;
+        const cancelled = filteredLessons.filter(l => l.status === 'CANCELLED').length;
         
         const months = eachMonthOfInterval({
             start: subMonths(new Date(), 5),
@@ -156,7 +151,7 @@ function LessonsArchive() {
         const monthlyStats = months.map(month => {
             const monthStart = startOfMonth(month);
             const monthEnd = endOfMonth(month);
-            const monthLessons = filtered.filter(l => {
+            const monthLessons = filteredLessons.filter(l => {
                 const lessonDate = new Date(l.lessonDate);
                 return lessonDate >= monthStart && lessonDate <= monthEnd;
             });
@@ -244,8 +239,6 @@ function LessonsArchive() {
         setFilteredLessons(filtered);
     };
 
-    const [filteredLessons, setFilteredLessons] = useState([]);
-    
     const handleRequestSort = (property) => {
         const isAsc = orderBy === property && order === 'asc';
         setOrder(isAsc ? 'desc' : 'asc');
@@ -282,6 +275,7 @@ function LessonsArchive() {
     };
 
     const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
         return format(new Date(dateStr), 'd MMMM yyyy', { locale: ru });
     };
 
@@ -476,7 +470,7 @@ function LessonsArchive() {
                         <Box sx={{ height: 200, mb: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, height: '100%' }}>
                                 {stats.monthlyStats.map((item, idx) => {
-                                    const height = (item.total / maxMonthlyTotal) * 160;
+                                    const height = maxMonthlyTotal > 0 ? (item.total / maxMonthlyTotal) * 160 : 0;
                                     return (
                                         <Tooltip key={idx} title={`${item.fullMonth}: ${item.total} занятий`} arrow>
                                             <Box sx={{ flex: 1, textAlign: 'center' }}>

@@ -7,11 +7,16 @@ import {
 import {
     Close as CloseIcon,
     OpenInNew as OpenInNewIcon,
-    Videocam as VideocamIcon
+    Videocam as VideocamIcon,
+    HourglassEmpty as WaitingIcon
 } from '@mui/icons-material';
-import axios from 'axios';
+import axiosInstance from '../api/axiosConfig';
+import { useAuth } from '../context/AuthContext';
 
 function VideoCallModal({ open, onClose, lessonId, lessonInfo }) {
+    const { user } = useAuth();
+    const isTutor = user?.role === 'tutor';
+    
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [roomInfo, setRoomInfo] = useState(null);
@@ -26,13 +31,10 @@ function VideoCallModal({ open, onClose, lessonId, lessonInfo }) {
         setLoading(true);
         setError(null);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/jitsi/room/${lessonId}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            const response = await axiosInstance.get(`/jitsi/room/${lessonId}`);
             setRoomInfo(response.data);
         } catch (err) {
+            console.error('Ошибка загрузки комнаты:', err);
             setError(err.response?.data?.error || 'Ошибка при создании комнаты');
         } finally {
             setLoading(false);
@@ -47,9 +49,12 @@ function VideoCallModal({ open, onClose, lessonId, lessonInfo }) {
 
     const handleJoinCall = () => {
         if (roomInfo?.roomUrl) {
-            // Открываем звонок в новом окне
             window.open(roomInfo.roomUrl, '_blank', 'width=1200,height=800');
         }
+    };
+
+    const handleRetry = () => {
+        fetchRoomInfo();
     };
 
     return (
@@ -83,9 +88,44 @@ function VideoCallModal({ open, onClose, lessonId, lessonInfo }) {
                         <CircularProgress />
                     </Box>
                 ) : error ? (
-                    <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+                    <Box sx={{ textAlign: 'center', py: 3 }}>
+                        <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+                        <Button variant="outlined" onClick={handleRetry}>
+                            Попробовать снова
+                        </Button>
+                    </Box>
                 ) : roomInfo && (
                     <Box>
+                        {/* ✅ КОМНАТА ОЖИДАНИЯ ДЛЯ УЧЕНИКА */}
+                        {!isTutor && roomInfo.waitingRoom && (
+                            <Box sx={{ 
+                                textAlign: 'center', 
+                                py: 4,
+                                bgcolor: '#FEF3C7',
+                                borderRadius: 2,
+                                mb: 3
+                            }}>
+                                <WaitingIcon sx={{ fontSize: 48, color: '#F59E0B', mb: 2 }} />
+                                <Typography variant="h6" gutterBottom sx={{ color: '#92400E' }}>
+                                    Ожидание репетитора
+                                </Typography>
+                                <Typography variant="body2" color="textSecondary">
+                                    Репетитор ещё не начал урок. Пожалуйста, подождите.
+                                </Typography>
+                                <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 2 }}>
+                                    Как только репетитор начнёт урок, вы сможете присоединиться.
+                                </Typography>
+                                <Button 
+                                    variant="outlined" 
+                                    size="small" 
+                                    onClick={handleRetry}
+                                    sx={{ mt: 2 }}
+                                >
+                                    Обновить
+                                </Button>
+                            </Box>
+                        )}
+
                         {/* Информация о занятии */}
                         <Box sx={{ 
                             p: 2, 
@@ -97,11 +137,11 @@ function VideoCallModal({ open, onClose, lessonId, lessonInfo }) {
                                 Занятие
                             </Typography>
                             <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                                {roomInfo.courseName}
+                                {roomInfo.courseName || 'Занятие'}
                             </Typography>
                             {lessonInfo && (
                                 <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
-                                    {lessonInfo.studentName} • {lessonInfo.startTime?.slice(0, 5)} - {lessonInfo.endTime?.slice(0, 5)}
+                                    {lessonInfo.studentName || lessonInfo.tutorName} • {lessonInfo.startTime?.slice(0, 5)} - {lessonInfo.endTime?.slice(0, 5)}
                                 </Typography>
                             )}
                         </Box>
@@ -112,43 +152,45 @@ function VideoCallModal({ open, onClose, lessonId, lessonInfo }) {
                                 Вы подключаетесь как
                             </Typography>
                             <Chip 
-                                label={roomInfo.displayName}
+                                label={roomInfo.displayName || user?.fullName || 'Участник'}
                                 color="primary"
                                 sx={{ fontWeight: 500 }}
                             />
                         </Box>
 
-                        {/* Кнопки */}
-                        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-                            <Button
-                                variant="contained"
-                                size="large"
-                                startIcon={<VideocamIcon />}
-                                onClick={handleJoinCall}
-                                sx={{
-                                    bgcolor: '#6366F1',
-                                    '&:hover': { bgcolor: '#4F46E5' },
-                                    px: 4,
-                                    py: 1.5,
-                                    borderRadius: 3
-                                }}
-                            >
-                                Присоединиться к звонку
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                size="large"
-                                startIcon={<OpenInNewIcon />}
-                                onClick={handleOpenInNewTab}
-                                sx={{
-                                    px: 3,
-                                    py: 1.5,
-                                    borderRadius: 3
-                                }}
-                            >
-                                В новом окне
-                            </Button>
-                        </Box>
+                        {/* Кнопки подключения (только если не в режиме ожидания) */}
+                        {(!roomInfo.waitingRoom || isTutor) && (
+                            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                                <Button
+                                    variant="contained"
+                                    size="large"
+                                    startIcon={<VideocamIcon />}
+                                    onClick={handleJoinCall}
+                                    sx={{
+                                        bgcolor: '#6366F1',
+                                        '&:hover': { bgcolor: '#4F46E5' },
+                                        px: 4,
+                                        py: 1.5,
+                                        borderRadius: 3
+                                    }}
+                                >
+                                    Присоединиться к звонку
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    size="large"
+                                    startIcon={<OpenInNewIcon />}
+                                    onClick={handleOpenInNewTab}
+                                    sx={{
+                                        px: 3,
+                                        py: 1.5,
+                                        borderRadius: 3
+                                    }}
+                                >
+                                    В новом окне
+                                </Button>
+                            </Box>
+                        )}
 
                         <Typography variant="caption" color="textSecondary" sx={{ 
                             display: 'block', 

@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import axiosInstance from '../api/axiosConfig'
 
 const Sidebar = ({ onHoverChange }) => {
     const navigate = useNavigate();
@@ -44,8 +45,8 @@ const Sidebar = ({ onHoverChange }) => {
         setLoadingAvatar(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/tutors/${user.id}/avatar`,
+            const response = await axiosInstance.get(
+                `/tutors/${user.id}/avatar`,
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
             

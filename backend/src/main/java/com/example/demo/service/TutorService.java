@@ -9,6 +9,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,7 +24,6 @@ public class TutorService {
 
     public Tutor registerTutor(String email, String password, String fullName, String phone) {
         if (tutorRepository.existsByEmail(email)) {
-            // ✅ Заменено на BusinessException
             throw new BusinessException("Репетитор с таким email уже существует");
         }
 
@@ -41,14 +41,12 @@ public class TutorService {
         Optional<Tutor> optionalTutor = tutorRepository.findByEmail(email);
 
         if (optionalTutor.isEmpty()) {
-            // ✅ Заменено на NotFoundException с параметрами
             throw new NotFoundException("Репетитор", "email", email);
         }
 
         Tutor tutor = optionalTutor.get();
 
         if (!passwordEncoder.matches(password, tutor.getPasswordHash())) {
-            // ✅ Заменено на BusinessException
             throw new BusinessException("Неверный пароль");
         }
 
@@ -57,7 +55,6 @@ public class TutorService {
 
     public Tutor getTutorById(Long id) {
         return tutorRepository.findById(id)
-                // ✅ Заменено на NotFoundException с параметрами
                 .orElseThrow(() -> new NotFoundException("Репетитор", "id", id));
     }
 
@@ -74,16 +71,63 @@ public class TutorService {
         return tutorRepository.save(tutor);
     }
 
+    public Tutor findByEmail(String email) {
+        return tutorRepository.findByEmail(email).orElse(null);
+    }
+
+    public void saveResetToken(String email, String token) {
+        Tutor tutor = tutorRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+        tutor.setResetToken(token);
+        tutor.setResetTokenExpiry(LocalDateTime.now().plusHours(24));
+        tutorRepository.save(tutor);
+    }
+
+    public boolean resetPassword(String token, String newPassword) {
+        Optional<Tutor> optionalTutor = tutorRepository.findByResetToken(token);
+
+        if (optionalTutor.isEmpty()) {
+            return false;
+        }
+
+        Tutor tutor = optionalTutor.get();
+
+        // Проверить, не истёк ли токен
+        if (tutor.getResetTokenExpiry() == null ||
+                tutor.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
+            return false;
+        }
+
+        // Установить новый пароль
+        tutor.setPasswordHash(passwordEncoder.encode(newPassword));
+        tutor.setResetToken(null);
+        tutor.setResetTokenExpiry(null);
+        tutorRepository.save(tutor);
+
+        return true;
+    }
+
+    public boolean isValidResetToken(String token) {
+        Optional<Tutor> optionalTutor = tutorRepository.findByResetToken(token);
+
+        if (optionalTutor.isEmpty()) {
+            return false;
+        }
+
+        Tutor tutor = optionalTutor.get();
+
+        return tutor.getResetTokenExpiry() != null &&
+                tutor.getResetTokenExpiry().isAfter(LocalDateTime.now());
+    }
+
     public void changePassword(Long id, String currentPassword, String newPassword) {
         Tutor tutor = getTutorById(id);
 
         if (!passwordEncoder.matches(currentPassword, tutor.getPasswordHash())) {
-            // ✅ Заменено на BusinessException
             throw new BusinessException("Неверный текущий пароль");
         }
 
         if (newPassword == null || newPassword.length() < 6) {
-            // ✅ Заменено на BusinessException
             throw new BusinessException("Пароль должен быть не менее 6 символов");
         }
 

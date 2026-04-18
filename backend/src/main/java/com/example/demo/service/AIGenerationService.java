@@ -59,15 +59,28 @@ public class AIGenerationService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Authorization", "Api-Key " + apiKey);
 
+        String modelUri = "gpt://" + folderId + "/yandexgpt/latest";
+
+        // ✅ ЭКСПЕРТНЫЙ СИСТЕМНЫЙ ПРОМПТ (Уровень 1)
+        String expertSystemPrompt = String.format(
+                "Ты — ведущий эксперт Федерального института педагогических измерений (ФИПИ), который 15 лет лично разрабатывает задания для %s по предмету \"%s\". " +
+                        "Твоя задача — создать **уникальное**, методически выверенное задание, которое идеально соответствует формату и духу реального экзамена. " +
+                        "Оно должно быть **средней сложности**, с одной неочевидной ловушкой на внимательность. " +
+                        "Ответом должно быть **целое число**. " +
+                        "Сначала напиши само задание, потом приведи **подробное и понятное решение**, а в конце укажи правильный ответ в формате `ОТВЕТ: 123`. " +
+                        "Твой стиль — четкий, лаконичный и безупречный с точки зрения методиста.",
+                examType, subject
+        );
+
         Map<String, Object> body = Map.of(
-                "modelUri", "gpt://" + folderId + "/yandexgpt-lite/latest",
+                "modelUri", modelUri,
                 "completionOptions", Map.of(
                         "stream", false,
                         "temperature", 0.7,
-                        "maxTokens", "2000"
+                        "maxTokens", "2500" // Увеличено, чтобы влезло подробное решение
                 ),
                 "messages", List.of(
-                        Map.of("role", "system", "text", "Ты — опытный преподаватель и эксперт по составлению заданий ЕГЭ и ОГЭ. Отвечай строго в указанном формате."),
+                        Map.of("role", "system", "text", expertSystemPrompt),
                         Map.of("role", "user", "text", fullPrompt)
                 )
         );
@@ -76,11 +89,21 @@ public class AIGenerationService {
             String jsonBody = objectMapper.writeValueAsString(body);
             HttpEntity<String> request = new HttpEntity<>(jsonBody, headers);
 
-            log.info("🤖 Отправка запроса к YandexGPT...");
+            log.info("🤖 Отправка запроса к YandexGPT с экспертным промптом...");
+            log.info("   modelUri: {}", modelUri);
+            log.info("   folderId: {}", folderId);
+
             ResponseEntity<String> response = restTemplate.postForEntity(YANDEX_GPT_URL, request, String.class);
-            log.info("✅ Ответ получен");
+            log.info("✅ Ответ получен, статус: {}", response.getStatusCode());
 
             JsonNode root = objectMapper.readTree(response.getBody());
+
+            if (root.has("error")) {
+                String errorMsg = root.path("error").path("message").asText("Неизвестная ошибка");
+                log.error("❌ YandexGPT error: {}", errorMsg);
+                throw new BusinessException("Ошибка YandexGPT: " + errorMsg);
+            }
+
             JsonNode result = root.path("result");
             JsonNode alternatives = result.path("alternatives");
 
@@ -89,6 +112,11 @@ public class AIGenerationService {
                 JsonNode firstAlternative = alternatives.get(0);
                 JsonNode message = firstAlternative.path("message");
                 generatedText = message.path("text").asText();
+            }
+
+            if (generatedText.isEmpty()) {
+                log.warn("⚠️ YandexGPT вернул пустой ответ");
+                throw new BusinessException("YandexGPT вернул пустой ответ");
             }
 
             return parseGeneratedText(generatedText, subject, examType, taskNumber);

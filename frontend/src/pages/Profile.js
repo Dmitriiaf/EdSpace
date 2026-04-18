@@ -5,8 +5,7 @@ import {
     Grid, Divider, Alert, Snackbar, CircularProgress,
     Card, CardContent, Chip, InputAdornment,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    IconButton, Tooltip, LinearProgress, Fade,
-    Tabs, Tab, Badge
+    IconButton, Tooltip, Tabs, Tab, Badge
 } from '@mui/material';
 import {
     Save as SaveIcon,
@@ -24,17 +23,15 @@ import {
     CalendarMonth as CalendarIcon,
     AccessTime as AccessTimeIcon,
     AttachMoney as MoneyIcon,
-    CloudUpload as CloudUploadIcon,
-    Delete as DeleteIcon,
     TrendingUp as TrendingUpIcon,
     TrendingDown as TrendingDownIcon,
     CheckCircle as CheckIcon,
-    Warning as WarningIcon,
-    Timeline as TimelineIcon
+    Warning as WarningIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
-import { format, differenceInDays } from 'date-fns';
+// ✅ Правильный импорт
+import axiosInstance from '../api/axiosConfig';
+import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
 const Profile = () => {
@@ -80,19 +77,18 @@ const Profile = () => {
     const [passwordError, setPasswordError] = useState('');
 
     useEffect(() => {
-        fetchProfile();
-        fetchStats();
-        fetchAvatar();
-        fetchActivityData();
-    }, []);
+        if (user && user.id) {
+            fetchProfile();
+            fetchStats();
+            fetchAvatar();
+            fetchActivityData();
+        }
+    }, [user]);
 
     const fetchProfile = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/tutors/${user.id}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Исправлено: axiosInstance
+            const response = await axiosInstance.get(`/tutors/${user.id}`);
             
             setProfile({
                 fullName: response.data.fullName || user?.fullName,
@@ -109,19 +105,11 @@ const Profile = () => {
 
     const fetchStats = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            
-            const studentsRes = await axios.get(
-                `http://localhost:8080/api/students/tutor/${user.id}`,
-                { headers }
-            );
+            // ✅ Исправлено: axiosInstance
+            const studentsRes = await axiosInstance.get(`/students/tutor/${user.id}`);
             const studentsCount = studentsRes.data.length;
             
-            const lessonsRes = await axios.get(
-                `http://localhost:8080/api/lessons/all?tutorId=${user.id}`,
-                { headers }
-            );
+            const lessonsRes = await axiosInstance.get(`/lessons/all?tutorId=${user.id}`);
             const completedLessons = lessonsRes.data.filter(l => 
                 l.status === 'COMPLETED' || l.status === 'PAID'
             );
@@ -135,10 +123,7 @@ const Profile = () => {
                 totalHours += hours;
             });
             
-            const paymentsRes = await axios.get(
-                `http://localhost:8080/api/payments/tutor/${user.id}`,
-                { headers }
-            );
+            const paymentsRes = await axiosInstance.get(`/payments/tutor/${user.id}`);
             
             const totalIncome = paymentsRes.data
                 .filter(p => p.status === 'paid')
@@ -179,11 +164,8 @@ const Profile = () => {
 
     const fetchActivityData = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/lessons/all?tutorId=${user.id}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Исправлено: axiosInstance
+            const response = await axiosInstance.get(`/lessons/all?tutorId=${user.id}`);
             
             const lessons = response.data;
             const now = new Date();
@@ -212,11 +194,8 @@ const Profile = () => {
 
     const fetchAvatar = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/tutors/${user.id}/avatar`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Исправлено: axiosInstance
+            const response = await axiosInstance.get(`/tutors/${user.id}/avatar`);
             if (response.data.avatar) {
                 setAvatar(response.data.avatar);
             }
@@ -249,12 +228,8 @@ const Profile = () => {
         reader.onloadend = async () => {
             try {
                 const base64 = reader.result;
-                const token = localStorage.getItem('token');
-                await axios.post(
-                    `http://localhost:8080/api/tutors/${user.id}/avatar`,
-                    { avatar: base64 },
-                    { headers: { 'Authorization': `Bearer ${token}` } }
-                );
+                // ✅ Исправлено: axiosInstance
+                await axiosInstance.post(`/tutors/${user.id}/avatar`, { avatar: base64 });
                 setAvatar(base64);
                 showSnackbar('Фото успешно загружено', 'success');
                 window.dispatchEvent(new CustomEvent('avatar-updated', { detail: base64 }));
@@ -268,39 +243,17 @@ const Profile = () => {
         reader.readAsDataURL(file);
     };
 
-    const handleDeleteAvatar = async () => {
-        if (!window.confirm('Удалить фото профиля?')) return;
-        
-        try {
-            const token = localStorage.getItem('token');
-            await axios.post(
-                `http://localhost:8080/api/tutors/${user.id}/avatar`,
-                { avatar: null },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
-            setAvatar(null);
-            showSnackbar('Фото удалено', 'success');
-            window.dispatchEvent(new CustomEvent('avatar-updated', { detail: null }));
-        } catch (err) {
-            showSnackbar('Ошибка при удалении фото', 'error');
-        }
-    };
-
     const handleSaveProfile = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            await axios.put(
-                `http://localhost:8080/api/tutors/${user.id}`,
-                {
-                    fullName: profile.fullName,
-                    phone: profile.phone,
-                    birthday: profile.birthday,
-                    about: profile.about,
-                    city: profile.city
-                },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Исправлено: axiosInstance
+            await axiosInstance.put(`/tutors/${user.id}`, {
+                fullName: profile.fullName,
+                phone: profile.phone,
+                birthday: profile.birthday,
+                about: profile.about,
+                city: profile.city
+            });
             
             if (updateUser) {
                 updateUser({ ...user, fullName: profile.fullName });
@@ -310,7 +263,7 @@ const Profile = () => {
             showSnackbar('Профиль успешно обновлён', 'success');
         } catch (err) {
             console.error('Ошибка сохранения:', err);
-            showSnackbar('Ошибка при сохранении профиля', 'error');
+            showSnackbar(err.response?.data?.error || 'Ошибка при сохранении профиля', 'error');
         } finally {
             setLoading(false);
         }
@@ -329,15 +282,11 @@ const Profile = () => {
         
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            await axios.post(
-                `http://localhost:8080/api/tutors/${user.id}/change-password`,
-                {
-                    currentPassword: passwordData.currentPassword,
-                    newPassword: passwordData.newPassword
-                },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            // ✅ Исправлено: axiosInstance
+            await axiosInstance.post(`/tutors/${user.id}/change-password`, {
+                currentPassword: passwordData.currentPassword,
+                newPassword: passwordData.newPassword
+            });
             
             setPasswordDialog(false);
             setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });

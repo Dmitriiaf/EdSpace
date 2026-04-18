@@ -1,6 +1,7 @@
-// ========== frontend/src/pages/Materials.js (ПОЛНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/pages/Materials.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+// ✅ Заменяем axios на axiosInstance
+import axiosInstance from '../services/api';
 import {
     Box, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, MenuItem, FormControl, InputLabel,
@@ -8,9 +9,9 @@ import {
     TableHead, TableRow, Paper, IconButton, Chip,
     Alert, Snackbar, Grid, Card, CardContent, Typography,
     Avatar, Tooltip, InputAdornment, CircularProgress,
-    Tabs, Tab, Divider, LinearProgress, Fade,
+    Tabs, Tab, Divider, LinearProgress,
     Breadcrumbs, Link as MuiLink,
-    CardActions, Badge
+    CardActions
 } from '@mui/material';
 import {
     Add, Delete, Edit, CloudUpload, Download,
@@ -30,7 +31,7 @@ import {
     People as PeopleIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
-import { useStudentRate } from '../hooks/useStudentRate';  // ✅ Импорт хука
+import { useStudentRate } from '../hooks/useStudentRate';
 
 const FileTypeIcon = ({ fileName }) => {
     const ext = fileName?.split('.').pop()?.toLowerCase();
@@ -53,7 +54,7 @@ const getFileTypeFromName = (filename) => {
 
 function Materials() {
     const { user } = useAuth();
-    const { getStudentRateForTutor } = useStudentRate();  // ✅ Используем хук
+    const { getStudentRateForTutor } = useStudentRate();
     
     const [materials, setMaterials] = useState([]);
     const [folders, setFolders] = useState([]);
@@ -63,7 +64,7 @@ function Materials() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [mainTabValue, setMainTabValue] = useState(0); // 0 - Курсы, 1 - Ученики, 2 - Все материалы
+    const [mainTabValue, setMainTabValue] = useState(0);
     const [selectedCourseId, setSelectedCourseId] = useState('');
     const [selectedStudentId, setSelectedStudentId] = useState('');
     const [viewMode, setViewMode] = useState('grid');
@@ -95,20 +96,17 @@ function Materials() {
         fileSize: ''
     });
 
-    // ✅ Функция getStudentRateForTutor удалена — теперь из хука
-
     const loadRootContent = async () => {
+        if (!user || !user.id) return;
+        
         try {
-            const token = localStorage.getItem('token');
-            let url = `http://localhost:8080/api/materials`;
+            let url = `/materials`;
             
             if (mainTabValue === 0 && selectedCourseId) {
                 url += `?courseId=${selectedCourseId}`;
             }
             
-            const response = await axios.get(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axiosInstance.get(url);
             
             let loadedMaterials = response.data.materials || [];
             let loadedFolders = response.data.folders || [];
@@ -122,10 +120,7 @@ function Materials() {
             setMaterials(loadedMaterials);
             setFolders(loadedFolders);
             
-            const foldersRes = await axios.get(
-                `http://localhost:8080/api/materials/folders`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            const foldersRes = await axiosInstance.get(`/materials/folders`);
             setAllFolders(foldersRes.data || []);
             setError(null);
         } catch (err) {
@@ -135,12 +130,10 @@ function Materials() {
     };
 
     const loadFolderContent = async (folderId) => {
+        if (!user || !user.id) return;
+        
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/materials/folder/${folderId}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            const response = await axiosInstance.get(`/materials/folder/${folderId}`);
             setMaterials(response.data.materials || []);
             setFolders(response.data.folders || []);
             setError(null);
@@ -175,30 +168,29 @@ function Materials() {
     };
 
     useEffect(() => {
-        if (user) {
+        if (user && user.id) {
             loadRootContent();
             fetchStudentsAndCourses();
         }
     }, [user]);
 
     useEffect(() => {
-        if (user) {
+        if (user && user.id) {
             loadRootContent();
         }
     }, [mainTabValue, selectedCourseId, selectedStudentId]);
 
     const fetchStudentsAndCourses = async () => {
+        if (!user || !user.id) return;
+        
         try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            
             const [studentsRes, coursesRes] = await Promise.all([
-                axios.get(`http://localhost:8080/api/students/tutor/${user.id}`, { headers }),
-                axios.get(`http://localhost:8080/api/courses/tutor/${user.id}`, { headers })
+                axiosInstance.get(`/students/tutor/${user.id}`),
+                axiosInstance.get(`/courses/tutor/${user.id}`)
             ]);
             
-            setStudents(studentsRes.data);
-            setCourses(coursesRes.data);
+            setStudents(studentsRes.data || []);
+            setCourses(coursesRes.data || []);
         } catch (err) {
             console.error('Ошибка загрузки учеников/курсов:', err);
         } finally {
@@ -258,22 +250,13 @@ function Materials() {
         }
         
         try {
-            const token = localStorage.getItem('token');
-            
             const interval = setInterval(() => {
                 setUploadProgress(prev => Math.min(prev + 10, 90));
             }, 200);
             
-            await axios.post(
-                'http://localhost:8080/api/materials/upload',
-                uploadFormData,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'multipart/form-data'
-                    }
-                }
-            );
+            await axiosInstance.post('/materials/upload', uploadFormData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
             
             clearInterval(interval);
             setUploadProgress(100);
@@ -302,16 +285,11 @@ function Materials() {
         if (!newFolderName.trim()) return;
         
         try {
-            const token = localStorage.getItem('token');
-            await axios.post(
-                'http://localhost:8080/api/materials/folder',
-                { 
-                    name: newFolderName, 
-                    parentFolderId: currentFolder,
-                    courseId: folderCourseId || selectedCourseId || null
-                },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            await axiosInstance.post('/materials/folder', { 
+                name: newFolderName, 
+                parentFolderId: currentFolder,
+                courseId: folderCourseId || selectedCourseId || null
+            });
             
             showSnackbar('Папка создана', 'success');
             setOpenFolderDialog(false);
@@ -332,15 +310,10 @@ function Materials() {
         if (!editingFolder) return;
         
         try {
-            const token = localStorage.getItem('token');
-            await axios.put(
-                `http://localhost:8080/api/materials/folder/${editingFolder.id}`,
-                { 
-                    name: newFolderName,
-                    courseId: folderCourseId || null
-                },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            await axiosInstance.put(`/materials/folder/${editingFolder.id}`, { 
+                name: newFolderName,
+                courseId: folderCourseId || null
+            });
             
             showSnackbar('Папка обновлена', 'success');
             setOpenEditFolderDialog(false);
@@ -369,12 +342,9 @@ function Materials() {
         if (!movingMaterial) return;
         
         try {
-            const token = localStorage.getItem('token');
-            await axios.put(
-                `http://localhost:8080/api/materials/${movingMaterial.id}/move`,
-                { folderId: selectedFolderId },
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            await axiosInstance.put(`/materials/${movingMaterial.id}/move`, { 
+                folderId: selectedFolderId 
+            });
             
             showSnackbar('Материал перемещён', 'success');
             setOpenMoveDialog(false);
@@ -452,9 +422,6 @@ function Materials() {
             await handleUpload();
         } else if (editingMaterial) {
             try {
-                const token = localStorage.getItem('token');
-                const headers = { 'Authorization': `Bearer ${token}` };
-                
                 const submitData = {
                     title: formData.title,
                     description: formData.description,
@@ -463,7 +430,7 @@ function Materials() {
                     folderId: selectedFolderId
                 };
                 
-                await axios.put(`http://localhost:8080/api/materials/${editingMaterial.id}`, submitData, { headers });
+                await axiosInstance.put(`/materials/${editingMaterial.id}`, submitData);
                 showSnackbar('Материал обновлён', 'success');
                 
                 handleCloseDialog();
@@ -485,11 +452,8 @@ function Materials() {
         if (!window.confirm(isFolder ? 'Удалить папку со всем содержимым?' : 'Удалить материал?')) return;
         
         try {
-            const token = localStorage.getItem('token');
-            const url = isFolder 
-                ? `http://localhost:8080/api/materials/folder/${id}`
-                : `http://localhost:8080/api/materials/${id}`;
-            await axios.delete(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            const url = isFolder ? `/materials/folder/${id}` : `/materials/${id}`;
+            await axiosInstance.delete(url);
             showSnackbar(isFolder ? 'Папка удалена' : 'Материал удалён', 'success');
             
             if (currentFolder) {
@@ -504,14 +468,9 @@ function Materials() {
 
     const handleDownload = async (material) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `http://localhost:8080/api/materials/download/${material.id}`,
-                {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    responseType: 'blob'
-                }
-            );
+            const response = await axiosInstance.get(`/materials/download/${material.id}`, {
+                responseType: 'blob'
+            });
             
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
@@ -548,7 +507,6 @@ function Materials() {
         return { name: 'Не указано', type: 'none', icon: <FolderIcon />, label: 'Без привязки' };
     };
 
-    // Группировка материалов по курсам для вкладки "Курсы"
     const getMaterialsByCourse = () => {
         const grouped = {};
         materials.forEach(m => {
@@ -706,7 +664,7 @@ function Materials() {
                                 >
                                     <MenuItem value="">— Выберите ученика —</MenuItem>
                                     {students.map(s => {
-                                        const rate = getStudentRateForTutor(s, user?.id);  // ✅ Из хука
+                                        const rate = getStudentRateForTutor(s, user?.id);
                                         return (
                                             <MenuItem key={s.id} value={s.id}>
                                                 {s.fullName} ({rate || '—'} ₽)
@@ -727,7 +685,7 @@ function Materials() {
                 </Paper>
             )}
 
-            {/* Хлебные крошки (только для вкладки "Все материалы") */}
+            {/* Хлебные крошки */}
             {mainTabValue === 2 && (
                 <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 2 }}>
                     <MuiLink 
@@ -846,7 +804,6 @@ function Materials() {
                     {mainTabValue === 0 && (
                         <>
                             {selectedCourseId ? (
-                                // Выбран конкретный курс - показываем папки и файлы
                                 filteredMaterials.length === 0 && filteredFolders.length === 0 ? (
                                     <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>
                                         <FolderIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 2 }} />
@@ -1017,7 +974,6 @@ function Materials() {
                                     </TableContainer>
                                 )
                             ) : (
-                                // Все курсы - группировка
                                 <Box>
                                     {getMaterialsByCourse().length === 0 ? (
                                         <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>

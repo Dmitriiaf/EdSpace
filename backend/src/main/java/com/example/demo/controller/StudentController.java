@@ -1,23 +1,31 @@
-// ========== StudentController.java (ПОЛНАЯ ЗАМЕНА) ==========
+// ========== backend/src/main/java/com/example/demo/controller/StudentController.java ==========
 package com.example.demo.controller;
+import com.example.demo.entity.Parent;
 
+import com.example.demo.entity.InvitationToken;
 import com.example.demo.entity.Student;
 import com.example.demo.entity.Tutor;
-import com.example.demo.service.StudentService;
+import com.example.demo.repository.InvitationTokenRepository;
 import com.example.demo.repository.StudentRepository;
+import com.example.demo.service.EmailService;
+import com.example.demo.service.StudentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/students")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {
+        "http://localhost:3000",
+        "http://72.56.238.224",
+        "http://ed-space.ru"
+}, allowCredentials = "true")
 public class StudentController {
 
     @Autowired
@@ -25,6 +33,12 @@ public class StudentController {
 
     @Autowired
     private StudentRepository studentRepository;
+
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private InvitationTokenRepository invitationTokenRepository;
 
     @PostMapping
     @PreAuthorize("hasRole('TUTOR')")
@@ -34,7 +48,7 @@ public class StudentController {
             String email = (String) request.get("email");
             Long tutorId = Long.parseLong(request.get("tutorId").toString());
 
-            // ✅ IDOR FIX: Проверяем, что репетитор создаёт ученика для себя
+            // IDOR FIX: Проверяем, что репетитор создаёт ученика для себя
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
@@ -69,6 +83,15 @@ public class StudentController {
                 }
 
                 studentRepository.save(existingStudent);
+
+                // ✅ Отправляем приглашение существующему ученику
+                sendInvitationToStudent(existingStudent, tutorId);
+
+                // ✅ Отправляем приглашение родителю, если указан email
+                if (parentEmail != null && !parentEmail.trim().isEmpty()) {
+                    sendParentInvitation(existingStudent, tutorId, parentEmail);
+                }
+
                 return ResponseEntity.ok(existingStudent);
             }
 
@@ -80,6 +103,14 @@ public class StudentController {
                     tutorId,
                     parentEmail
             );
+
+            // ✅ Отправляем приглашение новому ученику
+            sendInvitationToStudent(student, tutorId);
+
+            // ✅ Отправляем приглашение родителю, если указан email
+            if (parentEmail != null && !parentEmail.trim().isEmpty()) {
+                sendParentInvitation(student, tutorId, parentEmail);
+            }
 
             return ResponseEntity.ok(student);
 
@@ -94,7 +125,7 @@ public class StudentController {
     public ResponseEntity<?> getStudentsByTutor(@PathVariable Long tutorId,
                                                 @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                 @RequestAttribute(name = "userRole", required = false) String userRole) {
-        // ✅ IDOR FIX: Проверяем роль и ID
+        // IDOR FIX: Проверяем роль и ID
         if (!"ROLE_TUTOR".equals(userRole)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
@@ -116,7 +147,7 @@ public class StudentController {
     public ResponseEntity<?> getStudentsByParent(@PathVariable Long parentId,
                                                  @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                  @RequestAttribute(name = "userRole", required = false) String userRole) {
-        // ✅ IDOR FIX: Проверяем роль и ID
+        // IDOR FIX: Проверяем роль и ID
         if (!"ROLE_PARENT".equals(userRole)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
@@ -141,7 +172,7 @@ public class StudentController {
         try {
             Student student = studentService.getStudentById(id);
 
-            // ✅ IDOR FIX: Проверяем права доступа в зависимости от роли
+            // IDOR FIX: Проверяем права доступа в зависимости от роли
             if ("ROLE_TUTOR".equals(userRole)) {
                 boolean hasTutor = student.getTutors().stream()
                         .anyMatch(t -> t.getId().equals(currentUserId));
@@ -165,33 +196,65 @@ public class StudentController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
     public ResponseEntity<?> updateStudent(@PathVariable Long id,
                                            @RequestBody Map<String, Object> request,
-                                           @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                           @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                           @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Student student = studentService.getStudentById(id);
 
-            // ✅ IDOR FIX: Проверяем, что ученик принадлежит текущему репетитору
-            boolean hasTutor = student.getTutors().stream()
-                    .anyMatch(t -> t.getId().equals(currentUserId));
-            if (!hasTutor) {
-                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            // IDOR FIX: Проверяем права доступа
+            if ("ROLE_TUTOR".equals(userRole)) {
+                boolean hasTutor = student.getTutors().stream()
+                        .anyMatch(t -> t.getId().equals(currentUserId));
+                if (!hasTutor) {
+                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+                }
+            } else if ("ROLE_STUDENT".equals(userRole)) {
+                if (!student.getId().equals(currentUserId)) {
+                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+                }
             }
 
-            // Обновляем только базовые поля
+            // ✅ Запоминаем старый parentEmail
+            String oldParentEmail = student.getParent() != null ? student.getParent().getEmail() : null;
+
+            // Обновляем базовые поля
             if (request.get("fullName") != null) {
                 student.setFullName((String) request.get("fullName"));
             }
-            if (request.get("email") != null) {
+            if (request.get("phone") != null) {
+                student.setPhone((String) request.get("phone"));
+            }
+            if ("ROLE_TUTOR".equals(userRole) && request.get("email") != null) {
                 student.setEmail((String) request.get("email"));
             }
-            if (request.get("paymentType") != null) {
+            if ("ROLE_TUTOR".equals(userRole) && request.get("paymentType") != null) {
                 student.setPaymentType((String) request.get("paymentType"));
             }
 
-            // Ставка обновляется отдельно
-            if (request.get("ratePerLesson") != null) {
+            // ✅ Обработка parentEmail (только для репетитора)
+            if ("ROLE_TUTOR".equals(userRole) && request.containsKey("parentEmail")) {
+                String newParentEmail = (String) request.get("parentEmail");
+
+                // Если указан новый email родителя и он отличается от старого
+                if (newParentEmail != null && !newParentEmail.trim().isEmpty()
+                        && (oldParentEmail == null || !oldParentEmail.equals(newParentEmail))) {
+
+                    // ✅ СОЗДАЁМ ИЛИ ОБНОВЛЯЕМ РОДИТЕЛЯ
+                    Parent parent = studentService.findOrCreateParent(newParentEmail, student.getFullName());
+                    student.setParent(parent);
+                    student.setParentName(parent.getFullName());
+                    student.setParentPhone(parent.getPhone());
+
+                    // Отправляем приглашение родителю
+                    sendParentInvitation(student, currentUserId, newParentEmail);
+                }
+            }
+
+            // Ставка обновляется только репетитором
+            if ("ROLE_TUTOR".equals(userRole) && request.get("ratePerLesson") != null) {
                 String rateStr = request.get("ratePerLesson").toString();
                 if (!rateStr.isEmpty()) {
                     BigDecimal rate = new BigDecimal(rateStr);
@@ -215,7 +278,7 @@ public class StudentController {
         try {
             Student student = studentService.getStudentById(id);
 
-            // ✅ IDOR FIX: Проверяем, что ученик принадлежит текущему репетитору
+            // IDOR FIX: Проверяем, что ученик принадлежит текущему репетитору
             boolean hasTutor = student.getTutors().stream()
                     .anyMatch(t -> t.getId().equals(currentUserId));
             if (!hasTutor) {
@@ -240,7 +303,7 @@ public class StudentController {
                                             @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             List<Student> students = studentService.searchStudentsByName(name);
-            // ✅ IDOR FIX: Фильтруем только учеников текущего репетитора
+            // IDOR FIX: Фильтруем только учеников текущего репетитора
             students = students.stream()
                     .filter(s -> s.getTutors().stream().anyMatch(t -> t.getId().equals(currentUserId)))
                     .toList();
@@ -272,12 +335,64 @@ public class StudentController {
                 return ResponseEntity.notFound().build();
             }
 
-            // ✅ IDOR FIX: Возвращаем только базовую информацию, без привязки к репетитору
-            // (этот метод используется для проверки существования ученика)
             Student student = students.get(0);
             return ResponseEntity.ok(student);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ✅ Отправка приглашения ученику
+    private void sendInvitationToStudent(Student student, Long tutorId) {
+        try {
+            Tutor tutor = studentService.getTutorById(tutorId);
+
+            // Создать токен приглашения
+            InvitationToken token = new InvitationToken();
+            token.setEmail(student.getEmail());
+            token.setToken(UUID.randomUUID().toString());
+            token.setStudentId(student.getId());
+            token.setTutorId(tutorId);
+            token.setRatePerLesson(student.getRateForTutor(tutorId));
+            token.setPaymentType(student.getPaymentType());
+            token.setUserType("STUDENT");
+            token.setExpiresAt(java.time.LocalDateTime.now().plusDays(7));
+
+            invitationTokenRepository.save(token);
+
+            // Отправить письмо
+            emailService.sendStudentInvitation(token, student.getFullName(), tutor.getFullName());
+
+            System.out.println("📧 Приглашение отправлено ученику: " + student.getEmail());
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка отправки приглашения ученику " + student.getEmail() + ": " + e.getMessage());
+        }
+    }
+
+    // ✅ НОВЫЙ МЕТОД: Отправка приглашения родителю
+    private void sendParentInvitation(Student student, Long tutorId, String parentEmail) {
+        try {
+            Tutor tutor = studentService.getTutorById(tutorId);
+
+            // Создать токен приглашения для родителя
+            InvitationToken token = new InvitationToken();
+            token.setEmail(parentEmail);
+            token.setToken(UUID.randomUUID().toString());
+            token.setStudentId(student.getId());
+            token.setTutorId(tutorId);
+            token.setUserType("PARENT");
+            token.setExpiresAt(java.time.LocalDateTime.now().plusDays(7));
+
+            invitationTokenRepository.save(token);
+
+            // Отправить письмо родителю
+            emailService.sendParentInvitation(token, student.getFullName(), tutor.getFullName());
+
+            System.out.println("📧 Приглашение отправлено родителю: " + parentEmail);
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка отправки приглашения родителю " + parentEmail + ": " + e.getMessage());
         }
     }
 }

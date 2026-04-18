@@ -65,8 +65,8 @@ function LessonPlans() {
             const headers = { 'Authorization': `Bearer ${token}` };
             
             const [plansRes, coursesRes] = await Promise.all([
-                axios.get('http://localhost:8080/api/lesson-plans', { headers }),
-                axios.get(`http://localhost:8080/api/courses/tutor/${user.id}`, { headers })
+                axios.get('/lesson-plans', { headers }),
+                axios.get(`/courses/tutor/${user.id}`, { headers })
             ]);
             
             setPlans(plansRes.data || []);
@@ -160,9 +160,9 @@ function LessonPlans() {
             };
             
             if (editingPlan) {
-                await axios.put(`http://localhost:8080/api/lesson-plans/${editingPlan.id}`, submitData, { headers });
+                await axios.put(`/lesson-plans/${editingPlan.id}`, submitData, { headers });
             } else {
-                await axios.post('http://localhost:8080/api/lesson-plans', submitData, { headers });
+                await axios.post('/lesson-plans', submitData, { headers });
             }
             
             handleCloseDialog();
@@ -180,7 +180,7 @@ function LessonPlans() {
         
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`http://localhost:8080/api/lesson-plans/${id}`, {
+            await axios.delete(`/lesson-plans/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             fetchData();

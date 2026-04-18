@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
     Container, Box, TextField, Button, Typography,
@@ -15,8 +15,25 @@ function Login() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
+    const { login, user } = useAuth();
     const navigate = useNavigate();
+
+    // ✅ Если пользователь уже залогинен — сразу направляем на нужную страницу
+    useEffect(() => {
+        if (user) {
+            redirectBasedOnRole(user.role);
+        }
+    }, [user]);
+
+    const redirectBasedOnRole = (role) => {
+        if (role === 'tutor') {
+            navigate('/dashboard');
+        } else if (role === 'student') {
+            navigate('/student');
+        } else if (role === 'parent') {
+            navigate('/parent/dashboard');
+        }
+    };
 
     const handleChange = (e) => {
         setFormData({
@@ -33,19 +50,20 @@ function Login() {
         const result = await login(formData.email, formData.password);
         
         if (result.success) {
-            navigate('/dashboard');
+            // ✅ Редирект по роли
+            const userRole = result.role;
+            redirectBasedOnRole(userRole);
         } else {
             setError(result.error);
+            setLoading(false);
         }
-        
-        setLoading(false);
     };
 
     return (
         <Container component="main" maxWidth="xs">
             <Paper elevation={3} sx={{ p: 4, mt: 8, borderRadius: 4 }}>
                 <Typography component="h1" variant="h5" align="center" gutterBottom sx={{ fontWeight: 600 }}>
-                    Вход для репетитора
+                    Вход
                 </Typography>
 
                 {error && (
@@ -110,7 +128,6 @@ function Login() {
                         {loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Войти'}
                     </Button>
                     
-                    {/* ✅ КНОПКА "ЗАБЫЛИ ПАРОЛЬ" */}
                     <Box sx={{ textAlign: 'center', mt: 1 }}>
                         <Button component={Link} to="/forgot-password" sx={{ textTransform: 'none', fontSize: '0.875rem' }}>
                             Забыли пароль?

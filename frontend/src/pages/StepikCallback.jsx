@@ -33,7 +33,7 @@ function StepikCallback() {
         try {
             const token = localStorage.getItem('token');
             await axios.post(
-                'http://localhost:8080/api/stepik/token',
+                '/stepik/token',
                 { code },
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );

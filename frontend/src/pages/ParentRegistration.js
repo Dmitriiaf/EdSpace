@@ -14,7 +14,8 @@ import {
     VisibilityOff as VisibilityOffIcon,
     FamilyRestroom as FamilyIcon
 } from '@mui/icons-material';
-import axios from 'axios';
+// ✅ Правильный импорт
+import axiosInstance from '../api/axiosConfig';
 
 function ParentRegistration() {
     const navigate = useNavigate();
@@ -46,7 +47,8 @@ function ParentRegistration() {
 
     const validateToken = async () => {
         try {
-            const response = await axios.get(`http://localhost:8080/api/invitations/validate?token=${token}`);
+            // ✅ Исправлено: axiosInstance и /api/
+            const response = await axiosInstance.get(`/invitations/validate?token=${token}`);
             setInvitationData(response.data);
             setError('');
         } catch (err) {
@@ -82,7 +84,8 @@ function ParentRegistration() {
         setError('');
 
         try {
-            await axios.post('http://localhost:8080/api/invitations/complete-parent', {
+            // ✅ Исправлено: axiosInstance и /api/
+            await axiosInstance.post('/invitations/complete-parent', {
                 token,
                 fullName: formData.fullName,
                 phone: formData.phone,

@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            const response = await axiosInstance.post('/api/auth/login', { email, password });
+            const response = await axiosInstance.post('auth/login', { email, password });
             const { token, id, email: userEmail, fullName } = response.data;
             const userData = { id, email: userEmail, fullName, role: 'tutor' };
             localStorage.setItem('token', token);
@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
 
     const register = async (email, password, fullName, phone) => {
         try {
-            const response = await axiosInstance.post('/api/auth/register', { email, password, fullName, phone });
+            const response = await axiosInstance.post('/auth/register', { email, password, fullName, phone });
             const { token, id, email: userEmail, fullName: userName } = response.data;
             const userData = { id, email: userEmail, fullName: userName, role: 'tutor' };
             localStorage.setItem('token', token);
@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }) => {
 
     const studentLogin = async (email, password) => {
         try {
-            const response = await axiosInstance.post('/api/student-auth/login', { email, password });
+            const response = await axiosInstance.post('/student-auth/login', { email, password });
             const { token, id, fullName, role, allIds, birthday } = response.data;
             const userData = { id, fullName, role: role || 'student', allIds: allIds || [id], email, birthday: birthday || null };
             localStorage.setItem('token', token);
@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }) => {
 
     const parentLogin = async (email, password) => {
         try {
-            const response = await axiosInstance.post('/api/parent-auth/login', { email, password });
+            const response = await axiosInstance.post('/parent-auth/login', { email, password });
             const { token, id, fullName, role, children } = response.data;
             const userData = { id, fullName, role: role || 'parent', children: children || [] };
             localStorage.setItem('token', token);

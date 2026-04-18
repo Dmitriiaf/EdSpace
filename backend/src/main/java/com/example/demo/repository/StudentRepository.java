@@ -12,38 +12,38 @@ import java.util.Optional;
 @Repository
 public interface StudentRepository extends JpaRepository<Student, Long> {
 
-    List<Student> findByParentId(Long parentId);
-
     List<Student> findByEmail(String email);
 
-    @Query("SELECT s.id FROM Student s WHERE s.email = :email")
+    // ✅ ВОЗВРАЩЁННЫЙ МЕТОД
+    List<Student> findByParentId(Long parentId);
+
+    @Query("SELECT DISTINCT s.email FROM Student s WHERE s.id IN :ids")
+    List<String> findEmailsByIds(@Param("ids") List<Long> ids);
+
+    @Query("SELECT DISTINCT s.id FROM Student s WHERE s.email = :email")
     List<Long> findStudentIdsByEmail(@Param("email") String email);
 
-    List<Student> findByFullNameContainingIgnoreCase(String name);
+    @Query("SELECT s.id FROM Student s JOIN s.tutors t WHERE t.id = :tutorId AND s.email = :email")
+    List<Long> findStudentIdsByTutorIdAndEmail(@Param("tutorId") Long tutorId, @Param("email") String email);
 
-    // ✅ ОПТИМИЗИРОВАННЫЙ ЗАПРОС: загружаем студента с rates и tutors
-    @Query("SELECT DISTINCT s FROM Student s " +
-            "LEFT JOIN FETCH s.rates r " +
-            "LEFT JOIN FETCH r.tutor " +
-            "WHERE s.id = :id")
+    @Query("SELECT s FROM Student s LEFT JOIN FETCH s.rates r LEFT JOIN FETCH r.tutor WHERE s.id = :id")
     Optional<Student> findByIdWithRates(@Param("id") Long id);
 
-    // ✅ НОВЫЙ МЕТОД: загрузка всех студентов репетитора с rates
     @Query("SELECT DISTINCT s FROM Student s " +
-            "JOIN s.tutors t " +
             "LEFT JOIN FETCH s.rates r " +
-            "LEFT JOIN FETCH r.tutor rt " +
-            "WHERE t.id = :tutorId")
+            "LEFT JOIN FETCH r.tutor t " +
+            "JOIN s.tutors tutor " +
+            "WHERE tutor.id = :tutorId")
     List<Student> findByTutorIdWithRates(@Param("tutorId") Long tutorId);
 
-    // ✅ НОВЫЙ МЕТОД: загрузка студентов родителя с rates
     @Query("SELECT DISTINCT s FROM Student s " +
             "LEFT JOIN FETCH s.rates r " +
-            "LEFT JOIN FETCH r.tutor " +
+            "LEFT JOIN FETCH r.tutor t " +
             "WHERE s.parent.id = :parentId")
     List<Student> findByParentIdWithRates(@Param("parentId") Long parentId);
 
-    // ✅ Подсчёт студентов репетитора (без загрузки данных)
+    List<Student> findByFullNameContainingIgnoreCase(String fullName);
+
     @Query("SELECT COUNT(DISTINCT s) FROM Student s JOIN s.tutors t WHERE t.id = :tutorId")
     long countByTutorId(@Param("tutorId") Long tutorId);
 }

@@ -58,8 +58,7 @@ public class PasswordResetController {
         tokenRepository.save(token);
 
         try {
-            emailService.sendPasswordResetEmail(token, userName);
-            log.info("📧 Письмо для сброса пароля отправлено на {}", email);
+            emailService.sendPasswordResetEmail(token.getEmail(), userName, token.getToken());            log.info("📧 Письмо для сброса пароля отправлено на {}", email);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", "Не удалось отправить письмо"));
         }
