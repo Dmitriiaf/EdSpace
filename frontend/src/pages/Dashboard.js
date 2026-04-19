@@ -653,7 +653,7 @@ function Dashboard() {
                         
                         <Box sx={{ display: 'flex', gap: 1, ml: 2, flexDirection: 'column' }}>
                             {/* Видеозвонок */}
-                            {(isScheduled || isInProgress) && !isCancelled && (
+                            {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && !isCancelled && (
                                 <Button
                                     size="small"
                                     variant="outlined"
@@ -670,7 +670,7 @@ function Dashboard() {
                             )}
                             
                             {/* Онлайн-доска */}
-                            {(isScheduled || isInProgress) && !isCancelled && (
+                            {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && !isCancelled && (
                                 <Button
                                     size="small"
                                     variant="outlined"
@@ -686,8 +686,8 @@ function Dashboard() {
                                 </Button>
                             )}
                             
-                            {/* Начать урок (только для SCHEDULED) */}
-                            {isScheduled && (
+                            {/* Начать урок */}
+                            {(isScheduled || lesson.status === 'RESCHEDULED') && (
                                 <Button
                                     size="small"
                                     variant="contained"
@@ -699,7 +699,7 @@ function Dashboard() {
                                 </Button>
                             )}
                             
-                            {/* Завершить урок и Ученик не пришёл (только для IN_PROGRESS) */}
+                            {/* Завершить урок и Ученик не пришёл */}
                             {isInProgress && (
                                 <>
                                     <Button
@@ -723,8 +723,8 @@ function Dashboard() {
                                 </>
                             )}
                             
-                            {/* Перенести и Отмена (только для SCHEDULED) */}
-                            {isScheduled && (
+                            {/* Перенести и Отмена */}
+                            {(isScheduled || lesson.status === 'RESCHEDULED') && (
                                 <>
                                     <Button
                                         size="small"
@@ -747,7 +747,7 @@ function Dashboard() {
                                 </>
                             )}
                             
-                            {/* Заметки (для COMPLETED и PAID) */}
+                            {/* Заметки */}
                             {(isCompleted || isPaid) && (
                                 <Button
                                     size="small"
