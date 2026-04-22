@@ -1,6 +1,6 @@
 package com.example.demo.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -10,6 +10,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "tutor")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "lessons", "templates", "subscriptions", "payments"})
 public class Tutor {
 
     @Id
@@ -48,18 +49,19 @@ public class Tutor {
     @Column(nullable = false)
     private String role = "ROLE_TUTOR";
 
+    @Column(name = "timezone")
+    private String timezone = "Europe/Moscow";
+
     @Column(name = "reset_token")
     private String resetToken;
 
     @Column(name = "reset_token_expiry")
     private LocalDateTime resetTokenExpiry;
 
-    // ✅ НОВОЕ ПОЛЕ: Персональная видеокомната репетитора
     @Column(name = "video_room_name", unique = true)
     private String videoRoomName = "edspace-tutor-" + UUID.randomUUID().toString().substring(0, 8);
 
     @OneToMany(mappedBy = "tutor")
-    @JsonIgnore
     private List<Course> courses = new ArrayList<>();
 
     public Tutor() {}
@@ -76,6 +78,7 @@ public class Tutor {
     }
 
     // Геттеры
+    public String getTimezone() { return timezone; }
     public Long getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
@@ -91,9 +94,10 @@ public class Tutor {
     public String getRole() { return role; }
     public String getResetToken() { return resetToken; }
     public LocalDateTime getResetTokenExpiry() { return resetTokenExpiry; }
-    public String getVideoRoomName() { return videoRoomName; }  // ✅ Геттер
+    public String getVideoRoomName() { return videoRoomName; }
 
     // Сеттеры
+    public void setTimezone(String timezone) { this.timezone = timezone; }
     public void setEmail(String email) { this.email = email; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public void setFullName(String fullName) { this.fullName = fullName; }
@@ -107,5 +111,5 @@ public class Tutor {
     public void setRole(String role) { this.role = role; }
     public void setResetToken(String resetToken) { this.resetToken = resetToken; }
     public void setResetTokenExpiry(LocalDateTime resetTokenExpiry) { this.resetTokenExpiry = resetTokenExpiry; }
-    public void setVideoRoomName(String videoRoomName) { this.videoRoomName = videoRoomName; }  // ✅ Сеттер
+    public void setVideoRoomName(String videoRoomName) { this.videoRoomName = videoRoomName; }
 }

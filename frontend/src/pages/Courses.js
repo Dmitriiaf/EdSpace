@@ -6,7 +6,7 @@ import {
     TableContainer, TableHead, TableRow, Paper, IconButton,
     Alert, Snackbar, Chip, Typography, Grid, Card, CardContent,
     Avatar, LinearProgress, Tooltip, Tabs, Tab, Divider,
-    CircularProgress, Menu, MenuItem, InputAdornment
+    CircularProgress, Menu, MenuItem, InputAdornment, Autocomplete  // ← ДОБАВЛЕН Autocomplete
 } from '@mui/material';
 import {
     Add, Edit, Delete, School, AttachMoney,
@@ -34,6 +34,11 @@ function Courses() {
     const [tabValue, setTabValue] = useState(0);
     const [anchorEl, setAnchorEl] = useState(null);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+    
+    // ✅ НОВОЕ: список предметов и выбранный предмет
+    const [subjects, setSubjects] = useState([]);
+    const [selectedSubject, setSelectedSubject] = useState(null);
+    
     const [formData, setFormData] = useState({
         name: '',
         color: '#3B82F6',
@@ -46,8 +51,19 @@ function Courses() {
     useEffect(() => {
         if (user) {
             fetchData();
+            fetchSubjects();  // ✅ ЗАГРУЗКА ПРЕДМЕТОВ
         }
     }, [user]);
+
+    // ✅ НОВОЕ: загрузка списка предметов
+    const fetchSubjects = async () => {
+        try {
+            const response = await axiosInstance.get('/subjects');
+            setSubjects(response.data);
+        } catch (err) {
+            console.error('Ошибка загрузки предметов:', err);
+        }
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -81,19 +97,16 @@ function Courses() {
         const stats = {};
         
         coursesData.forEach(course => {
-            // Ученики, которые занимаются этим курсом
             const courseStudents = studentsData.filter(s => 
                 s.course?.id === course.id || 
                 lessonsData.some(l => l.course?.id === course.id && l.student?.id === s.id)
             );
             const uniqueStudents = [...new Map(courseStudents.map(s => [s.id, s])).values()];
             
-            // Занятия по курсу
             const courseLessons = lessonsData.filter(l => l.course?.id === course.id);
             const completedLessons = courseLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID');
             const paidLessons = courseLessons.filter(l => l.status === 'PAID');
             
-            // Доход по курсу
             const coursePayments = paymentsData.filter(p => 
                 p.courseName === course.name || 
                 lessonsData.some(l => l.id === p.lesson?.id && l.course?.id === course.id)
@@ -102,7 +115,6 @@ function Courses() {
                 .filter(p => p.status === 'paid')
                 .reduce((sum, p) => sum + p.amount, 0);
             
-            // Динамика по месяцам (последние 6 месяцев)
             const now = new Date();
             const months = eachMonthOfInterval({
                 start: subMonths(now, 5),
@@ -130,7 +142,7 @@ function Courses() {
                 paidCount: paidLessons.length,
                 totalIncome,
                 monthlyStats,
-                students: uniqueStudents.slice(0, 5), // последние 5 учеников
+                students: uniqueStudents.slice(0, 5),
                 progress: courseLessons.length > 0 
                     ? (completedLessons.length / courseLessons.length) * 100 
                     : 0
@@ -148,6 +160,12 @@ function Courses() {
                 color: course.color || '#3B82F6',
                 tutorId: user.id
             });
+            // ✅ Установить выбранный предмет при редактировании
+            if (course.subject) {
+                setSelectedSubject(course.subject);
+            } else {
+                setSelectedSubject(null);
+            }
         } else {
             setEditingCourse(null);
             setFormData({
@@ -155,6 +173,7 @@ function Courses() {
                 color: '#3B82F6',
                 tutorId: user.id
             });
+            setSelectedSubject(null);  // ✅ Сбросить предмет
         }
         setOpenDialog(true);
     };
@@ -167,6 +186,7 @@ function Courses() {
             color: '#3B82F6',
             tutorId: user.id
         });
+        setSelectedSubject(null);  // ✅ Сбросить предмет
     };
 
     const handleInputChange = (e) => {
@@ -188,11 +208,17 @@ function Courses() {
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}` };
             
+            // ✅ Добавляем subjectId в данные формы
+            const dataToSend = {
+                ...formData,
+                subjectId: selectedSubject?.id || null
+            };
+            
             if (editingCourse) {
-                await axiosInstance.put(`/courses/${editingCourse.id}`, formData, { headers });
+                await axiosInstance.put(`/courses/${editingCourse.id}`, dataToSend, { headers });
                 showSnackbar('Курс обновлён', 'success');
             } else {
-                await axiosInstance.post('/courses', formData, { headers });
+                await axiosInstance.post('/courses', dataToSend, { headers });
                 showSnackbar('Курс добавлен', 'success');
             }
             
@@ -200,7 +226,7 @@ function Courses() {
             fetchData();
         } catch (err) {
             console.error('Ошибка при сохранении:', err);
-            showSnackbar('Ошибка при сохранении курса', 'error');
+            showSnackbar(err.response?.data?.error || 'Ошибка при сохранении курса', 'error');
         }
     };
 
@@ -238,7 +264,6 @@ function Courses() {
         setTabValue(newValue);
     };
 
-    // Общая статистика по всем курсам
     const totalStats = {
         coursesCount: courses.length,
         totalStudents: Object.values(courseStats).reduce((sum, s) => sum + s.studentsCount, 0),
@@ -387,11 +412,9 @@ function Courses() {
                                         }
                                     }}
                                 >
-                                    {/* Цветная полоска */}
                                     <Box sx={{ height: 4, bgcolor: course.color || '#3B82F6' }} />
                                     
                                     <CardContent>
-                                        {/* Заголовок курса */}
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                 <Avatar 
@@ -407,9 +430,12 @@ function Courses() {
                                                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                                                         {course.name}
                                                     </Typography>
-                                                    <Typography variant="caption" color="textSecondary">
-                                                        ID: {course.id}
-                                                    </Typography>
+                                                    {/* ✅ Показываем предмет, если он есть */}
+                                                    {course.subject && (
+                                                        <Typography variant="caption" color="textSecondary">
+                                                            {course.subject.name}
+                                                        </Typography>
+                                                    )}
                                                 </Box>
                                             </Box>
                                             <IconButton onClick={(e) => handleMenuOpen(e, course)}>
@@ -417,7 +443,6 @@ function Courses() {
                                             </IconButton>
                                         </Box>
 
-                                        {/* Статистика курса */}
                                         <Grid container spacing={2} sx={{ mb: 2 }}>
                                             <Grid item xs={4}>
                                                 <Box sx={{ textAlign: 'center' }}>
@@ -451,7 +476,6 @@ function Courses() {
                                             </Grid>
                                         </Grid>
 
-                                        {/* Прогресс */}
                                         <Box sx={{ mb: 2 }}>
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                                                 <Typography variant="caption" color="textSecondary">
@@ -475,7 +499,6 @@ function Courses() {
                                             />
                                         </Box>
 
-                                        {/* Доход */}
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, p: 1, bgcolor: '#f5f5f5', borderRadius: 2 }}>
                                             <AttachMoney sx={{ fontSize: 18, color: '#2E7D32' }} />
                                             <Typography variant="body2" sx={{ fontWeight: 500, color: '#2E7D32' }}>
@@ -483,7 +506,6 @@ function Courses() {
                                             </Typography>
                                         </Box>
 
-                                        {/* Ученики */}
                                         {stats.students.length > 0 && (
                                             <Box sx={{ mb: 2 }}>
                                                 <Typography variant="caption" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
@@ -512,7 +534,6 @@ function Courses() {
                                             </Box>
                                         )}
 
-                                        {/* График динамики */}
                                         {stats.monthlyStats.length > 0 && (
                                             <Box>
                                                 <Typography variant="caption" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
@@ -553,7 +574,6 @@ function Courses() {
                 </Grid>
             )}
 
-            {/* Меню действий для курса */}
             <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
@@ -575,31 +595,94 @@ function Courses() {
                 </MenuItem>
             </Menu>
 
-            {/* Диалог добавления/редактирования */}
-            <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+                        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
                 <DialogTitle>
                     {editingCourse ? 'Редактировать курс' : 'Добавить новый курс'}
                 </DialogTitle>
                 <DialogContent>
                     <Box sx={{ pt: 2 }}>
-                        <TextField
-                            fullWidth
-                            label="Название курса"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleInputChange}
-                            margin="normal"
-                            required
-                            autoFocus
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <School color="action" />
-                                    </InputAdornment>
-                                )
+                        {/* ✅ УМНОЕ АВТОДОПОЛНЕНИЕ: предметы + существующие курсы */}
+                        <Autocomplete
+                            freeSolo
+                            options={[
+                                // Группа "Предметы"
+                                ...subjects.map(s => ({ 
+                                    type: 'subject', 
+                                    name: s.name, 
+                                    original: s 
+                                })),
+                                // Группа "Мои курсы"
+                                ...courses.map(c => ({ 
+                                    type: 'course', 
+                                    name: c.name, 
+                                    original: c 
+                                }))
+                            ]}
+                            groupBy={(option) => option.type === 'subject' ? '📚 Предметы' : '📖 Мои курсы'}
+                            getOptionLabel={(option) => {
+                                if (typeof option === 'string') return option;
+                                return option.name;
                             }}
+                            value={formData.name}
+                            onChange={(event, newValue) => {
+                                if (typeof newValue === 'string') {
+                                    // Ввели новое название
+                                    setFormData({ ...formData, name: newValue });
+                                    setSelectedSubject(null);
+                                } else if (newValue?.type === 'subject') {
+                                    // Выбрали предмет из справочника
+                                    setFormData({ ...formData, name: newValue.name });
+                                    setSelectedSubject(newValue.original);
+                                } else if (newValue?.type === 'course') {
+                                    // Выбрали существующий курс
+                                    setFormData({ ...formData, name: newValue.name });
+                                    setSelectedSubject(newValue.original.subject || null);
+                                } else {
+                                    setFormData({ ...formData, name: '' });
+                                    setSelectedSubject(null);
+                                }
+                            }}
+                            onInputChange={(event, newInputValue) => {
+                                setFormData({ ...formData, name: newInputValue });
+                            }}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="Название курса"
+                                    margin="normal"
+                                    fullWidth
+                                    required
+                                    placeholder="Например: Математика ОГЭ"
+                                    helperText="Выберите из списка или введите своё название"
+                                    InputProps={{
+                                        ...params.InputProps,
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <School color="action" />
+                                            </InputAdornment>
+                                        )
+                                    }}
+                                />
+                            )}
+                            renderGroup={(params) => (
+                                <Box key={params.key}>
+                                    <Box sx={{ 
+                                        px: 2, 
+                                        py: 1, 
+                                        bgcolor: '#f5f5f5', 
+                                        fontWeight: 600,
+                                        fontSize: '0.75rem',
+                                        color: 'text.secondary'
+                                    }}>
+                                        {params.group}
+                                    </Box>
+                                    <Box>{params.children}</Box>
+                                </Box>
+                            )}
+                            isOptionEqualToValue={(option, value) => option.name === value.name}
                         />
-                        
+
+                        {/* Выбор цвета */}
                         <Box sx={{ mt: 2, mb: 1 }}>
                             <ColorPicker 
                                 value={formData.color}
@@ -608,7 +691,10 @@ function Courses() {
                         </Box>
 
                         <Alert severity="info" sx={{ mt: 2 }}>
-                            Курс поможет группировать занятия и отслеживать статистику по предметам.
+                            {selectedSubject 
+                                ? `Курс будет привязан к предмету «${selectedSubject.name}»`
+                                : 'Введите название курса или выберите из списка'
+                            }
                         </Alert>
                     </Box>
                 </DialogContent>

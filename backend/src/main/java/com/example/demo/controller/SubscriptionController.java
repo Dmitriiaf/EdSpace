@@ -43,6 +43,38 @@ public class SubscriptionController {
         }
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> updateSubscription(@PathVariable Long id,
+                                                @RequestBody Map<String, Object> request,
+                                                @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Subscription sub = subscriptionService.getSubscriptionById(id);
+
+            // IDOR проверка
+            if (!sub.getTutor().getId().equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            // Редактировать можно только PENDING
+            if (!"PENDING".equalsIgnoreCase(sub.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Нельзя редактировать оплаченный или активный абонемент"));
+            }
+
+            if (request.containsKey("lessonsCount")) {
+                sub.setLessonsCount(Integer.parseInt(request.get("lessonsCount").toString()));
+            }
+            if (request.containsKey("price")) {
+                sub.setPrice(new BigDecimal(request.get("price").toString()));
+            }
+
+            subscriptionService.saveSubscription(sub); // нужно добавить метод save в сервис
+            return ResponseEntity.ok(sub);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/student/{studentId}/pending")
     @PreAuthorize("hasAnyRole('TUTOR', 'PARENT')")
     public ResponseEntity<?> getPendingSubscriptions(@PathVariable Long studentId) {

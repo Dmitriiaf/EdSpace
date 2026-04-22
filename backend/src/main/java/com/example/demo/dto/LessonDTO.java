@@ -8,6 +8,7 @@ public class LessonDTO {
     private Long id;
     private Long tutorId;
     private String tutorName;
+    private Integer duration;
     private Long studentId;
     private String studentName;
     private Long courseId;
@@ -25,6 +26,7 @@ public class LessonDTO {
     public LessonDTO() {}
 
     // Геттеры
+    public Integer getDuration() { return duration; }
     public Long getId() { return id; }
     public Long getTutorId() { return tutorId; }
     public String getTutorName() { return tutorName; }
@@ -43,6 +45,7 @@ public class LessonDTO {
     public LocalDateTime getPaidAt() { return paidAt; }
 
     // Сеттеры
+    public void setDuration(Integer duration) { this.duration = duration; }
     public void setId(Long id) { this.id = id; }
     public void setTutorId(Long tutorId) { this.tutorId = tutorId; }
     public void setTutorName(String tutorName) { this.tutorName = tutorName; }

@@ -6,15 +6,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
+import com.example.demo.repository.LessonRepository;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/weekly-template")
 @CrossOrigin(origins = "http://localhost:3000")
 public class WeeklyTemplateController {
+
+
+    @Autowired
+    private LessonRepository lessonRepository;
 
     @Autowired
     private WeeklyTemplateService templateService;
@@ -121,8 +126,21 @@ public class WeeklyTemplateController {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
+            // ✅ Удаляем все будущие уроки, созданные по этому шаблону
+            LocalDate today = LocalDate.now();
+            int deletedLessons = lessonRepository.deleteFutureLessonsByTemplateId(id, today);
+
+            // Удаляем сам шаблон
             templateService.deleteTemplate(id);
-            return ResponseEntity.ok(Map.of("message", "Шаблон удалён"));
+
+            String message = deletedLessons > 0
+                    ? "Шаблон и " + deletedLessons + " будущих занятий удалены"
+                    : "Шаблон удалён (будущих занятий не было)";
+
+            return ResponseEntity.ok(Map.of(
+                    "message", message,
+                    "deletedLessons", deletedLessons
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

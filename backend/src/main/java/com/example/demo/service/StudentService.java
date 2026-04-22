@@ -1,10 +1,10 @@
+// ========== backend/src/main/java/com/example/demo/service/StudentService.java ==========
 package com.example.demo.service;
 
 import com.example.demo.repository.InvitationTokenRepository;
 import com.example.demo.entity.InvitationToken;
 import com.example.demo.service.EmailService;
 import com.example.demo.entity.*;
-import com.example.demo.exception.BusinessException;
 import com.example.demo.exception.NotFoundException;
 import com.example.demo.repository.*;
 import lombok.extern.slf4j.Slf4j;
@@ -14,8 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -34,6 +32,9 @@ public class StudentService {
 
     @Autowired
     private TutorRepository tutorRepository;
+
+    @Autowired
+    private WeeklyTemplateRepository weeklyTemplateRepository;
 
     @Autowired
     private ParentRepository parentRepository;
@@ -61,6 +62,10 @@ public class StudentService {
             sb.append(chars.charAt(random.nextInt(chars.length())));
         }
         return sb.toString();
+    }
+
+    public List<Student> getArchivedStudentsByTutor(Long tutorId) {
+        return studentRepository.findArchivedByTutorIdWithRates(tutorId);
     }
 
     @Transactional
@@ -176,7 +181,7 @@ public class StudentService {
     public Student updateStudent(Long id, String fullName, String email,
                                  String phone, String parentName, String parentPhone,
                                  String paymentType, BigDecimal ratePerLesson,
-                                 String parentEmail, LocalDate birthday) {
+                                 String parentEmail, java.time.LocalDate birthday) {
         Student student = getStudentById(id);
 
         if (fullName != null) student.setFullName(fullName);
@@ -210,30 +215,55 @@ public class StudentService {
         return studentRepository.save(student);
     }
 
+    // ✅ ИСПРАВЛЕННЫЙ МЕТОД УДАЛЕНИЯ
     @Transactional
     public void deleteStudent(Long id) {
         Student student = getStudentById(id);
 
+        // 1. Очищаем связи с курсами
+        student.getCourses().clear();
+        studentRepository.save(student);
+
+        // 2. Удаляем ставки
+        if (student.getRates() != null) {
+            student.getRates().clear();
+            studentRepository.save(student);
+        }
+
+        // 3. Удаляем шаблоны (weekly_template)
+        List<WeeklyTemplate> templates = weeklyTemplateRepository.findByStudentId(id);
+        if (!templates.isEmpty()) {
+            weeklyTemplateRepository.deleteAll(templates);
+        }
+
+        // 4. Удаляем уроки
         List<Lesson> lessons = lessonRepository.findByStudentIdOrderByLessonDateAscStartTimeAsc(id);
         if (!lessons.isEmpty()) {
             lessonRepository.deleteAll(lessons);
         }
 
+        // 5. Удаляем платежи
         List<Payment> payments = paymentRepository.findByStudentId(id);
         if (!payments.isEmpty()) {
             paymentRepository.deleteAll(payments);
         }
 
+        // 6. Удаляем абонементы
         List<Subscription> subscriptions = subscriptionRepository.findByStudentId(id);
         if (!subscriptions.isEmpty()) {
             subscriptionRepository.deleteAll(subscriptions);
         }
 
+        // 7. Удаляем токены приглашений
+        invitationTokenRepository.deleteByStudentId(id);
+
+        // 8. Отвязываем родителя
         if (student.getParent() != null) {
             student.setParent(null);
             studentRepository.save(student);
         }
 
+        // 9. Удаляем ученика
         studentRepository.delete(student);
     }
 

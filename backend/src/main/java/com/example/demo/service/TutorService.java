@@ -59,7 +59,7 @@ public class TutorService {
     }
 
     public Tutor updateTutor(Long id, String phone, String fullName,
-                             String birthday, String about, String city) {
+                             String birthday, String about, String city, String timezone) {
         Tutor tutor = getTutorById(id);
 
         if (phone != null) tutor.setPhone(phone);
@@ -67,6 +67,7 @@ public class TutorService {
         if (birthday != null && !birthday.isEmpty()) tutor.setBirthday(LocalDate.parse(birthday));
         if (about != null) tutor.setAbout(about);
         if (city != null) tutor.setCity(city);
+        if (timezone != null) tutor.setTimezone(timezone);  // ✅ ДОБАВЛЕНО
 
         return tutorRepository.save(tutor);
     }

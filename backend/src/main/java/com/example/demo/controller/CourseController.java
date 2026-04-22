@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
+import com.example.demo.repository.CourseRepository;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +18,8 @@ public class CourseController {
     @Autowired
     private CourseService courseService;
 
+    @Autowired
+    private CourseRepository courseRepository;
     // Создать новый курс
     @PostMapping
     @PreAuthorize("hasRole('TUTOR')")
@@ -26,16 +28,26 @@ public class CourseController {
         try {
             Long tutorId = Long.parseLong(request.get("tutorId").toString());
 
-            // ✅ IDOR FIX: Проверяем, что репетитор создаёт курс для себя
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
+            String courseName = (String) request.get("name");
+
+            if (courseRepository.existsByTutorIdAndName(tutorId, courseName)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Курс с таким названием уже существует"));
+            }
+
+            // Получаем subjectId из запроса
+            Long subjectId = request.get("subjectId") != null ?
+                    Long.parseLong(request.get("subjectId").toString()) : null;
+
             Course course = courseService.createCourse(
-                    (String) request.get("name"),
+                    courseName,
                     (String) request.get("description"),
                     (String) request.get("color"),
-                    tutorId
+                    tutorId,
+                    subjectId  // ← добавить параметр в сервис
             );
             return ResponseEntity.ok(course);
         } catch (RuntimeException e) {
@@ -89,16 +101,21 @@ public class CourseController {
         try {
             Course course = courseService.getCourseById(id);
 
-            // ✅ IDOR FIX: Проверяем, что курс принадлежит текущему репетитору
+            // IDOR FIX: Проверяем, что курс принадлежит текущему репетитору
             if (!course.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
+
+            // Получаем subjectId из запроса
+            Long subjectId = request.get("subjectId") != null ?
+                    Long.parseLong(request.get("subjectId").toString()) : null;
 
             Course updatedCourse = courseService.updateCourse(
                     id,
                     (String) request.get("name"),
                     (String) request.get("description"),
-                    (String) request.get("color")
+                    (String) request.get("color"),
+                    subjectId  // ← ПЯТЫЙ АРГУМЕНТ
             );
             return ResponseEntity.ok(updatedCourse);
         } catch (RuntimeException e) {

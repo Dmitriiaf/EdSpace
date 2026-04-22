@@ -11,6 +11,7 @@ import com.example.demo.service.NotificationService;
 import com.example.demo.service.StudentService;
 import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.SubscriptionRepository;
+import com.example.demo.repository.LessonRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,18 +21,30 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import com.example.demo.entity.Tutor;
+import com.example.demo.repository.TutorRepository;
 
 @RestController
 @RequestMapping("/api/lessons")
 @CrossOrigin(origins = {
         "http://localhost:3000",
         "http://72.56.238.224",
-        "http://ed-space.ru"
+        "http://ed-space.ru",
+        "https://ed-space.ru",
+        "https://www.ed-space.ru"
 }, allowCredentials = "true")
 public class LessonController {
 
     @Autowired
+    private LessonRepository lessonRepository;
+
+    @Autowired
     private LessonService lessonService;
+
+    @Autowired
+    private TutorRepository tutorRepository;
 
     @Autowired
     private LessonGeneratorService lessonGeneratorService;
@@ -66,6 +79,38 @@ public class LessonController {
         }
     }
 
+    @PostMapping("/{id}/cancel-reschedule")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> cancelReschedule(@PathVariable Long id,
+                                              @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Lesson original = lessonService.getLessonById(id);
+
+            boolean hasTutor = original.getStudent().getTutors().stream()
+                    .anyMatch(t -> t.getId().equals(currentUserId));
+            if (!hasTutor) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            if (!"RESCHEDULED".equals(original.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Занятие не было перенесено"));
+            }
+
+            Lesson newLesson = lessonRepository.findByOriginalLessonId(id)
+                    .orElseThrow(() -> new RuntimeException("Не найдено перенесённое занятие"));
+
+            original.setStatus("SCHEDULED");
+            original.setUpdatedAt(LocalDateTime.now());
+            lessonRepository.save(original);
+
+            lessonRepository.delete(newLesson);
+
+            return ResponseEntity.ok(Map.of("message", "Перенос отменён"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/upcoming")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getUpcomingLessons(@RequestParam Long tutorId,
@@ -84,12 +129,41 @@ public class LessonController {
     @GetMapping("/all")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getAllLessons(@RequestParam Long tutorId,
-                                           @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                           @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                           @RequestAttribute(name = "userRole", required = false) String userRole) {
         if (!tutorId.equals(currentUserId)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
         try {
             List<Lesson> lessons = lessonService.getAllLessons(tutorId);
+
+            // Получаем часовой пояс репетитора
+            Tutor tutor = tutorRepository.findById(currentUserId).orElse(null);
+            String userTimeZone = (tutor != null && tutor.getTimezone() != null)
+                    ? tutor.getTimezone()
+                    : "Europe/Moscow";
+
+            ZoneId userZone = ZoneId.of(userTimeZone);
+
+            // Конвертируем время каждого урока
+            for (Lesson lesson : lessons) {
+                // Конвертируем startTime
+                ZonedDateTime utcStart = ZonedDateTime.of(
+                        lesson.getLessonDate(),
+                        lesson.getStartTime(),
+                        ZoneId.of("UTC")
+                );
+                ZonedDateTime userStart = utcStart.withZoneSameInstant(userZone);
+
+                // ✅ Вычисляем endTime на основе duration
+                int duration = lesson.getDuration() != null ? lesson.getDuration() : 60;
+                ZonedDateTime userEnd = userStart.plusMinutes(duration);
+
+                lesson.setLessonDate(userStart.toLocalDate());
+                lesson.setStartTime(userStart.toLocalTime());
+                lesson.setEndTime(userEnd.toLocalTime());
+            }
+
             return ResponseEntity.ok(lessons);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -136,19 +210,15 @@ public class LessonController {
             }
 
             List<Long> allStudentIds = studentRepository.findStudentIdsByEmail(student.getEmail());
-
             List<Lesson> allLessons = new ArrayList<>();
 
             for (Long id : allStudentIds) {
-                List<Lesson> lessons = lessonService.getLessonsByStudent(id);
-                allLessons.addAll(lessons);
+                allLessons.addAll(lessonService.getLessonsByStudent(id));
             }
 
             List<Lesson> uniqueLessons = allLessons.stream()
                     .collect(Collectors.toMap(Lesson::getId, lesson -> lesson, (existing, replacement) -> existing))
-                    .values()
-                    .stream()
-                    .collect(Collectors.toList());
+                    .values().stream().collect(Collectors.toList());
 
             uniqueLessons.sort((a, b) -> {
                 int dateCompare = a.getLessonDate().compareTo(b.getLessonDate());
@@ -202,14 +272,37 @@ public class LessonController {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
         try {
+            Integer duration = request.get("duration") != null ?
+                    Integer.parseInt(request.get("duration").toString()) : 60;
+
+            // Получаем часовой пояс репетитора
+            Tutor tutor = tutorRepository.findById(tutorId).orElseThrow();
+            ZoneId tutorZone = ZoneId.of(tutor.getTimezone() != null ? tutor.getTimezone() : "Europe/Moscow");
+
+            // Парсим дату и время
+            LocalDate lessonDate = LocalDate.parse(request.get("lessonDate").toString());
+            LocalTime startTime = LocalTime.parse(request.get("startTime").toString());
+
+            // Конвертируем из часового пояса репетитора в UTC
+            ZonedDateTime zonedStart = ZonedDateTime.of(lessonDate, startTime, tutorZone);
+            ZonedDateTime utcStart = zonedStart.withZoneSameInstant(ZoneId.of("UTC"));
+
+            LocalDate utcDate = utcStart.toLocalDate();
+            LocalTime utcTime = utcStart.toLocalTime();
+            LocalTime utcEndTime = utcTime.plusMinutes(duration);
+
             Lesson lesson = lessonService.createLesson(
                     tutorId,
                     Long.parseLong(request.get("studentId").toString()),
                     request.get("courseId") != null ? Long.parseLong(request.get("courseId").toString()) : null,
-                    LocalDate.parse(request.get("lessonDate").toString()),
-                    LocalTime.parse(request.get("startTime").toString()),
-                    LocalTime.parse(request.get("endTime").toString())
+                    utcDate,
+                    utcTime,
+                    utcEndTime
             );
+
+            lesson.setDuration(duration);
+            lessonService.saveLesson(lesson);
+
             return ResponseEntity.ok(lesson);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -232,7 +325,14 @@ public class LessonController {
             String notes = request.get("notes");
             String nextLessonPlan = request.get("nextLessonPlan");
 
-            Lesson completedLesson = lessonService.completeLesson(id, notes, nextLessonPlan);
+            Lesson completedLesson;
+
+            // ✅ Если это перенесённый урок — используем специальный метод
+            if (lesson.getOriginalLesson() != null && "RESCHEDULED".equals(lesson.getStatus())) {
+                completedLesson = lessonService.completeRescheduledLesson(id, notes, nextLessonPlan);
+            } else {
+                completedLesson = lessonService.completeLesson(id, notes, nextLessonPlan);
+            }
 
             boolean isSubscription = "subscription".equals(completedLesson.getStudent().getPaymentType());
 
@@ -283,24 +383,18 @@ public class LessonController {
                 if (parent == null) {
                     return ResponseEntity.status(403).body(Map.of("error", "У ученика нет привязанного родителя"));
                 }
-
                 if (!parent.getId().equals(currentUserId)) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён — это не ваш ребёнок"));
                 }
-
                 boolean isChildLesson = parent.getChildren().stream()
                         .anyMatch(child -> child.getId().equals(lesson.getStudent().getId()));
-
                 if (!isChildLesson) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён — урок не принадлежит вашему ребёнку"));
                 }
             }
 
             Lesson paidLesson = lessonService.confirmPayment(id);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Оплата подтверждена",
-                    "lesson", paidLesson
-            ));
+            return ResponseEntity.ok(Map.of("message", "Оплата подтверждена", "lesson", paidLesson));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -315,7 +409,7 @@ public class LessonController {
         try {
             Lesson lesson = lessonService.getLessonById(id);
 
-            // Проверки прав доступа (без изменений)
+            // Проверки прав доступа
             if ("ROLE_TUTOR".equals(userRole)) {
                 boolean hasTutor = lesson.getStudent().getTutors().stream()
                         .anyMatch(t -> t.getId().equals(currentUserId));
@@ -331,52 +425,56 @@ public class LessonController {
                 if (parent == null || !parent.getId().equals(currentUserId)) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
-                boolean isChildLesson = parent.getChildren().stream()
-                        .anyMatch(child -> child.getId().equals(lesson.getStudent().getId()));
-                if (!isChildLesson) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
             }
 
             String reason = request != null ? request.get("reason") : null;
+            String originalStatus = lesson.getStatus();
 
-            // ✅ НОВАЯ ЛОГИКА: Если урок уже IN_PROGRESS и его отменяет репетитор — ученик не пришёл
-            if (Lesson.STATUS_IN_PROGRESS.equals(lesson.getStatus()) && "ROLE_TUTOR".equals(userRole)) {
-                lesson.setStatus(Lesson.STATUS_CANCELLED);
-                if (reason != null && !reason.isEmpty()) {
-                    lesson.setNotes("❌ Ученик не пришёл: " + reason);
-                } else {
-                    lesson.setNotes("❌ Ученик не пришёл");
-                }
+            // ✅ НЕЯВКА = урок был IN_PROGRESS и его отменяет репетитор
+            boolean isNoShow = Lesson.STATUS_IN_PROGRESS.equals(originalStatus) && "ROLE_TUTOR".equals(userRole);
 
-                // Создаём долг, но НЕ списываем занятие из абонемента
-                if ("subscription".equals(lesson.getStudent().getPaymentType())) {
-                    List<Subscription> activeSubs = subscriptionRepository.findActiveByStudentId(lesson.getStudent().getId());
-                    if (!activeSubs.isEmpty()) {
-                        Subscription sub = activeSubs.get(0);
+            lesson.setStatus(Lesson.STATUS_CANCELLED);
+
+            if (isNoShow) {
+                lesson.setNotes("❌ Ученик не пришёл" + (reason != null && !reason.isEmpty() ? ": " + reason : ""));
+            } else {
+                lesson.setNotes(reason != null && !reason.isEmpty() ? "❌ Отменено: " + reason : "❌ Отменено");
+            }
+
+            // ========== ОБРАБОТКА ДОЛГОВ И ПРОПУСКОВ ==========
+            Student student = lesson.getStudent();
+            String paymentType = student.getPaymentType();
+
+            boolean shouldCreateDebt = Lesson.STATUS_SCHEDULED.equals(originalStatus) || isNoShow;
+
+            if (shouldCreateDebt) {
+                if ("subscription".equals(paymentType)) {
+                    Optional<Subscription> activeSubOpt = subscriptionRepository.findActiveByStudentId(student.getId());
+                    if (activeSubOpt.isPresent()) {
+                        Subscription sub = activeSubOpt.get();
                         sub.setDebtLessons(sub.getDebtLessons() != null ? sub.getDebtLessons() + 1 : 1);
                         subscriptionRepository.save(sub);
                     }
-                }
-
-                Lesson savedLesson = lessonService.saveLesson(lesson);
-                return ResponseEntity.ok(savedLesson);
-            }
-
-            // Для всех остальных случаев — стандартная отмена
-            Lesson cancelledLesson = lessonService.cancelLesson(id, reason);
-
-            // Если урок был SCHEDULED и у ученика абонемент — создаём долг
-            if (Lesson.STATUS_SCHEDULED.equals(lesson.getStatus()) && "subscription".equals(cancelledLesson.getStudent().getPaymentType())) {
-                List<Subscription> activeSubs = subscriptionRepository.findActiveByStudentId(cancelledLesson.getStudent().getId());
-                if (!activeSubs.isEmpty()) {
-                    Subscription sub = activeSubs.get(0);
-                    sub.setDebtLessons(sub.getDebtLessons() != null ? sub.getDebtLessons() + 1 : 1);
-                    subscriptionRepository.save(sub);
+                } else {
+                    student.setMissedLessons(student.getMissedLessons() != null ? student.getMissedLessons() + 1 : 1);
+                    studentRepository.save(student);
                 }
             }
 
-            return ResponseEntity.ok(cancelledLesson);
+            Lesson savedLesson = lessonService.saveLesson(lesson);
+
+            // Уведомление родителю
+            if (student.getParent() != null) {
+                String message = isNoShow ?
+                        String.format("❌ Ученик %s не пришёл на занятие %s %s.",
+                                student.getFullName(), lesson.getLessonDate(), lesson.getStartTime().toString().substring(0, 5)) :
+                        String.format("❌ Урок по %s с %s (%s %s) отменён.",
+                                lesson.getCourse() != null ? lesson.getCourse().getName() : "занятию",
+                                student.getFullName(), lesson.getLessonDate(), lesson.getStartTime().toString().substring(0, 5));
+                notificationService.createNotification(student.getParent().getId(), lesson.getId(), message);
+            }
+
+            return ResponseEntity.ok(savedLesson);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -394,12 +492,7 @@ public class LessonController {
             if (!hasTutor) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
-            Lesson updatedLesson = lessonService.addNotes(
-                    id,
-                    request.get("notes"),
-                    request.get("nextLessonPlan")
-            );
+            Lesson updatedLesson = lessonService.addNotes(id, request.get("notes"), request.get("nextLessonPlan"));
             return ResponseEntity.ok(updatedLesson);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -418,17 +511,13 @@ public class LessonController {
             if (!hasTutor) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             Lesson rescheduledLesson = lessonService.rescheduleLesson(
                     id,
                     LocalDate.parse(request.get("newDate").toString()),
                     LocalTime.parse(request.get("newStartTime").toString()),
                     LocalTime.parse(request.get("newEndTime").toString())
             );
-            return ResponseEntity.ok(Map.of(
-                    "message", "Занятие успешно перенесено",
-                    "lesson", rescheduledLesson
-            ));
+            return ResponseEntity.ok(Map.of("message", "Занятие успешно перенесено", "lesson", rescheduledLesson));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -441,10 +530,7 @@ public class LessonController {
             LocalDate today = LocalDate.now();
             LocalDate endDate = today.plusMonths(1);
             lessonGeneratorService.generateLessons(today, endDate);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Занятия созданы на месяц вперёд (только новые, существующие не изменены)",
-                    "period", Map.of("start", today, "end", endDate)
-            ));
+            return ResponseEntity.ok(Map.of("message", "Занятия созданы на месяц вперёд", "period", Map.of("start", today, "end", endDate)));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -467,98 +553,63 @@ public class LessonController {
     public ResponseEntity<?> resurrectLesson(@RequestBody Map<String, Object> request,
                                              @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
-            Long originalLessonId = null;
-            if (request.get("originalLessonId") != null) {
-                originalLessonId = Long.parseLong(request.get("originalLessonId").toString());
-            }
-
-            Long studentId = null;
-            if (request.get("studentId") != null) {
-                studentId = Long.parseLong(request.get("studentId").toString());
-            }
-
+            Long studentId = request.get("studentId") != null ? Long.parseLong(request.get("studentId").toString()) : null;
             LocalDate newDate = LocalDate.parse(request.get("newDate").toString());
             LocalTime newStartTime = LocalTime.parse(request.get("newStartTime").toString());
             LocalTime newEndTime = LocalTime.parse(request.get("newEndTime").toString());
 
-            if (originalLessonId != null) {
-                Lesson originalLesson = lessonService.getLessonById(originalLessonId);
+            System.out.println("🔍 [RESURRECT] studentId=" + studentId + ", tutorId=" + currentUserId);
 
-                boolean hasTutor = originalLesson.getStudent().getTutors().stream()
-                        .anyMatch(t -> t.getId().equals(currentUserId));
-                if (!hasTutor) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
-
-                Lesson newLesson = lessonService.createLesson(
-                        currentUserId,
-                        originalLesson.getStudent().getId(),
-                        originalLesson.getCourse() != null ? originalLesson.getCourse().getId() : null,
-                        newDate,
-                        newStartTime,
-                        newEndTime
-                );
-
-                if ("subscription".equals(originalLesson.getStudent().getPaymentType())) {
-                    List<Subscription> activeSubs = subscriptionRepository.findActiveByStudentId(originalLesson.getStudent().getId());
-                    if (!activeSubs.isEmpty()) {
-                        Subscription sub = activeSubs.get(0);
-                        if (sub.getDebtLessons() != null && sub.getDebtLessons() > 0) {
-                            sub.setDebtLessons(sub.getDebtLessons() - 1);
-                            subscriptionRepository.save(sub);
-                        }
-                    }
-                }
-
-                return ResponseEntity.ok(Map.of(
-                        "message", "Пропущенное занятие успешно отработано",
-                        "lesson", newLesson
-                ));
+            if (studentId == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Не указан studentId"));
             }
 
-            if (studentId != null) {
-                Student student = studentService.getStudentById(studentId);
+            Student student = studentService.getStudentById(studentId);
+            System.out.println("🔍 [RESURRECT] student: " + student.getFullName() + ", paymentType=" + student.getPaymentType());
 
-                boolean hasTutor = student.getTutors().stream()
-                        .anyMatch(t -> t.getId().equals(currentUserId));
-                if (!hasTutor) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
+            boolean hasTutor = student.getTutors().stream().anyMatch(t -> t.getId().equals(currentUserId));
+            if (!hasTutor) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
 
-                Lesson newLesson = lessonService.createLesson(
-                        currentUserId,
-                        studentId,
-                        null,
-                        newDate,
-                        newStartTime,
-                        newEndTime
-                );
+            Lesson newLesson = lessonService.createLesson(currentUserId, studentId, null, newDate, newStartTime, newEndTime);
 
-                if ("subscription".equals(student.getPaymentType())) {
-                    List<Subscription> activeSubs = subscriptionRepository.findActiveByStudentId(studentId);
-                    if (!activeSubs.isEmpty()) {
-                        Subscription sub = activeSubs.get(0);
-                        if (sub.getDebtLessons() != null && sub.getDebtLessons() > 0) {
-                            sub.setDebtLessons(sub.getDebtLessons() - 1);
-                            subscriptionRepository.save(sub);
-                        }
+            boolean debtReduced = false;
+
+            if ("subscription".equals(student.getPaymentType())) {
+                System.out.println("🔍 [RESURRECT] Looking for active subscription: studentId=" + studentId + ", tutorId=" + currentUserId);
+
+                Optional<Subscription> activeSubOpt = subscriptionRepository
+                        .findByStudentIdAndTutorIdAndStatus(studentId, currentUserId, "ACTIVE");
+
+                if (activeSubOpt.isPresent()) {
+                    Subscription sub = activeSubOpt.get();
+                    System.out.println("🔍 [RESURRECT] Found subscription id=" + sub.getId() + ", debt_lessons=" + sub.getDebtLessons());
+
+                    if (sub.getDebtLessons() != null && sub.getDebtLessons() > 0) {
+                        sub.setDebtLessons(sub.getDebtLessons() - 1);
+                        subscriptionRepository.save(sub);
+                        debtReduced = true;
+                        System.out.println("✅ [RESURRECT] Debt reduced to " + sub.getDebtLessons());
+                    } else {
+                        System.out.println("⚠️ [RESURRECT] Debt lessons is null or 0");
                     }
+                } else {
+                    System.out.println("❌ [RESURRECT] Active subscription NOT FOUND for studentId=" + studentId + ", tutorId=" + currentUserId);
                 }
-
-                return ResponseEntity.ok(Map.of(
-                        "message", "Пропущенное занятие успешно отработано",
-                        "lesson", newLesson
-                ));
+            } else {
+                System.out.println("🔍 [RESURRECT] Payment type is NOT subscription, it's: " + student.getPaymentType());
             }
 
-            return ResponseEntity.badRequest().body(Map.of("error", "Не указан originalLessonId или studentId"));
+            String message = debtReduced ? "✅ Долг списан" : "✅ Занятие создано";
+            System.out.println("🔍 [RESURRECT] Final message: " + message);
+
+            return ResponseEntity.ok(Map.of("message", message, "lesson", newLesson));
 
         } catch (RuntimeException e) {
+            e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // ✅ Отметка начала звонка (переводит урок в IN_PROGRESS)
     @PostMapping("/{id}/call-started")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
     public ResponseEntity<?> markCallStarted(@PathVariable Long id,
@@ -566,35 +617,23 @@ public class LessonController {
                                              @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Lesson lesson = lessonService.getLessonById(id);
-
             if ("ROLE_TUTOR".equals(userRole)) {
-                boolean hasTutor = lesson.getStudent().getTutors().stream()
-                        .anyMatch(t -> t.getId().equals(currentUserId));
-                if (!hasTutor) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
+                boolean hasTutor = lesson.getStudent().getTutors().stream().anyMatch(t -> t.getId().equals(currentUserId));
+                if (!hasTutor) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             } else if ("ROLE_STUDENT".equals(userRole)) {
-                if (!lesson.getStudent().getId().equals(currentUserId)) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
+                if (!lesson.getStudent().getId().equals(currentUserId)) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             if (Lesson.STATUS_SCHEDULED.equals(lesson.getStatus())) {
                 lesson.setStatus(Lesson.STATUS_IN_PROGRESS);
                 lesson.setCallStartedAt(LocalDateTime.now());
                 lessonService.saveLesson(lesson);
             }
-
-            return ResponseEntity.ok(Map.of(
-                    "callStartedAt", lesson.getCallStartedAt(),
-                    "status", lesson.getStatus()
-            ));
+            return ResponseEntity.ok(Map.of("callStartedAt", lesson.getCallStartedAt(), "status", lesson.getStatus()));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // ✅ Авто-завершение урока (только если он IN_PROGRESS)
     @PostMapping("/{id}/auto-complete")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
     public ResponseEntity<?> autoCompleteLesson(@PathVariable Long id,
@@ -602,25 +641,16 @@ public class LessonController {
                                                 @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Lesson lesson = lessonService.getLessonById(id);
-
             if ("ROLE_TUTOR".equals(userRole)) {
-                boolean hasTutor = lesson.getStudent().getTutors().stream()
-                        .anyMatch(t -> t.getId().equals(currentUserId));
-                if (!hasTutor) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
+                boolean hasTutor = lesson.getStudent().getTutors().stream().anyMatch(t -> t.getId().equals(currentUserId));
+                if (!hasTutor) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             } else if ("ROLE_STUDENT".equals(userRole)) {
-                if (!lesson.getStudent().getId().equals(currentUserId)) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
+                if (!lesson.getStudent().getId().equals(currentUserId)) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             if (!Lesson.STATUS_IN_PROGRESS.equals(lesson.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Урок не в процессе"));
             }
-
             boolean isSubscription = "subscription".equals(lesson.getStudent().getPaymentType());
-
             if (isSubscription) {
                 lesson.setStatus(Lesson.STATUS_PAID);
                 lesson.setPaidAt(LocalDateTime.now());
@@ -628,32 +658,17 @@ public class LessonController {
             } else {
                 lesson.setStatus(Lesson.STATUS_COMPLETED);
             }
-
             lesson.setCompletedAt(LocalDateTime.now());
             lesson.setAutoCompleted(true);
             lesson.setNotes(lesson.getNotes() != null ? lesson.getNotes() + " (автозавершение)" : "(автозавершение)");
-
             Lesson savedLesson = lessonService.saveLesson(lesson);
-
             if (!isSubscription && lesson.getStudent().getParent() != null) {
-                String message = String.format(
-                        "✅ Урок по %s с %s (%s %s) завершён автоматически.",
+                String message = String.format("✅ Урок по %s с %s (%s %s) завершён автоматически.",
                         lesson.getCourse() != null ? lesson.getCourse().getName() : "занятию",
-                        lesson.getStudent().getFullName(),
-                        lesson.getLessonDate().toString(),
-                        lesson.getStartTime().toString().substring(0, 5)
-                );
-                notificationService.createNotification(
-                        lesson.getStudent().getParent().getId(),
-                        lesson.getId(),
-                        message
-                );
+                        lesson.getStudent().getFullName(), lesson.getLessonDate().toString(), lesson.getStartTime().toString().substring(0, 5));
+                notificationService.createNotification(lesson.getStudent().getParent().getId(), lesson.getId(), message);
             }
-
-            return ResponseEntity.ok(Map.of(
-                    "message", isSubscription ? "Урок завершён автоматически и оплачен из абонемента" : "Урок завершён автоматически",
-                    "lesson", savedLesson
-            ));
+            return ResponseEntity.ok(Map.of("message", isSubscription ? "Урок завершён автоматически и оплачен из абонемента" : "Урок завершён автоматически", "lesson", savedLesson));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -662,21 +677,56 @@ public class LessonController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> deleteLesson(@PathVariable Long id,
+                                          @RequestParam(required = false, defaultValue = "false") boolean deleteFromTemplate,
                                           @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Lesson lesson = lessonService.getLessonById(id);
+
+            // IDOR: проверяем, что урок принадлежит репетитору
             boolean hasTutor = lesson.getStudent().getTutors().stream()
                     .anyMatch(t -> t.getId().equals(currentUserId));
             if (!hasTutor) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
+            int deletedCount = 1; // текущий урок
+
+            // ✅ Если нужно удалить из шаблона — удаляем все будущие уроки с теми же параметрами
+            if (deleteFromTemplate) {
+                List<Lesson> futureTemplateLessons = lessonRepository.findFutureTemplateLessons(
+                        lesson.getTutor().getId(),
+                        lesson.getStudent().getId(),
+                        lesson.getCourse() != null ? lesson.getCourse().getId() : null,
+                        lesson.getLessonDate(),
+                        lesson.getStartTime(),
+                        lesson.getEndTime()
+                );
+
+                for (Lesson futureLesson : futureTemplateLessons) {
+                    if (!futureLesson.getId().equals(id)) { // не удаляем текущий урок дважды
+                        lessonRepository.delete(futureLesson);
+                        deletedCount++;
+                    }
+                }
+            }
+
+            // Удаляем текущий урок
             lessonService.deleteLesson(id);
-            return ResponseEntity.ok(Map.of("message", "Занятие удалено"));
+
+            String message = deleteFromTemplate
+                    ? String.format("Удалён урок и %d будущих занятий по шаблону", deletedCount - 1)
+                    : "Занятие удалено";
+
+            return ResponseEntity.ok(Map.of(
+                    "message", message,
+                    "deletedCount", deletedCount
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+
 
     @PostMapping("/{id}/start")
     @PreAuthorize("hasRole('TUTOR')")
@@ -684,30 +734,17 @@ public class LessonController {
                                          @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Lesson lesson = lessonService.getLessonById(id);
-
-            // IDOR FIX: Проверяем, что урок принадлежит репетитору
-            boolean hasTutor = lesson.getStudent().getTutors().stream()
-                    .anyMatch(t -> t.getId().equals(currentUserId));
-            if (!hasTutor) {
-                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-            }
-
-            // Проверяем, что урок ещё не начат и не завершён
+            boolean hasTutor = lesson.getStudent().getTutors().stream().anyMatch(t -> t.getId().equals(currentUserId));
+            if (!hasTutor) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             if (!Lesson.STATUS_SCHEDULED.equals(lesson.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Урок уже начат или завершён"));
             }
-
             lesson.setStatus(Lesson.STATUS_IN_PROGRESS);
             lesson.setCallStartedAt(LocalDateTime.now());
             Lesson savedLesson = lessonService.saveLesson(lesson);
-
-            return ResponseEntity.ok(Map.of(
-                    "message", "Урок начат",
-                    "lesson", savedLesson
-            ));
+            return ResponseEntity.ok(Map.of("message", "Урок начат", "lesson", savedLesson));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
-
 }

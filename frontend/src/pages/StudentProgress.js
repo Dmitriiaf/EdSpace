@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import axiosInstance from '../api/axiosConfig';
 import {
     Box, Paper, Typography, Grid, Card, CardContent,
-    CircularProgress, Alert, Chip, Avatar, Divider,
+    CircularProgress, Alert, Chip, Divider,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Button, Dialog, DialogTitle, DialogContent, LinearProgress
+    Dialog, DialogTitle, DialogContent, LinearProgress
 } from '@mui/material';
 import {
     TrendingUp, TrendingDown, TrendingFlat,
-    School, CheckCircle, Cancel, Schedule,
-    Star, StarHalf, StarBorder, Assessment
+    School, CheckCircle,
+    Star, StarHalf, StarBorder
 } from '@mui/icons-material';
 import { getStudentProgressStats, getProgressTimeline } from '../services/api';
 
@@ -21,21 +22,39 @@ function StudentProgress() {
     const [timeline, setTimeline] = useState([]);
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedHomework, setSelectedHomework] = useState(null);
+    const [studentName, setStudentName] = useState(''); // ✅ Для хранения имени ученика
 
     useEffect(() => {
         fetchData();
-    }, []);
+        if (user?.role === 'tutor') {
+            fetchStudentName();
+        }
+    }, [user]);
+
+    const fetchStudentName = async () => {
+        try {
+            const studentId = window.location.pathname.split('/').pop();
+            const response = await axiosInstance.get(`/students/${studentId}`);
+            setStudentName(response.data.fullName);
+        } catch (err) {
+            console.error('Ошибка загрузки имени ученика:', err);
+        }
+    };
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const studentId = user?.id;
+            // Для репетитора ID ученика берётся из URL, для ученика — из user.id
+            const studentId = user?.role === 'tutor' 
+                ? window.location.pathname.split('/').pop() 
+                : user?.id;
+            
             const [statsRes, timelineRes] = await Promise.all([
                 getStudentProgressStats(studentId),
                 getProgressTimeline(studentId)
             ]);
             setStats(statsRes.data);
-            setTimeline(timelineRes.data.timeline || []);
+            setTimeline(timelineRes.data?.timeline || []);
             setError(null);
         } catch (err) {
             console.error('Ошибка загрузки:', err);
@@ -82,8 +101,11 @@ function StudentProgress() {
 
     return (
         <Box sx={{ p: 3 }}>
+            {/* ✅ ИСПРАВЛЕННЫЙ ЗАГОЛОВОК */}
             <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
-                Моя успеваемость
+                {user?.role === 'tutor' 
+                    ? `Успеваемость: ${studentName || 'Ученик'}` 
+                    : 'Моя успеваемость'}
             </Typography>
             <Typography variant="body2" color="textSecondary" sx={{ mb: 4 }}>
                 Детальная статистика прогресса и успеваемости

@@ -1,9 +1,11 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.Course;
+import com.example.demo.entity.Subject;
 import com.example.demo.entity.Tutor;
 import com.example.demo.exception.NotFoundException;
 import com.example.demo.repository.CourseRepository;
+import com.example.demo.repository.SubjectRepository;
 import com.example.demo.repository.TutorRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -19,16 +21,24 @@ public class CourseService {
     @Autowired
     private TutorRepository tutorRepository;
 
+    @Autowired
+    private SubjectRepository subjectRepository;  // ← ДОБАВЛЕНО
+
     // Создать новый курс
     public Course createCourse(String name, String description,
-                               String color, Long tutorId) {
+                               String color, Long tutorId, Long subjectId) {  // ← ДОБАВЛЕН subjectId
         Tutor tutor = tutorRepository.findById(tutorId)
-                // ✅ Заменено на NotFoundException
                 .orElseThrow(() -> new NotFoundException("Репетитор", "id", tutorId));
 
-        // Используем новый конструктор
         Course course = new Course(name, color, tutor);
-        course.setDescription(description); // опционально
+        course.setDescription(description);
+
+        // ← ДОБАВЛЕНО: привязка к предмету
+        if (subjectId != null) {
+            Subject subject = subjectRepository.findById(subjectId)
+                    .orElseThrow(() -> new NotFoundException("Предмет", "id", subjectId));
+            course.setSubject(subject);
+        }
 
         return courseRepository.save(course);
     }
@@ -41,12 +51,11 @@ public class CourseService {
     // Получить курс по ID
     public Course getCourseById(Long id) {
         return courseRepository.findById(id)
-                // ✅ Заменено на NotFoundException
                 .orElseThrow(() -> new NotFoundException("Курс", "id", id));
     }
 
     // Обновить курс
-    public Course updateCourse(Long id, String name, String description, String color) {
+    public Course updateCourse(Long id, String name, String description, String color, Long subjectId) {  // ← ДОБАВЛЕН subjectId
         Course course = getCourseById(id);
 
         if (name != null) {
@@ -57,6 +66,13 @@ public class CourseService {
         }
         if (color != null) {
             course.setColor(color);
+        }
+
+        // ← ДОБАВЛЕНО: обновление предмета
+        if (subjectId != null) {
+            Subject subject = subjectRepository.findById(subjectId)
+                    .orElseThrow(() -> new NotFoundException("Предмет", "id", subjectId));
+            course.setSubject(subject);
         }
 
         return courseRepository.save(course);

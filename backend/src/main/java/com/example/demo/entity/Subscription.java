@@ -1,5 +1,6 @@
 package com.example.demo.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -7,6 +8,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "subscription")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Subscription {
 
     @Id
@@ -39,7 +41,7 @@ public class Subscription {
     @Column(name = "end_date")
     private LocalDate endDate;
 
-    private String status = "pending"; // pending, active, completed, cancelled
+    private String status = "pending";
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -62,7 +64,6 @@ public class Subscription {
         this.createdAt = LocalDateTime.now();
     }
 
-    // Геттеры
     public Long getId() { return id; }
     public Tutor getTutor() { return tutor; }
     public Student getStudent() { return student; }
@@ -76,7 +77,6 @@ public class Subscription {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getPaidAt() { return paidAt; }
 
-    // Сеттеры
     public void setTutor(Tutor tutor) { this.tutor = tutor; }
     public void setDebtLessons(Integer debtLessons) { this.debtLessons = debtLessons; }
     public void setStudent(Student student) { this.student = student; }

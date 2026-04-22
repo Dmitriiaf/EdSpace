@@ -46,4 +46,11 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
 
     @Query("SELECT COUNT(DISTINCT s) FROM Student s JOIN s.tutors t WHERE t.id = :tutorId")
     long countByTutorId(@Param("tutorId") Long tutorId);
+
+    @Query("SELECT DISTINCT s FROM Student s " +
+            "LEFT JOIN FETCH s.rates r " +
+            "LEFT JOIN FETCH r.tutor t " +
+            "JOIN s.tutors tutor " +
+            "WHERE tutor.id = :tutorId AND s.archived = true")
+    List<Student> findArchivedByTutorIdWithRates(@Param("tutorId") Long tutorId);
 }

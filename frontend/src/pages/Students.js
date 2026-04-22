@@ -1,11 +1,10 @@
-// ========== frontend/src/pages/Students.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ С DRAG-AND-DROP) ==========
+// ========== frontend/src/pages/Students.js (С ВКЛАДКАМИ АКТИВНЫЕ/АРХИВ) ==========
 import React, { useState, useEffect } from 'react';
-// ✅ Правильный импорт
 import axiosInstance, { getAllLessons } from '../services/api';
 import {
     Box, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, Paper, IconButton, Alert, Snackbar,
-    Chip, Typography,
+    Chip, Typography, Tabs, Tab,
     FormControl, InputLabel, Select, MenuItem,
     CircularProgress, Avatar, Tooltip, InputAdornment,
     Card, CardContent, Grid,
@@ -15,10 +14,12 @@ import {
 import { 
     Add, Edit, Delete, PersonAdd, Search, 
     Phone, Email, 
-    School, AttachMoney,
     CheckCircle, Cake, Schedule,
     ExpandMore, ExpandLess, TrendingUp,
-    Warning as WarningIcon
+    Warning as WarningIcon,
+    AttachMoney,
+    Archive as ArchiveIcon,
+    Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
@@ -32,6 +33,8 @@ function Students() {
     const { getStudentRateForTutor } = useStudentRate();
     
     const [students, setStudents] = useState([]);
+    const [archivedStudents, setArchivedStudents] = useState([]);
+    const [tabValue, setTabValue] = useState(0); // 0 = активные, 1 = архив
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -45,6 +48,7 @@ function Students() {
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
     const [allLessons, setAllLessons] = useState([]);
     const [subscriptions, setSubscriptions] = useState([]);
+    const [submitting, setSubmitting] = useState(false);
     
     const [formData, setFormData] = useState({
         fullName: '', 
@@ -74,7 +78,15 @@ function Students() {
         return null;
     };
 
-    useEffect(() => { if (user) { fetchStudents(); fetchAllLessons(); fetchSubscriptions(); } }, [user]);
+    useEffect(() => { 
+        if (user) { 
+            fetchStudents(); 
+            fetchArchivedStudents();
+            fetchAllLessons(); 
+            fetchSubscriptions(); 
+        } 
+    }, [user]);
+
     useEffect(() => { calculateStats(); }, [students]);
 
     const fetchStudents = async () => {
@@ -83,6 +95,13 @@ function Students() {
             setStudents(response.data);
             setError(null);
         } catch (err) { setError('Не удалось загрузить учеников'); } finally { setLoading(false); }
+    };
+
+    const fetchArchivedStudents = async () => {
+        try {
+            const response = await axiosInstance.get(`/students/tutor/${user.id}/archived`);
+            setArchivedStudents(response.data);
+        } catch (err) { console.error('Ошибка загрузки архива:', err); }
     };
 
     const fetchAllLessons = async () => {
@@ -135,7 +154,7 @@ function Students() {
     };
 
     const getSubscriptionProgress = (studentId) => {
-        const studentSub = subscriptions.find(s => s.student?.id === studentId && s.status === 'active');
+        const studentSub = subscriptions.find(s => s.student?.id === studentId && (s.status === 'ACTIVE' || s.status === 'active'));
         if (!studentSub) return null;
         const used = studentSub.lessonsUsed || 0;
         const total = studentSub.lessonsCount;
@@ -146,7 +165,8 @@ function Students() {
 
     const getUpcomingBirthdays = () => {
         const today = new Date();
-        return students.filter(s => s.birthday).map(s => {
+        const activeStudents = tabValue === 0 ? students : archivedStudents;
+        return activeStudents.filter(s => s.birthday).map(s => {
             const birthday = new Date(s.birthday);
             const nextBirthday = new Date(today.getFullYear(), birthday.getMonth(), birthday.getDate());
             if (nextBirthday < today) nextBirthday.setFullYear(today.getFullYear() + 1);
@@ -160,9 +180,7 @@ function Students() {
         setCheckingEmail(true);
         try {
             const response = await axiosInstance.get(`/students/search-by-email?email=${email}`);
-            
             const data = response.data;
-            console.log('Search response:', data);
             
             if (data && data.exists === true) {
                 if (data.alreadyLinked) {
@@ -178,7 +196,6 @@ function Students() {
                 setShowExistingDialog(false);
             }
         } catch (err) {
-            console.log('Search error:', err);
             setExistingStudent(null);
             setShowExistingDialog(false);
         } finally {
@@ -245,6 +262,9 @@ function Students() {
     };
 
     const handleSubmit = async () => {
+        if (submitting) return;
+        
+        setSubmitting(true);
         try {
             const requestData = {
                 fullName: formData.fullName, 
@@ -264,10 +284,13 @@ function Students() {
             }
             handleCloseDialog();
             await fetchStudents();
+            await fetchArchivedStudents();
             await fetchAllLessons();
             await fetchSubscriptions();
         } catch (err) { 
             showSnackbar(err.response?.data?.error || 'Ошибка при сохранении', 'error'); 
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -276,8 +299,37 @@ function Students() {
             try {
                 await axiosInstance.delete(`/students/${id}`);
                 showSnackbar('Ученик удалён', 'success');
-                fetchStudents(); fetchAllLessons(); fetchSubscriptions();
+                fetchStudents();
+                fetchArchivedStudents();
+                fetchAllLessons();
+                fetchSubscriptions();
             } catch (err) { showSnackbar('Ошибка при удалении ученика', 'error'); }
+        }
+    };
+
+    const handleArchive = async (id, fullName) => {
+        if (window.confirm(`Переместить ученика "${fullName}" в архив?`)) {
+            try {
+                await axiosInstance.put(`/students/${id}`, { archived: true });
+                showSnackbar('Ученик перемещён в архив', 'success');
+                fetchStudents();
+                fetchArchivedStudents();
+            } catch (err) {
+                showSnackbar('Ошибка при архивировании', 'error');
+            }
+        }
+    };
+
+    const handleUnarchive = async (id, fullName) => {
+        if (window.confirm(`Восстановить ученика "${fullName}" из архива?`)) {
+            try {
+                await axiosInstance.put(`/students/${id}`, { archived: false });
+                showSnackbar('Ученик восстановлен', 'success');
+                fetchStudents();
+                fetchArchivedStudents();
+            } catch (err) {
+                showSnackbar('Ошибка при восстановлении', 'error');
+            }
         }
     };
 
@@ -289,7 +341,9 @@ function Students() {
     const getPaymentTypeColor = (type) => type === 'subscription' ? 'primary' : 'default';
     const handleExpandClick = (id) => { setExpandedId(expandedId === id ? null : id); };
 
-    const filteredStudents = students.filter(student => {
+    const currentStudents = tabValue === 0 ? students : archivedStudents;
+    
+    const filteredStudents = currentStudents.filter(student => {
         const matchesSearch = student.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             student.email?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesFilter = filterType === 'all' || student.paymentType === filterType;
@@ -323,7 +377,17 @@ function Students() {
                 <Typography variant="body2" color="textSecondary">Управление списком учеников и их данными</Typography>
             </Box>
 
-            {upcomingBirthdays.length > 0 && (
+            {/* Вкладки Активные / Архив */}
+            <Tabs 
+                value={tabValue} 
+                onChange={(e, v) => setTabValue(v)}
+                sx={{ mb: 3, borderBottom: '1px solid #E0E0E0' }}
+            >
+                <Tab label={`Активные (${students.length})`} />
+                <Tab label={`Архив (${archivedStudents.length})`} />
+            </Tabs>
+
+            {upcomingBirthdays.length > 0 && tabValue === 0 && (
                 <Paper sx={{ p: 2, mb: 3, borderRadius: 3, bgcolor: '#FFF8E7', border: '1px solid #FFE0B5' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}><Cake sx={{ color: '#F4B942' }} /><Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#B45F06' }}>Ближайшие дни рождения</Typography></Box>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
@@ -334,28 +398,30 @@ function Students() {
                 </Paper>
             )}
 
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-                <Grid item xs={6} sm={3}>
-                    <Card sx={{ borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #F3F4F6' }}>
-                        <CardContent sx={{ textAlign: 'center', py: 2 }}><Typography variant="h4" sx={{ fontWeight: 600, color: '#6366F1' }}>{stats.total}</Typography><Typography variant="caption" color="textSecondary">Всего учеников</Typography></CardContent>
-                    </Card>
+            {tabValue === 0 && (
+                <Grid container spacing={2} sx={{ mb: 4 }}>
+                    <Grid item xs={6} sm={3}>
+                        <Card sx={{ borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #F3F4F6' }}>
+                            <CardContent sx={{ textAlign: 'center', py: 2 }}><Typography variant="h4" sx={{ fontWeight: 600, color: '#6366F1' }}>{stats.total}</Typography><Typography variant="caption" color="textSecondary">Всего учеников</Typography></CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                        <Card sx={{ borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #F3F4F6' }}>
+                            <CardContent sx={{ textAlign: 'center', py: 2 }}><Typography variant="h4" sx={{ fontWeight: 600, color: '#10B981' }}>{stats.subscription}</Typography><Typography variant="caption" color="textSecondary">Абонемент</Typography></CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                        <Card sx={{ borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #F3F4F6' }}>
+                            <CardContent sx={{ textAlign: 'center', py: 2 }}><Typography variant="h4" sx={{ fontWeight: 600, color: '#F59E0B' }}>{stats.single}</Typography><Typography variant="caption" color="textSecondary">Поурочно</Typography></CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                        <Card sx={{ borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #F3F4F6' }}>
+                            <CardContent sx={{ textAlign: 'center', py: 2 }}><Typography variant="h4" sx={{ fontWeight: 600, color: '#8B5CF6' }}>{stats.withParent}</Typography><Typography variant="caption" color="textSecondary">С родителем</Typography></CardContent>
+                        </Card>
+                    </Grid>
                 </Grid>
-                <Grid item xs={6} sm={3}>
-                    <Card sx={{ borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #F3F4F6' }}>
-                        <CardContent sx={{ textAlign: 'center', py: 2 }}><Typography variant="h4" sx={{ fontWeight: 600, color: '#10B981' }}>{stats.subscription}</Typography><Typography variant="caption" color="textSecondary">Абонемент</Typography></CardContent>
-                    </Card>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                    <Card sx={{ borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #F3F4F6' }}>
-                        <CardContent sx={{ textAlign: 'center', py: 2 }}><Typography variant="h4" sx={{ fontWeight: 600, color: '#F59E0B' }}>{stats.single}</Typography><Typography variant="caption" color="textSecondary">Поурочно</Typography></CardContent>
-                    </Card>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                    <Card sx={{ borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #F3F4F6' }}>
-                        <CardContent sx={{ textAlign: 'center', py: 2 }}><Typography variant="h4" sx={{ fontWeight: 600, color: '#8B5CF6' }}>{stats.withParent}</Typography><Typography variant="caption" color="textSecondary">С родителем</Typography></CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
+            )}
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <TextField placeholder="Поиск по имени или email..." size="small" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} sx={{ width: { xs: '100%', sm: 300 } }} InputProps={{ startAdornment: <InputAdornment position="start"><Search sx={{ color: 'text.secondary', fontSize: 20 }} /></InputAdornment> }} />
@@ -364,15 +430,21 @@ function Students() {
                     <Chip label="Абонемент" onClick={() => setFilterType('subscription')} color={filterType === 'subscription' ? 'primary' : 'default'} variant={filterType === 'subscription' ? 'filled' : 'outlined'} />
                     <Chip label="Поурочно" onClick={() => setFilterType('single')} color={filterType === 'single' ? 'primary' : 'default'} variant={filterType === 'single' ? 'filled' : 'outlined'} />
                 </Box>
-                <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenDialog()} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 500, bgcolor: '#6366F1', '&:hover': { bgcolor: '#4F46E5' } }}>Добавить ученика</Button>
+                {tabValue === 0 && (
+                    <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenDialog()} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 500, bgcolor: '#6366F1', '&:hover': { bgcolor: '#4F46E5' } }}>Добавить ученика</Button>
+                )}
             </Box>
 
             {error ? <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert> : filteredStudents.length === 0 ? (
                 <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 3, border: '1px solid #F3F4F6' }}>
                     <PersonAdd sx={{ fontSize: 60, color: '#E5E7EB', mb: 2 }} />
-                    <Typography variant="h6" color="textSecondary" gutterBottom>{searchTerm ? 'Ничего не найдено' : 'У вас пока нет учеников'}</Typography>
-                    <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>{searchTerm ? 'Попробуйте изменить поисковый запрос' : 'Нажмите "Добавить ученика" чтобы создать первого'}</Typography>
-                    {!searchTerm && <Button variant="outlined" startIcon={<Add />} onClick={() => handleOpenDialog()}>Добавить ученика</Button>}
+                    <Typography variant="h6" color="textSecondary" gutterBottom>
+                        {tabValue === 0 ? (searchTerm ? 'Ничего не найдено' : 'У вас пока нет учеников') : 'Архив пуст'}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                        {tabValue === 0 ? (searchTerm ? 'Попробуйте изменить поисковый запрос' : 'Нажмите "Добавить ученика" чтобы создать первого') : 'Здесь будут отображаться архивированные ученики'}
+                    </Typography>
+                    {!searchTerm && tabValue === 0 && <Button variant="outlined" startIcon={<Add />} onClick={() => handleOpenDialog()}>Добавить ученика</Button>}
                 </Paper>
             ) : (
                 <Grid container spacing={3}>
@@ -401,8 +473,8 @@ function Students() {
                                         </Box>
                                         <Divider sx={{ my: 1.5 }} />
                                         
-                                        {/* ✅ ОБНОВЛЁННЫЙ БЛОК: ОТОБРАЖЕНИЕ ДОЛГОВ С DRAG-AND-DROP */}
-                                        {subscriptionProgress && subscriptionProgress.debt > 0 && (
+                                        {/* Долги по абонементу */}
+                                        {student.subscription && student.subscription.debtLessons > 0 && (
                                             <Box 
                                                 sx={{ 
                                                     mb: 1.5, p: 1, bgcolor: '#FFF3E0', borderRadius: 2, 
@@ -414,7 +486,7 @@ function Students() {
                                                     const dragData = JSON.stringify({
                                                         id: student.id,
                                                         fullName: student.fullName,
-                                                        debt: subscriptionProgress.debt
+                                                        debt: student.subscription.debtLessons
                                                     });
                                                     e.dataTransfer.setData('text/plain', dragData);
                                                     e.dataTransfer.effectAllowed = 'move';
@@ -423,36 +495,91 @@ function Students() {
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                     <WarningIcon sx={{ color: '#E65100', fontSize: 18 }} />
                                                     <Typography variant="body2" sx={{ fontWeight: 600, color: '#E65100' }}>
-                                                        Пропущено занятий: {subscriptionProgress.debt}
+                                                        <strong>Долгов по абонементу: {student.subscription.debtLessons}</strong>
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        )}
+
+                                        {/* Пропуски для поурочной оплаты */}
+                                        {student.paymentType === 'single' && student.missedLessons > 0 && (
+                                            <Box 
+                                                sx={{ 
+                                                    mb: 1.5, p: 1, bgcolor: '#E3F2FD', borderRadius: 2, 
+                                                    border: '1px solid #64B5F6'
+                                                }}
+                                            >
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <WarningIcon sx={{ color: '#1565C0', fontSize: 18 }} />
+                                                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#1565C0' }}>
+                                                        Пропущено занятий: {student.missedLessons}
                                                     </Typography>
                                                 </Box>
                                             </Box>
                                         )}
                                         
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-around', mb: 1.5, p: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}>
-                                            <Box sx={{ textAlign: 'center', flex: 1 }}><Typography variant="h6" sx={{ fontWeight: 600, color: '#6366F1' }}>{stats.total}</Typography><Typography variant="caption" color="textSecondary">Всего</Typography></Box>
-                                            <Box sx={{ textAlign: 'center', flex: 1 }}><Typography variant="h6" sx={{ fontWeight: 600, color: '#10B981' }}>{stats.completed}</Typography><Typography variant="caption" color="textSecondary">Проведено</Typography></Box>
-                                        </Box>
-                                        
-                                        {nextLesson && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, p: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}><Schedule sx={{ fontSize: 16, color: '#F59E0B' }} /><Typography variant="body2" sx={{ fontSize: '0.75rem' }}>След. занятие: {format(new Date(nextLesson.lessonDate), 'd MMM', { locale: ru })} в {nextLesson.startTime?.slice(0,5)}</Typography></Box>}
-                                        {subscriptionProgress && (
-                                            <Box sx={{ mb: 1.5 }}>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}><Typography variant="caption" color="textSecondary">Абонемент</Typography><Typography variant="caption" fontWeight={500}>{subscriptionProgress.used}/{subscriptionProgress.total}</Typography></Box>
-                                                <LinearProgress variant="determinate" value={subscriptionProgress.percent} sx={{ borderRadius: 1, height: 6 }} />
-                                            </Box>
+                                        {tabValue === 0 && (
+                                            <>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-around', mb: 1.5, p: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}>
+                                                    <Box sx={{ textAlign: 'center', flex: 1 }}><Typography variant="h6" sx={{ fontWeight: 600, color: '#6366F1' }}>{stats.total}</Typography><Typography variant="caption" color="textSecondary">Всего</Typography></Box>
+                                                    <Box sx={{ textAlign: 'center', flex: 1 }}><Typography variant="h6" sx={{ fontWeight: 600, color: '#10B981' }}>{stats.completed}</Typography><Typography variant="caption" color="textSecondary">Проведено</Typography></Box>
+                                                </Box>
+                                                
+                                                {nextLesson && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, p: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}><Schedule sx={{ fontSize: 16, color: '#F59E0B' }} /><Typography variant="body2" sx={{ fontSize: '0.75rem' }}>След. занятие: {format(new Date(nextLesson.lessonDate), 'd MMM', { locale: ru })} в {nextLesson.startTime?.slice(0,5)}</Typography></Box>}
+                                                {subscriptionProgress && (
+                                                    <Box sx={{ mb: 1.5 }}>
+                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}><Typography variant="caption" color="textSecondary">Абонемент</Typography><Typography variant="caption" fontWeight={500}>{subscriptionProgress.used}/{subscriptionProgress.total}</Typography></Box>
+                                                        <LinearProgress variant="determinate" value={subscriptionProgress.percent} sx={{ borderRadius: 1, height: 6 }} />
+                                                    </Box>
+                                                )}
+                                            </>
                                         )}
+                                        
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
                                             {student.email && <Tooltip title={student.email}><Chip icon={<Email sx={{ fontSize: 14 }} />} label={student.email} size="small" variant="outlined" sx={{ maxWidth: '100%' }} /></Tooltip>}
                                             {student.phone && <Tooltip title={student.phone}><Chip icon={<Phone sx={{ fontSize: 14 }} />} label={student.phone} size="small" variant="outlined" /></Tooltip>}
+                                            {student.paymentType === 'single' && student.missedLessons > 0 && (
+                                                <Tooltip title="Пропущено занятий в этом месяце">
+                                                    <Chip 
+                                                        icon={<WarningIcon sx={{ fontSize: 14 }} />} 
+                                                        label={`Пропусков: ${student.missedLessons}`} 
+                                                        size="small" 
+                                                        sx={{ 
+                                                            bgcolor: '#E3F2FD', 
+                                                            color: '#1565C0',
+                                                            fontWeight: 500,
+                                                            border: '1px solid #64B5F6'
+                                                        }} 
+                                                    />
+                                                </Tooltip>
+                                            )}
                                         </Box>
                                         {studentRate && <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}><AttachMoney sx={{ fontSize: 14, color: '#10B981' }} /><Typography variant="body2" sx={{ fontWeight: 500, color: '#10B981' }}>{studentRate} ₽/занятие</Typography></Box>}
                                     </CardContent>
                                     <Divider />
                                     <CardActions sx={{ justifyContent: 'space-between', px: 2, py: 1 }}>
                                         <Box>
-                                            <IconButton size="small" onClick={() => handleOpenDialog(student)}><Edit fontSize="small" /></IconButton>
-                                            <IconButton size="small" color="error" onClick={() => handleDelete(student.id)}><Delete fontSize="small" /></IconButton>
-                                            <IconButton size="small" color="primary" onClick={() => navigate(`/student-progress/${student.id}`)}><TrendingUp fontSize="small" /></IconButton>
+                                            {tabValue === 0 ? (
+                                                <>
+                                                    <IconButton size="small" onClick={() => handleOpenDialog(student)}><Edit fontSize="small" /></IconButton>
+                                                    <IconButton size="small" color="error" onClick={() => handleDelete(student.id)}><Delete fontSize="small" /></IconButton>
+                                                    <IconButton size="small" color="primary" onClick={() => navigate(`/student-progress/${student.id}`)}><TrendingUp fontSize="small" /></IconButton>
+                                                    <Tooltip title="Архивировать">
+                                                        <IconButton size="small" color="secondary" onClick={() => handleArchive(student.id, student.fullName)}>
+                                                            <ArchiveIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Tooltip title="Восстановить">
+                                                        <IconButton size="small" color="primary" onClick={() => handleUnarchive(student.id, student.fullName)}>
+                                                            <UnarchiveIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <IconButton size="small" color="error" onClick={() => handleDelete(student.id)}><Delete fontSize="small" /></IconButton>
+                                                </>
+                                            )}
                                         </Box>
                                         <Button size="small" onClick={() => handleExpandClick(student.id)} endIcon={isExpanded ? <ExpandLess /> : <ExpandMore />}>Подробнее</Button>
                                     </CardActions>
@@ -474,104 +601,22 @@ function Students() {
                 <DialogTitle>{editingStudent ? 'Редактировать ученика' : 'Добавить нового ученика'}</DialogTitle>
                 <DialogContent>
                     <Box sx={{ pt: 2 }}>
-                        <TextField 
-                            fullWidth 
-                            label="Имя ученика" 
-                            name="fullName" 
-                            value={formData.fullName} 
-                            onChange={handleInputChange} 
-                            margin="normal" 
-                            required 
-                            autoFocus 
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <PersonAdd sx={{ color: '#9CA3AF' }} />
-                                    </InputAdornment>
-                                )
-                            }}
-                        />
-                        
-                        <TextField 
-                            fullWidth 
-                            label="Email ученика" 
-                            name="email" 
-                            type="email" 
-                            value={formData.email} 
-                            onChange={handleInputChange} 
-                            onBlur={handleEmailBlur} 
-                            margin="normal" 
-                            required 
-                            helperText="На этот email будет отправлено приглашение"
-                            InputProps={{ 
-                                endAdornment: checkingEmail && <CircularProgress size={20} />,
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Email sx={{ color: '#9CA3AF' }} />
-                                    </InputAdornment>
-                                )
-                            }} 
-                        />
-                        
-                        <TextField 
-                            fullWidth 
-                            label="Ставка за занятие (₽)" 
-                            name="ratePerLesson" 
-                            type="number" 
-                            value={formData.ratePerLesson} 
-                            onChange={handleInputChange} 
-                            margin="normal" 
-                            required 
-                            InputProps={{ 
-                                startAdornment: <InputAdornment position="start">₽</InputAdornment> 
-                            }} 
-                        />
-                        
+                        <TextField fullWidth label="Имя ученика" name="fullName" value={formData.fullName} onChange={handleInputChange} margin="normal" required autoFocus InputProps={{ startAdornment: (<InputAdornment position="start"><PersonAdd sx={{ color: '#9CA3AF' }} /></InputAdornment>) }} />
+                        <TextField fullWidth label="Email ученика" name="email" type="email" value={formData.email} onChange={handleInputChange} onBlur={handleEmailBlur} margin="normal" required helperText="На этот email будет отправлено приглашение" InputProps={{ endAdornment: checkingEmail && <CircularProgress size={20} />, startAdornment: (<InputAdornment position="start"><Email sx={{ color: '#9CA3AF' }} /></InputAdornment>) }} />
+                        <TextField fullWidth label="Ставка за занятие (₽)" name="ratePerLesson" type="number" value={formData.ratePerLesson} onChange={handleInputChange} margin="normal" required InputProps={{ startAdornment: <InputAdornment position="start">₽</InputAdornment> }} />
                         <FormControl fullWidth margin="normal">
                             <InputLabel>Тип оплаты</InputLabel>
-                            <Select 
-                                name="paymentType" 
-                                value={formData.paymentType} 
-                                onChange={handleInputChange} 
-                                label="Тип оплаты"
-                            >
+                            <Select name="paymentType" value={formData.paymentType} onChange={handleInputChange} label="Тип оплаты">
                                 <MenuItem value="single">Поурочная оплата</MenuItem>
                                 <MenuItem value="subscription">Абонемент (авторасчёт)</MenuItem>
                             </Select>
                         </FormControl>
-                        
-                        <TextField 
-                            fullWidth 
-                            label="Email родителя (необязательно)" 
-                            name="parentEmail" 
-                            type="email" 
-                            value={formData.parentEmail || ''} 
-                            onChange={handleInputChange} 
-                            margin="normal" 
-                            helperText="На этот email будет отправлено приглашение для родителя"
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Email sx={{ color: '#9CA3AF' }} />
-                                    </InputAdornment>
-                                )
-                            }}
-                        />
-                        
-                        <Alert severity="info" sx={{ mt: 2 }}>
-                            После добавления ученик и родитель получат приглашения на email для завершения регистрации.
-                        </Alert>
-                        
+                        <TextField fullWidth label="Email родителя (необязательно)" name="parentEmail" type="email" value={formData.parentEmail || ''} onChange={handleInputChange} margin="normal" helperText="На этот email будет отправлено приглашение для родителя" InputProps={{ startAdornment: (<InputAdornment position="start"><Email sx={{ color: '#9CA3AF' }} /></InputAdornment>) }} />
+                        <Alert severity="info" sx={{ mt: 2 }}>После добавления ученик и родитель получат приглашения на email для завершения регистрации.</Alert>
                         <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
                             <Button fullWidth variant="outlined" onClick={handleCloseDialog}>Отмена</Button>
-                            <Button 
-                                fullWidth 
-                                variant="contained" 
-                                onClick={handleSubmit} 
-                                disabled={!formData.fullName || !formData.email || !formData.ratePerLesson} 
-                                sx={{ bgcolor: '#6366F1', '&:hover': { bgcolor: '#4F46E5' } }}
-                            >
-                                {editingStudent ? 'Сохранить' : 'Отправить приглашение'}
+                            <Button fullWidth variant="contained" onClick={handleSubmit} disabled={!formData.fullName || !formData.email || !formData.ratePerLesson || submitting} sx={{ bgcolor: '#6366F1', '&:hover': { bgcolor: '#4F46E5' } }}>
+                                {submitting ? <CircularProgress size={24} sx={{ color: 'white' }} /> : (editingStudent ? 'Сохранить' : 'Отправить приглашение')}
                             </Button>
                         </Box>
                     </Box>

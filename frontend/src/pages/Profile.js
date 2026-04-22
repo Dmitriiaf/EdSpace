@@ -7,6 +7,7 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     IconButton, Tooltip, Tabs, Tab, Badge
 } from '@mui/material';
+import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import {
     Save as SaveIcon,
     Edit as EditIcon,
@@ -65,7 +66,8 @@ const Profile = () => {
         phone: '',
         birthday: '',
         about: '',
-        city: ''
+        city: '',
+        timezone: 'Europe/Moscow'
     });
     
     const [passwordDialog, setPasswordDialog] = useState(false);
@@ -96,7 +98,8 @@ const Profile = () => {
                 phone: response.data.phone || '',
                 birthday: response.data.birthday || '',
                 about: response.data.about || '',
-                city: response.data.city || ''
+                city: response.data.city || '',
+                timezone: response.data.timezone || 'Europe/Moscow'
             });
         } catch (err) {
             console.error('Ошибка загрузки профиля:', err);
@@ -252,7 +255,8 @@ const Profile = () => {
                 phone: profile.phone,
                 birthday: profile.birthday,
                 about: profile.about,
-                city: profile.city
+                city: profile.city,
+                timezone: profile.timezone
             });
             
             if (updateUser) {
@@ -478,6 +482,29 @@ const Profile = () => {
                                             }}
                                             helperText="Email нельзя изменить"
                                         />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Часовой пояс</InputLabel>
+                                            <Select
+                                                value={profile.timezone || 'Europe/Moscow'}
+                                                onChange={(e) => setProfile({...profile, timezone: e.target.value})}
+                                                disabled={!editMode}
+                                                label="Часовой пояс"
+                                            >
+                                                <MenuItem value="Europe/Kaliningrad">Калининград (UTC+2)</MenuItem>
+                                                <MenuItem value="Europe/Moscow">Москва (UTC+3)</MenuItem>
+                                                <MenuItem value="Europe/Samara">Самара (UTC+4)</MenuItem>
+                                                <MenuItem value="Asia/Yekaterinburg">Екатеринбург (UTC+5)</MenuItem>
+                                                <MenuItem value="Asia/Omsk">Омск (UTC+6)</MenuItem>
+                                                <MenuItem value="Asia/Krasnoyarsk">Красноярск (UTC+7)</MenuItem>
+                                                <MenuItem value="Asia/Irkutsk">Иркутск (UTC+8)</MenuItem>
+                                                <MenuItem value="Asia/Yakutsk">Якутск (UTC+9)</MenuItem>
+                                                <MenuItem value="Asia/Vladivostok">Владивосток (UTC+10)</MenuItem>
+                                                <MenuItem value="Asia/Magadan">Магадан (UTC+11)</MenuItem>
+                                                <MenuItem value="Asia/Kamchatka">Камчатка (UTC+12)</MenuItem>
+                                            </Select>
+                                        </FormControl>
                                     </Grid>
                                     
                                     <Grid item xs={12} sm={6}>

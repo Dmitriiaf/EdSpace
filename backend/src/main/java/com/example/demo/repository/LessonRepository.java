@@ -10,11 +10,19 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
 
 @Repository
 public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
     List<Lesson> findByTutorIdAndLessonDateOrderByStartTimeAsc(Long tutorId, LocalDate date);
+
+    @Query("SELECT l FROM Lesson l WHERE l.originalLesson.id = :originalLessonId")
+    Optional<Lesson> findByOriginalLessonId(@Param("originalLessonId") Long originalLessonId);
 
     @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND l.lessonDate >= :today AND l.status IN ('SCHEDULED', 'RESCHEDULED') ORDER BY l.lessonDate ASC, l.startTime ASC")
     List<Lesson> findUpcomingLessons(@Param("tutorId") Long tutorId, @Param("today") LocalDate today);
@@ -32,6 +40,11 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
     // ✅ ВОЗВРАЩЁННЫЙ МЕТОД
     boolean existsByTutorIdAndLessonDateAndStartTime(Long tutorId, LocalDate date, LocalTime startTime);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM Lesson l WHERE l.weeklyTemplateId = :templateId AND l.lessonDate >= :afterDate AND l.status = 'SCHEDULED'")
+    int deleteFutureLessonsByTemplateId(@Param("templateId") Long templateId, @Param("afterDate") LocalDate afterDate);
 
     // ✅ ВОЗВРАЩЁННЫЙ МЕТОД
     @Query("SELECT COUNT(l) FROM Lesson l WHERE l.student.id = :studentId AND l.lessonDate BETWEEN :startDate AND :endDate")
@@ -77,4 +90,20 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
                                             @Param("startTime") LocalTime startTime,
                                             @Param("endTime") LocalTime endTime,
                                             @Param("excludeLessonId") Long excludeLessonId);
+    @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND l.student.id = :studentId " +
+            "AND (:courseId IS NULL OR l.course.id = :courseId) " +
+            "AND l.lessonDate > :afterDate " +
+            "AND l.startTime = :startTime AND l.endTime = :endTime " +
+            "AND l.status = 'SCHEDULED'")
+    List<Lesson> findFutureTemplateLessons(
+            @Param("tutorId") Long tutorId,
+            @Param("studentId") Long studentId,
+            @Param("courseId") Long courseId,
+            @Param("afterDate") LocalDate afterDate,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime
+    );
+
+
+
 }

@@ -16,7 +16,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import ruLocale from 'date-fns/locale/ru';
 import {
-    Add, Delete, Refresh, 
+    Add, Edit, Delete, Refresh,
     AttachMoney as MoneyIcon,
     School as SchoolIcon,
     Person as PersonIcon,
@@ -38,7 +38,9 @@ import axiosInstance, { getAllLessons } from '../services/api';
 function Subscriptions() {
     const { user } = useAuth();
     const { getStudentRateForTutor } = useStudentRate();
-    
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [editingSubscription, setEditingSubscription] = useState(null);
+    const [editFormData, setEditFormData] = useState({ lessonsCount: '', price: '' });
     const [subscriptions, setSubscriptions] = useState([]);
     const [students, setStudents] = useState([]);
     const [allLessons, setAllLessons] = useState([]);
@@ -101,6 +103,29 @@ function Subscriptions() {
             setError('Ошибка загрузки данных');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleEditSubscription = (subscription) => {
+        setEditingSubscription(subscription);
+        setEditFormData({
+            lessonsCount: subscription.lessonsCount,
+            price: subscription.price
+        });
+        setEditDialogOpen(true);
+    };
+
+    const handleUpdateSubscription = async () => {
+        try {
+            await axiosInstance.put(`/subscriptions/${editingSubscription.id}`, {
+                lessonsCount: parseInt(editFormData.lessonsCount),
+                price: parseFloat(editFormData.price)
+            });
+            showSnackbar('Абонемент обновлён', 'success');
+            setEditDialogOpen(false);
+            fetchData();
+        } catch (err) {
+            showSnackbar(err.response?.data?.error || 'Ошибка обновления', 'error');
         }
     };
 
@@ -169,10 +194,15 @@ function Subscriptions() {
 
     const getFilteredSubscriptions = () => {
         if (viewMode === 'active') {
-            return subscriptions.filter(s => s.status === 'active' || s.status === 'pending');
+            return subscriptions.filter(s => 
+                s.status === 'active' || s.status === 'ACTIVE' || 
+                s.status === 'pending' || s.status === 'PENDING'
+            );
         }
         if (viewMode === 'history') {
-            return subscriptions.filter(s => s.status === 'completed');
+            return subscriptions.filter(s => 
+                s.status === 'completed' || s.status === 'COMPLETED'
+            );
         }
         return subscriptions;
     };
@@ -258,15 +288,6 @@ function Subscriptions() {
                         <Tab value="history" label="История" sx={{ textTransform: 'none', minHeight: 36, py: 0 }} />
                         <Tab value="all" label="Все" sx={{ textTransform: 'none', minHeight: 36, py: 0 }} />
                     </Tabs>
-                    
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={() => setOpenDialog(true)}
-                        sx={{ borderRadius: 2, textTransform: 'none' }}
-                    >
-                        Создать абонемент
-                    </Button>
                 </Box>
 
                 {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
@@ -412,7 +433,15 @@ function Subscriptions() {
                                         
                                         <Divider />
                                         
-                                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, p: 1 }}>
+                                            {/* Кнопка редактирования — только для PENDING */}
+                                            {sub.status === 'pending' && (
+                                                <Tooltip title="Редактировать">
+                                                    <IconButton size="small" color="primary" onClick={() => handleEditSubscription(sub)}>
+                                                        <Edit fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
                                             <Tooltip title="Удалить">
                                                 <IconButton size="small" color="error" onClick={() => handleDeleteSubscription(sub.id)}>
                                                     <Delete fontSize="small" />
@@ -521,9 +550,41 @@ function Subscriptions() {
                         {snackbar.message}
                     </Alert>
                 </Snackbar>
+                <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+                    <DialogTitle>Редактировать абонемент</DialogTitle>
+                    <DialogContent>
+                        <Box sx={{ pt: 2 }}>
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                                Редактирование возможно только для неоплаченных абонементов.
+                            </Alert>
+                            <TextField
+                                fullWidth
+                                label="Количество занятий"
+                                type="number"
+                                value={editFormData.lessonsCount}
+                                onChange={(e) => setEditFormData({...editFormData, lessonsCount: e.target.value})}
+                                margin="normal"
+                                required
+                            />
+                            <TextField
+                                fullWidth
+                                label="Сумма (₽)"
+                                type="number"
+                                value={editFormData.price}
+                                onChange={(e) => setEditFormData({...editFormData, price: e.target.value})}
+                                margin="normal"
+                                required
+                            />
+                        </Box>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setEditDialogOpen(false)}>Отмена</Button>
+                        <Button onClick={handleUpdateSubscription} variant="contained">Сохранить</Button>
+                    </DialogActions>
+                </Dialog>
             </Box>
         </LocalizationProvider>
     );
-}
+    }
 
 export default Subscriptions;

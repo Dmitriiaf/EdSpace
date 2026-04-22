@@ -1,12 +1,14 @@
 // ========== backend/src/main/java/com/example/demo/controller/StudentController.java ==========
 package com.example.demo.controller;
-import com.example.demo.entity.Parent;
 
+import com.example.demo.entity.Parent;
 import com.example.demo.entity.InvitationToken;
 import com.example.demo.entity.Student;
+import com.example.demo.entity.Subscription;
 import com.example.demo.entity.Tutor;
 import com.example.demo.repository.InvitationTokenRepository;
 import com.example.demo.repository.StudentRepository;
+import com.example.demo.repository.SubscriptionRepository;
 import com.example.demo.service.EmailService;
 import com.example.demo.service.StudentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,16 +17,20 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/students")
 @CrossOrigin(origins = {
         "http://localhost:3000",
         "http://72.56.238.224",
-        "http://ed-space.ru"
+        "http://ed-space.ru",
+        "https://ed-space.ru",
+        "https://www.ed-space.ru"
 }, allowCredentials = "true")
 public class StudentController {
 
@@ -40,6 +46,9 @@ public class StudentController {
     @Autowired
     private InvitationTokenRepository invitationTokenRepository;
 
+    @Autowired
+    private SubscriptionRepository subscriptionRepository;
+
     @PostMapping
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createStudent(@RequestBody Map<String, Object> request,
@@ -48,7 +57,6 @@ public class StudentController {
             String email = (String) request.get("email");
             Long tutorId = Long.parseLong(request.get("tutorId").toString());
 
-            // IDOR FIX: Проверяем, что репетитор создаёт ученика для себя
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
@@ -84,15 +92,13 @@ public class StudentController {
 
                 studentRepository.save(existingStudent);
 
-                // ✅ Отправляем приглашение существующему ученику
                 sendInvitationToStudent(existingStudent, tutorId);
 
-                // ✅ Отправляем приглашение родителю, если указан email
                 if (parentEmail != null && !parentEmail.trim().isEmpty()) {
                     sendParentInvitation(existingStudent, tutorId, parentEmail);
                 }
 
-                return ResponseEntity.ok(existingStudent);
+                return ResponseEntity.ok(studentToMap(existingStudent, tutorId, null));
             }
 
             Student student = studentService.addStudent(
@@ -104,15 +110,13 @@ public class StudentController {
                     parentEmail
             );
 
-            // ✅ Отправляем приглашение новому ученику
             sendInvitationToStudent(student, tutorId);
 
-            // ✅ Отправляем приглашение родителю, если указан email
             if (parentEmail != null && !parentEmail.trim().isEmpty()) {
                 sendParentInvitation(student, tutorId, parentEmail);
             }
 
-            return ResponseEntity.ok(student);
+            return ResponseEntity.ok(studentToMap(student, tutorId, null));
 
         } catch (RuntimeException e) {
             e.printStackTrace();
@@ -125,19 +129,73 @@ public class StudentController {
     public ResponseEntity<?> getStudentsByTutor(@PathVariable Long tutorId,
                                                 @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                 @RequestAttribute(name = "userRole", required = false) String userRole) {
-        // IDOR FIX: Проверяем роль и ID
         if (!"ROLE_TUTOR".equals(userRole)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
-
         if (!tutorId.equals(currentUserId)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
-
         try {
-            List<Student> students = studentService.getStudentsByTutor(tutorId);
-            return ResponseEntity.ok(students);
+            List<Student> students = studentService.getStudentsByTutor(tutorId).stream()
+                    .filter(s -> s.getArchived() == null || !s.getArchived())
+                    .collect(Collectors.toList());
+
+            List<Long> studentIds = students.stream().map(Student::getId).collect(Collectors.toList());
+            List<Subscription> allSubscriptions = subscriptionRepository.findByStudentIdIn(studentIds);
+            Map<Long, Subscription> subscriptionMap = new HashMap<>();
+            for (Subscription sub : allSubscriptions) {
+                Long studentId = sub.getStudent().getId();
+                Subscription existing = subscriptionMap.get(studentId);
+                if (existing == null || "ACTIVE".equalsIgnoreCase(sub.getStatus())) {
+                    subscriptionMap.put(studentId, sub);
+                } else if (!"ACTIVE".equalsIgnoreCase(existing.getStatus()) && "PENDING".equalsIgnoreCase(sub.getStatus())) {
+                    subscriptionMap.put(studentId, sub);
+                }
+            }
+            List<Map<String, Object>> result = students.stream()
+                    .map(s -> studentToMap(s, tutorId, subscriptionMap.get(s.getId())))
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/tutor/{tutorId}/archived")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getArchivedStudentsByTutor(@PathVariable Long tutorId,
+                                                        @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                                        @RequestAttribute(name = "userRole", required = false) String userRole) {
+        if (!"ROLE_TUTOR".equals(userRole)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+        }
+        if (!tutorId.equals(currentUserId)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+        }
+        try {
+            List<Student> archivedStudents = studentService.getStudentsByTutor(tutorId).stream()
+                    .filter(s -> s.getArchived() != null && s.getArchived())
+                    .collect(Collectors.toList());
+
+            List<Long> studentIds = archivedStudents.stream().map(Student::getId).collect(Collectors.toList());
+            List<Subscription> allSubscriptions = subscriptionRepository.findByStudentIdIn(studentIds);
+            Map<Long, Subscription> subscriptionMap = new HashMap<>();
+            for (Subscription sub : allSubscriptions) {
+                Long studentId = sub.getStudent().getId();
+                Subscription existing = subscriptionMap.get(studentId);
+                if (existing == null || "ACTIVE".equalsIgnoreCase(sub.getStatus())) {
+                    subscriptionMap.put(studentId, sub);
+                } else if (!"ACTIVE".equalsIgnoreCase(existing.getStatus()) && "PENDING".equalsIgnoreCase(sub.getStatus())) {
+                    subscriptionMap.put(studentId, sub);
+                }
+            }
+
+            List<Map<String, Object>> result = archivedStudents.stream()
+                    .map(s -> studentToMap(s, tutorId, subscriptionMap.get(s.getId())))
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -147,7 +205,6 @@ public class StudentController {
     public ResponseEntity<?> getStudentsByParent(@PathVariable Long parentId,
                                                  @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                  @RequestAttribute(name = "userRole", required = false) String userRole) {
-        // IDOR FIX: Проверяем роль и ID
         if (!"ROLE_PARENT".equals(userRole)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
@@ -158,7 +215,23 @@ public class StudentController {
 
         try {
             List<Student> students = studentService.getStudentsByParent(parentId);
-            return ResponseEntity.ok(students);
+
+            List<Long> studentIds = students.stream().map(Student::getId).collect(Collectors.toList());
+            List<Subscription> allSubscriptions = subscriptionRepository.findByStudentIdIn(studentIds);
+
+            Map<Long, Subscription> subscriptionMap = new HashMap<>();
+            for (Subscription sub : allSubscriptions) {
+                Long studentId = sub.getStudent().getId();
+                Subscription existing = subscriptionMap.get(studentId);
+                if (existing == null || "ACTIVE".equalsIgnoreCase(sub.getStatus())) {
+                    subscriptionMap.put(studentId, sub);
+                }
+            }
+
+            List<Map<String, Object>> result = students.stream()
+                    .map(s -> studentToMap(s, null, subscriptionMap.get(s.getId())))
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -172,13 +245,14 @@ public class StudentController {
         try {
             Student student = studentService.getStudentById(id);
 
-            // IDOR FIX: Проверяем права доступа в зависимости от роли
             if ("ROLE_TUTOR".equals(userRole)) {
                 boolean hasTutor = student.getTutors().stream()
                         .anyMatch(t -> t.getId().equals(currentUserId));
                 if (!hasTutor) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
+                Subscription sub = subscriptionRepository.findFirstByStudentIdOrderByIdDesc(id).orElse(null);
+                return ResponseEntity.ok(studentToMap(student, currentUserId, sub));
             } else if ("ROLE_STUDENT".equals(userRole)) {
                 if (!student.getId().equals(currentUserId)) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
@@ -189,7 +263,7 @@ public class StudentController {
                 }
             }
 
-            return ResponseEntity.ok(student);
+            return ResponseEntity.ok(studentToMap(student, null, null));
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
         }
@@ -204,7 +278,6 @@ public class StudentController {
         try {
             Student student = studentService.getStudentById(id);
 
-            // IDOR FIX: Проверяем права доступа
             if ("ROLE_TUTOR".equals(userRole)) {
                 boolean hasTutor = student.getTutors().stream()
                         .anyMatch(t -> t.getId().equals(currentUserId));
@@ -217,10 +290,6 @@ public class StudentController {
                 }
             }
 
-            // ✅ Запоминаем старый parentEmail
-            String oldParentEmail = student.getParent() != null ? student.getParent().getEmail() : null;
-
-            // Обновляем базовые поля
             if (request.get("fullName") != null) {
                 student.setFullName((String) request.get("fullName"));
             }
@@ -234,26 +303,22 @@ public class StudentController {
                 student.setPaymentType((String) request.get("paymentType"));
             }
 
-            // ✅ Обработка parentEmail (только для репетитора)
             if ("ROLE_TUTOR".equals(userRole) && request.containsKey("parentEmail")) {
                 String newParentEmail = (String) request.get("parentEmail");
+                String oldParentEmail = student.getParent() != null ? student.getParent().getEmail() : null;
 
-                // Если указан новый email родителя и он отличается от старого
                 if (newParentEmail != null && !newParentEmail.trim().isEmpty()
                         && (oldParentEmail == null || !oldParentEmail.equals(newParentEmail))) {
 
-                    // ✅ СОЗДАЁМ ИЛИ ОБНОВЛЯЕМ РОДИТЕЛЯ
                     Parent parent = studentService.findOrCreateParent(newParentEmail, student.getFullName());
                     student.setParent(parent);
                     student.setParentName(parent.getFullName());
                     student.setParentPhone(parent.getPhone());
 
-                    // Отправляем приглашение родителю
                     sendParentInvitation(student, currentUserId, newParentEmail);
                 }
             }
 
-            // Ставка обновляется только репетитором
             if ("ROLE_TUTOR".equals(userRole) && request.get("ratePerLesson") != null) {
                 String rateStr = request.get("ratePerLesson").toString();
                 if (!rateStr.isEmpty()) {
@@ -262,9 +327,13 @@ public class StudentController {
                     student.setRateForTutor(tutor, rate);
                 }
             }
+            if (request.containsKey("archived")) {
+                student.setArchived((Boolean) request.get("archived"));
+            }
 
             studentRepository.save(student);
-            return ResponseEntity.ok(student);
+            Subscription sub = subscriptionRepository.findFirstByStudentIdOrderByIdDesc(id).orElse(null);
+            return ResponseEntity.ok(studentToMap(student, currentUserId, sub));
 
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -278,7 +347,6 @@ public class StudentController {
         try {
             Student student = studentService.getStudentById(id);
 
-            // IDOR FIX: Проверяем, что ученик принадлежит текущему репетитору
             boolean hasTutor = student.getTutors().stream()
                     .anyMatch(t -> t.getId().equals(currentUserId));
             if (!hasTutor) {
@@ -303,11 +371,25 @@ public class StudentController {
                                             @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             List<Student> students = studentService.searchStudentsByName(name);
-            // IDOR FIX: Фильтруем только учеников текущего репетитора
             students = students.stream()
                     .filter(s -> s.getTutors().stream().anyMatch(t -> t.getId().equals(currentUserId)))
                     .toList();
-            return ResponseEntity.ok(students);
+
+            List<Long> studentIds = students.stream().map(Student::getId).collect(Collectors.toList());
+            List<Subscription> allSubscriptions = subscriptionRepository.findByStudentIdIn(studentIds);
+            Map<Long, Subscription> subscriptionMap = new HashMap<>();
+            for (Subscription sub : allSubscriptions) {
+                Long studentId = sub.getStudent().getId();
+                Subscription existing = subscriptionMap.get(studentId);
+                if (existing == null || "ACTIVE".equalsIgnoreCase(sub.getStatus())) {
+                    subscriptionMap.put(studentId, sub);
+                }
+            }
+
+            List<Map<String, Object>> result = students.stream()
+                    .map(s -> studentToMap(s, currentUserId, subscriptionMap.get(s.getId())))
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -336,18 +418,82 @@ public class StudentController {
             }
 
             Student student = students.get(0);
-            return ResponseEntity.ok(student);
+            Subscription sub = subscriptionRepository.findFirstByStudentIdOrderByIdDesc(student.getId()).orElse(null);
+            return ResponseEntity.ok(studentToMap(student, currentUserId, sub));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // ✅ Отправка приглашения ученику
+    // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
+
+    private Map<String, Object> studentToMap(Student student, Long tutorId, Subscription subscription) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", student.getId());
+        map.put("fullName", student.getFullName());
+        map.put("email", student.getEmail());
+        map.put("phone", student.getPhone());
+        map.put("paymentType", student.getPaymentType());
+        map.put("missedLessons", student.getMissedLessons() != null ? student.getMissedLessons() : 0);
+        map.put("archived", student.getArchived() != null ? student.getArchived() : false);
+
+        if (tutorId != null) {
+            map.put("ratePerLesson", student.getRateForTutor(tutorId));
+        }
+
+        if (subscription != null) {
+            Map<String, Object> subMap = new HashMap<>();
+            subMap.put("id", subscription.getId());
+            subMap.put("totalLessons", subscription.getLessonsCount());
+            subMap.put("usedLessons", subscription.getLessonsUsed() != null ? subscription.getLessonsUsed() : 0);
+            subMap.put("debtLessons", subscription.getDebtLessons() != null ? subscription.getDebtLessons() : 0);
+            subMap.put("status", subscription.getStatus());
+            map.put("subscription", subMap);
+        }
+
+        // ========== ИСПРАВЛЕНИЕ B3.2: Имя родителя ==========
+        if (student.getParent() != null) {
+            String parentFullName = student.getParent().getFullName();
+            // Если имя родителя начинается с "Родитель " — значит, он не зарегистрирован
+            if (parentFullName != null && parentFullName.startsWith("Родитель ")) {
+                map.put("parent", null);
+                map.put("parentEmail", student.getParent().getEmail());
+                map.put("parentName", "Не указано");
+            } else {
+                Map<String, Object> parentMap = new HashMap<>();
+                parentMap.put("id", student.getParent().getId());
+                parentMap.put("fullName", parentFullName);
+                parentMap.put("email", student.getParent().getEmail());
+                parentMap.put("phone", student.getParent().getPhone());
+                map.put("parent", parentMap);
+                map.put("parentEmail", student.getParent().getEmail());
+                map.put("parentName", parentFullName);
+            }
+        } else {
+            map.put("parent", null);
+            map.put("parentEmail", null);
+            map.put("parentName", null);
+        }
+        // =====================================================
+
+        List<Map<String, Object>> tutors = student.getTutors().stream()
+                .map(t -> {
+                    Map<String, Object> tm = new HashMap<>();
+                    tm.put("id", t.getId());
+                    tm.put("fullName", t.getFullName());
+                    tm.put("email", t.getEmail());
+                    return tm;
+                })
+                .collect(Collectors.toList());
+        map.put("tutors", tutors);
+
+        return map;
+    }
+
     private void sendInvitationToStudent(Student student, Long tutorId) {
         try {
             Tutor tutor = studentService.getTutorById(tutorId);
 
-            // Создать токен приглашения
             InvitationToken token = new InvitationToken();
             token.setEmail(student.getEmail());
             token.setToken(UUID.randomUUID().toString());
@@ -360,7 +506,6 @@ public class StudentController {
 
             invitationTokenRepository.save(token);
 
-            // Отправить письмо
             emailService.sendStudentInvitation(token, student.getFullName(), tutor.getFullName());
 
             System.out.println("📧 Приглашение отправлено ученику: " + student.getEmail());
@@ -370,12 +515,10 @@ public class StudentController {
         }
     }
 
-    // ✅ НОВЫЙ МЕТОД: Отправка приглашения родителю
     private void sendParentInvitation(Student student, Long tutorId, String parentEmail) {
         try {
             Tutor tutor = studentService.getTutorById(tutorId);
 
-            // Создать токен приглашения для родителя
             InvitationToken token = new InvitationToken();
             token.setEmail(parentEmail);
             token.setToken(UUID.randomUUID().toString());
@@ -386,7 +529,6 @@ public class StudentController {
 
             invitationTokenRepository.save(token);
 
-            // Отправить письмо родителю
             emailService.sendParentInvitation(token, student.getFullName(), tutor.getFullName());
 
             System.out.println("📧 Приглашение отправлено родителю: " + parentEmail);

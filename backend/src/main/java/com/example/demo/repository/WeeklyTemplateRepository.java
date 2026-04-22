@@ -13,5 +13,7 @@ public interface WeeklyTemplateRepository extends JpaRepository<WeeklyTemplate, 
 
     List<WeeklyTemplate> findByTutorIdAndDayOfWeek(Long tutorId, Integer dayOfWeek);
 
+    List<WeeklyTemplate> findByStudentId(Long studentId);
+
     boolean existsByTutorIdAndDayOfWeekAndStartTime(Long tutorId, Integer dayOfWeek, LocalTime startTime);
 }

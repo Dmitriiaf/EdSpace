@@ -12,6 +12,7 @@ import StepikCallback from './pages/StepikCallback';
 import LessonPlans from './pages/LessonPlans';
 import TaskBank from './pages/TaskBank';
 // Страницы
+import TutorProgress from './pages/TutorProgress';
 import CompleteRegistration from './pages/CompleteRegistration';
 import ParentRegistration from './pages/ParentRegistration';
 import ForgotPassword from './pages/ForgotPassword';
@@ -106,7 +107,10 @@ const AppContent = () => {
                     <Route path="/lesson-plans" element={<PrivateRoute requiredRole="tutor"><LessonPlans /></PrivateRoute>} />
                     <Route path="/stepik" element={<PrivateRoute requiredRole="tutor"><StepikPageWrapper /></PrivateRoute>} />
                     <Route path="/profile" element={<PrivateRoute requiredRole="tutor"><Profile /></PrivateRoute>} />
+                    <Route path="/student-progress/:id" element={<PrivateRoute requiredRole="tutor"><StudentProgress /></PrivateRoute>} />
+                    <Route path="/progress" element={<PrivateRoute requiredRole="tutor"><TutorProgress /></PrivateRoute>} />
 
+                    <Route path="/progress" element={<PrivateRoute requiredRole="tutor"><TutorProgress /></PrivateRoute>} />
                     {/* Ученик */}
                     <Route path="/student" element={<PrivateRoute requiredRole="student"><StudentDashboard /></PrivateRoute>} />
                     <Route path="/student/profile" element={<PrivateRoute requiredRole="student"><StudentProfile /></PrivateRoute>} />

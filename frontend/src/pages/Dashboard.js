@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Dashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/pages/Dashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ С ОТМЕНОЙ ПЕРЕНОСА) ==========
 import React, { useState, useEffect } from 'react';
 import {
     Box, Grid, Card, CardContent, Typography,
@@ -45,7 +45,7 @@ import {
     getLessonPlans as fetchLessonPlansAPI,
     getVariants as fetchVariantsAPI
 } from '../services/api';
-
+// FORCE REBUILD V2 - 2026-04-20 15:15
 function Dashboard() {
     const { user } = useAuth();
     const { getStudentRateForTutor } = useStudentRate();
@@ -196,10 +196,27 @@ function Dashboard() {
         try {
             const dateStr = format(date, 'yyyy-MM-dd');
             const response = await getAllLessons(user.id);
-            
             const lessonsData = response.data !== undefined ? response.data : response;
             
-            const filtered = lessonsData.filter(lesson => lesson.lessonDate === dateStr);
+            // ✅ Правильная фильтрация
+            const filtered = lessonsData.filter(lesson => {
+                // Урок должен быть на выбранную дату
+                if (lesson.lessonDate !== dateStr) return false;
+                
+                // Если урок имеет статус RESCHEDULED и НЕ имеет originalLesson (т.е. это оригинал)
+                // и при этом существует другой урок, который ссылается на него как на originalLesson
+                // то НЕ показываем этот оригинальный урок
+                if (lesson.status === 'RESCHEDULED' && !lesson.originalLesson) {
+                    const hasRescheduledLesson = lessonsData.some(l => 
+                        l.originalLesson?.id === lesson.id
+                    );
+                    return !hasRescheduledLesson;
+                }
+                
+                // Все остальные уроки показываем
+                return true;
+            });
+            
             const sorted = filtered.sort((a, b) => a.startTime.localeCompare(b.startTime));
             setTodayLessons(sorted);
         } catch (err) {
@@ -396,6 +413,21 @@ function Dashboard() {
         }
     };
 
+    // ✅ НОВАЯ ФУНКЦИЯ: ОТМЕНА ПЕРЕНОСА
+    const handleCancelReschedule = async (originalLesson) => {
+        if (!window.confirm('Отменить перенос? Оригинальное занятие восстановится, новое будет удалено.')) {
+            return;
+        }
+        
+        try {
+            await axiosInstance.post(`/lessons/${originalLesson.id}/cancel-reschedule`);
+            showSnackbar('✅ Перенос отменён', 'success');
+            await loadAllData();
+        } catch (err) {
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        }
+    };
+
     const handleRescheduleClick = (lesson) => {
         setLessonToReschedule(lesson);
         const lessonDate = new Date(lesson.lessonDate);
@@ -536,13 +568,11 @@ function Dashboard() {
         const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
         
         const isRescheduledNew = lesson.originalLesson !== null && lesson.status === 'RESCHEDULED';
-        const isRescheduledOriginal = lesson.status === 'RESCHEDULED' && lesson.originalLesson === null;
-        
+        const isRescheduledOriginal = lesson.status === 'RESCHEDULED' && !lesson.originalLesson;        const isScheduled = lesson.status === 'SCHEDULED';
+        const isInProgress = lesson.status === 'IN_PROGRESS';
         const isCompleted = lesson.status === 'COMPLETED';
         const isPaid = lesson.status === 'PAID';
         const isCancelled = lesson.status === 'CANCELLED';
-        const isInProgress = lesson.status === 'IN_PROGRESS';
-        const isScheduled = lesson.status === 'SCHEDULED';
         
         const getRescheduledTarget = () => {
             if (!isRescheduledOriginal) return null;
@@ -652,111 +682,135 @@ function Dashboard() {
                         </Box>
                         
                         <Box sx={{ display: 'flex', gap: 1, ml: 2, flexDirection: 'column' }}>
-                            {/* Видеозвонок */}
-                            {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && !isCancelled && (
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="primary"
-                                    startIcon={<VideocamIcon />}
-                                    onClick={() => {
-                                        setSelectedLessonForCall(lesson);
-                                        setVideoCallOpen(true);
-                                    }}
-                                    sx={{ mb: 0.5 }}
-                                >
-                                    Видеозвонок
-                                </Button>
-                            )}
-                            
-                            {/* Онлайн-доска */}
-                            {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && !isCancelled && (
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="secondary"
-                                    startIcon={<DrawIcon />}
-                                    onClick={() => {
-                                        setSelectedLessonForBoard(lesson);
-                                        setWhiteboardOpen(true);
-                                    }}
-                                    sx={{ mb: 0.5 }}
-                                >
-                                    Онлайн-доска
-                                </Button>
-                            )}
-                            
-                            {/* Начать урок */}
-                            {(isScheduled || lesson.status === 'RESCHEDULED') && (
-                                <Button
-                                    size="small"
-                                    variant="contained"
-                                    color="primary"
-                                    startIcon={<PlayIcon />}
-                                    onClick={() => handleStartLesson(lesson)}
-                                >
-                                    Начать урок
-                                </Button>
-                            )}
-                            
-                            {/* Завершить урок и Ученик не пришёл */}
-                            {isInProgress && (
+                            {/* ========== ДЛЯ ОРИГИНАЛЬНОГО (ПЕРЕНЕСЁННОГО) УРОКА ========== */}
+                            {isRescheduledOriginal ? (
                                 <>
-                                    <Button
-                                        size="small"
-                                        variant="contained"
-                                        color="success"
-                                        startIcon={<CheckIcon />}
-                                        onClick={() => handleOpenComplete(lesson)}
-                                    >
-                                        Завершить урок
-                                    </Button>
+                                    {rescheduledTarget && (
+                                        <Paper sx={{ p: 1, bgcolor: '#FFF3E0', borderRadius: 2, mb: 1 }}>
+                                            <Typography variant="caption" color="textSecondary">
+                                                Перенесено на {new Date(rescheduledTarget.lessonDate).toLocaleDateString('ru-RU')} в {rescheduledTarget.startTime?.slice(0,5)}
+                                            </Typography>
+                                        </Paper>
+                                    )}
                                     <Button
                                         size="small"
                                         variant="outlined"
-                                        color="warning"
-                                        startIcon={<CancelIcon />}
-                                        onClick={() => handleStudentNoShow(lesson)}
+                                        color="secondary"
+                                        onClick={() => handleCancelReschedule(lesson)}
+                                        data-testid="cancel-reschedule-btn"
                                     >
-                                        Ученик не пришёл
+                                        <strong>Отменить перенос</strong>
                                     </Button>
                                 </>
-                            )}
-                            
-                            {/* Перенести и Отмена */}
-                            {(isScheduled || lesson.status === 'RESCHEDULED') && (
+                            ) : (
                                 <>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="warning"
-                                        startIcon={<EventIcon />}
-                                        onClick={() => handleRescheduleClick(lesson)}
-                                    >
-                                        Перенести
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="error"
-                                        startIcon={<CancelIcon />}
-                                        onClick={() => handleCancelClick(lesson)}
-                                    >
-                                        Отмена
-                                    </Button>
+                                    {/* Видеозвонок */}
+                                    {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && !isCancelled && (
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="primary"
+                                            startIcon={<VideocamIcon />}
+                                            onClick={() => {
+                                                setSelectedLessonForCall(lesson);
+                                                setVideoCallOpen(true);
+                                            }}
+                                            sx={{ mb: 0.5 }}
+                                        >
+                                            Видеозвонок
+                                        </Button>
+                                    )}
+                                    
+                                    {/* Онлайн-доска */}
+                                    {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && !isCancelled && (
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="secondary"
+                                            startIcon={<DrawIcon />}
+                                            onClick={() => {
+                                                setSelectedLessonForBoard(lesson);
+                                                setWhiteboardOpen(true);
+                                            }}
+                                            sx={{ mb: 0.5 }}
+                                        >
+                                            Онлайн-доска
+                                        </Button>
+                                    )}
+                                    
+                                    {/* Начать урок */}
+                                    {(isScheduled || lesson.status === 'RESCHEDULED') && (
+                                        <Button
+                                            size="small"
+                                            variant="contained"
+                                            color="primary"
+                                            startIcon={<PlayIcon />}
+                                            onClick={() => handleStartLesson(lesson)}
+                                        >
+                                            Начать урок
+                                        </Button>
+                                    )}
+                                    
+                                    {/* Завершить урок и Ученик не пришёл */}
+                                    {isInProgress && (
+                                        <>
+                                            <Button
+                                                size="small"
+                                                variant="contained"
+                                                color="success"
+                                                startIcon={<CheckIcon />}
+                                                onClick={() => handleOpenComplete(lesson)}
+                                            >
+                                                Завершить урок
+                                            </Button>
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                color="warning"
+                                                startIcon={<CancelIcon />}
+                                                onClick={() => handleStudentNoShow(lesson)}
+                                            >
+                                                Ученик не пришёл
+                                            </Button>
+                                        </>
+                                    )}
+                                    
+                                    {/* Перенести и Отмена */}
+                                    {(isScheduled || lesson.status === 'RESCHEDULED') && (
+                                        <>
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                color="warning"
+                                                startIcon={<EventIcon />}
+                                                onClick={() => handleRescheduleClick(lesson)}
+                                            >
+                                                Перенести
+                                            </Button>
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                color="error"
+                                                startIcon={<CancelIcon />}
+                                                onClick={() => handleCancelClick(lesson)}
+                                            >
+                                                Отмена
+                                            </Button>
+                                        </>
+                                    )}
+                                    
+                                    {/* Заметки */}
+                                    {(isCompleted || isPaid) && (
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={<EditIcon />}
+                                            onClick={() => handleOpenNotes(lesson)}
+                                        >
+                                            Заметки
+                                        </Button>
+                                    )}
                                 </>
-                            )}
-                            
-                            {/* Заметки */}
-                            {(isCompleted || isPaid) && (
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    startIcon={<EditIcon />}
-                                    onClick={() => handleOpenNotes(lesson)}
-                                >
-                                    Заметки
-                                </Button>
                             )}
                         </Box>
                     </Box>
@@ -1223,4 +1277,4 @@ function Dashboard() {
     );
 }
 
-export default Dashboard;
+export default Dashboard;// FORCE REBUILD V3

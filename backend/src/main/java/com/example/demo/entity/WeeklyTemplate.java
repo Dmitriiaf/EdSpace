@@ -1,16 +1,21 @@
 package com.example.demo.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Entity
 @Table(name = "weekly_template")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class WeeklyTemplate {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "duration")
+    private Integer duration = 60;
 
     @ManyToOne
     @JoinColumn(name = "tutor_id", nullable = false)

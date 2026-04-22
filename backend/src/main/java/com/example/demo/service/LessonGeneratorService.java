@@ -92,6 +92,7 @@ public class LessonGeneratorService {
                                 template.getStartTime(),
                                 template.getEndTime()
                         );
+                        lesson.setWeeklyTemplateId(template.getId());  // ← ТОЧКА С ЗАПЯТОЙ В КОНЦЕ!
                         lessonRepository.save(lesson);
                         createdCount++;
                     } else {

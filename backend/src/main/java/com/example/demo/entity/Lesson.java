@@ -1,5 +1,6 @@
 package com.example.demo.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -7,9 +8,9 @@ import java.time.LocalTime;
 
 @Entity
 @Table(name = "lesson")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "originalLesson"})
 public class Lesson {
 
-    // ✅ СТАТУСЫ
     public static final String STATUS_SCHEDULED = "SCHEDULED";
     public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     public static final String STATUS_COMPLETED = "COMPLETED";
@@ -36,6 +37,9 @@ public class Lesson {
     @Column(name = "lesson_date", nullable = false)
     private LocalDate lessonDate;
 
+    @Column(name = "weekly_template_id")
+    private Long weeklyTemplateId;
+
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
 
@@ -51,6 +55,9 @@ public class Lesson {
 
     @Column(length = 2000)
     private String notes;
+
+    @Column(name = "duration")
+    private Integer duration = 60;
 
     @Column(name = "next_lesson_plan", length = 2000)
     private String nextLessonPlan;
@@ -76,7 +83,6 @@ public class Lesson {
     @Column(name = "auto_completed")
     private Boolean autoCompleted = false;
 
-    // ✅ НОВОЕ ПОЛЕ: время начала звонка
     @Column(name = "call_started_at")
     private LocalDateTime callStartedAt;
 
@@ -93,6 +99,8 @@ public class Lesson {
     }
 
     // Геттеры
+    public Integer getDuration() { return duration; }
+    public Long getWeeklyTemplateId() { return weeklyTemplateId; }
     public Long getId() { return id; }
     public Tutor getTutor() { return tutor; }
     public Student getStudent() { return student; }
@@ -111,9 +119,11 @@ public class Lesson {
     public LocalDateTime getCompletedAt() { return completedAt; }
     public LocalDateTime getPaidAt() { return paidAt; }
     public Boolean getAutoCompleted() { return autoCompleted; }
-    public LocalDateTime getCallStartedAt() { return callStartedAt; }  // ✅ Геттер
+    public LocalDateTime getCallStartedAt() { return callStartedAt; }
 
     // Сеттеры
+    public void setDuration(Integer duration) { this.duration = duration; }
+    public void setWeeklyTemplateId(Long weeklyTemplateId) { this.weeklyTemplateId = weeklyTemplateId; }
     public void setTutor(Tutor tutor) { this.tutor = tutor; }
     public void setStudent(Student student) { this.student = student; }
     public void setCourse(Course course) { this.course = course; }
@@ -122,29 +132,19 @@ public class Lesson {
     public void setLessonDate(LocalDate lessonDate) { this.lessonDate = lessonDate; }
     public void setStartTime(LocalTime startTime) { this.startTime = startTime; }
     public void setEndTime(LocalTime endTime) { this.endTime = endTime; }
-    public void setStatus(String status) {
-        this.status = status;
-        this.updatedAt = LocalDateTime.now();
-    }
+    public void setStatus(String status) { this.status = status; this.updatedAt = LocalDateTime.now(); }
     public void setOriginalLesson(Lesson originalLesson) { this.originalLesson = originalLesson; }
-    public void setNotes(String notes) {
-        this.notes = notes;
-        this.updatedAt = LocalDateTime.now();
-    }
-    public void setNextLessonPlan(String nextLessonPlan) {
-        this.nextLessonPlan = nextLessonPlan;
-        this.updatedAt = LocalDateTime.now();
-    }
+    public void setNotes(String notes) { this.notes = notes; this.updatedAt = LocalDateTime.now(); }
+    public void setNextLessonPlan(String nextLessonPlan) { this.nextLessonPlan = nextLessonPlan; this.updatedAt = LocalDateTime.now(); }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
     public void setPaidAt(LocalDateTime paidAt) { this.paidAt = paidAt; }
     public void setAutoCompleted(Boolean autoCompleted) { this.autoCompleted = autoCompleted; }
-    public void setCallStartedAt(LocalDateTime callStartedAt) { this.callStartedAt = callStartedAt; }  // ✅ Сеттер
+    public void setCallStartedAt(LocalDateTime callStartedAt) { this.callStartedAt = callStartedAt; }
 
-    // Вспомогательные методы
     public boolean isRescheduled() { return originalLesson != null; }
     public boolean isCompleted() { return STATUS_COMPLETED.equals(status); }
     public boolean isPaid() { return STATUS_PAID.equals(status); }
     public boolean isScheduled() { return STATUS_SCHEDULED.equals(status); }
-    public boolean isInProgress() { return STATUS_IN_PROGRESS.equals(status); }  // ✅ Новый метод
+    public boolean isInProgress() { return STATUS_IN_PROGRESS.equals(status); }
 }

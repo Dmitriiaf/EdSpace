@@ -20,11 +20,11 @@ import {
     School as SchoolIcon,
     Person as PersonIcon,
     Payment as PaymentIcon,
-    ChildCare as ChildCareIcon
+    ChildCare as ChildCareIcon,
+    TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
-import axiosInstance from '../api/axiosConfig'
+import axiosInstance from '../api/axiosConfig';
 
 const Sidebar = ({ onHoverChange }) => {
     const navigate = useNavigate();
@@ -60,10 +60,11 @@ const Sidebar = ({ onHoverChange }) => {
         }
     };
 
-    // ✅ Меню для репетитора — БЕЗ STEPIK
+    // ✅ Меню для репетитора — добавлен пункт "Календарь (бета)"
     const tutorMenuItems = [
         { path: '/dashboard', label: 'Главная', icon: <DashboardIcon />, roles: ['tutor'] },
         { path: '/students', label: 'Ученики', icon: <PeopleIcon />, roles: ['tutor'] },
+        { path: '/progress', label: 'Успеваемость', icon: <TrendingUpIcon />, roles: ['tutor'] },
         { path: '/courses', label: 'Курсы', icon: <BookIcon />, roles: ['tutor'] },
         { path: '/weekly-schedule', label: 'Расписание', icon: <CalendarIcon />, roles: ['tutor'] },
         { path: '/finance', label: 'Финансы', icon: <MoneyIcon />, roles: ['tutor'] },
@@ -76,6 +77,8 @@ const Sidebar = ({ onHoverChange }) => {
     // Меню для ученика
     const studentMenuItems = [
         { path: '/student', label: 'Главная', icon: <DashboardIcon />, roles: ['student'] },
+        { path: '/student/progress', label: 'Успеваемость', icon: <TrendingUpIcon />, roles: ['student'] },
+        { path: '/student/materials', label: 'Материалы', icon: <FolderIcon />, roles: ['student'] },
         { path: '/student/profile', label: 'Профиль', icon: <PersonIcon />, roles: ['student'] },
     ];
 

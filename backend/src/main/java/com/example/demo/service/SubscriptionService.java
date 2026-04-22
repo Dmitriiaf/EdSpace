@@ -44,12 +44,16 @@ public class SubscriptionService {
     }
 
     public List<Subscription> getPendingSubscriptionsByStudent(Long studentId) {
-        return subscriptionRepository.findByStudentIdAndStatus(studentId, "pending");
+        return subscriptionRepository.findByStudentIdAndStatus(studentId, "PENDING");
+    }
+
+    public Subscription saveSubscription(Subscription subscription) {
+        return subscriptionRepository.save(subscription);
     }
 
     public Subscription getActiveSubscription(Long studentId) {
         List<Subscription> activeSubscriptions = subscriptionRepository
-                .findByStudentIdAndStatus(studentId, "active");
+                .findByStudentIdAndStatus(studentId, "ACTIVE");
         if (activeSubscriptions.isEmpty()) {
             return null;
         }
@@ -74,7 +78,7 @@ public class SubscriptionService {
         Subscription subscription = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new RuntimeException("Абонемент не найден"));
 
-        if (!"active".equals(subscription.getStatus())) {
+        if (!"ACTIVE".equals(subscription.getStatus())) {
             throw new RuntimeException("Абонемент не активен");
         }
 
@@ -135,7 +139,7 @@ public class SubscriptionService {
         Subscription subscription = new Subscription(
                 tutor, student, lessonsCount, price, startDate.toLocalDate(), endDate.toLocalDate()
         );
-        subscription.setStatus("pending");
+        subscription.setStatus("PENDING");
 
         return subscriptionRepository.save(subscription);
     }
@@ -145,11 +149,11 @@ public class SubscriptionService {
         Subscription subscription = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new RuntimeException("Абонемент не найден"));
 
-        if ("active".equals(subscription.getStatus())) {
+        if ("ACTIVE".equals(subscription.getStatus())) {
             throw new RuntimeException("Абонемент уже оплачен");
         }
 
-        if ("completed".equals(subscription.getStatus())) {
+        if ("COMPLETED".equals(subscription.getStatus())) {
             throw new RuntimeException("Абонемент уже завершён");
         }
 
@@ -162,7 +166,7 @@ public class SubscriptionService {
 
         BigDecimal remainingAmount = totalAmount.subtract(paidAmount);
 
-        subscription.setStatus("active");
+        subscription.setStatus("ACTIVE");
         subscription.setPaidAt(LocalDateTime.now());
 
         Payment payment = new Payment(
@@ -190,7 +194,7 @@ public class SubscriptionService {
         Subscription subscription = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new RuntimeException("Абонемент не найден"));
 
-        if (!"active".equals(subscription.getStatus())) {
+        if (!"ACTIVE".equals(subscription.getStatus())) {
             throw new RuntimeException("Абонемент не активен");
         }
 
