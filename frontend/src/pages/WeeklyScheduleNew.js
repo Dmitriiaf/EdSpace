@@ -10,6 +10,7 @@ import {
     Avatar, Card, CardContent, ToggleButton, ToggleButtonGroup,
     TextField
 } from '@mui/material';
+import { formatLessonTime } from '../utils/timezone';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -377,7 +378,7 @@ function WeeklySchedule() {
                                                                             </Typography>
                                                                         )}
                                                                         <Typography variant="caption" display="block" color="textSecondary">
-                                                                            {lesson.startTime.slice(0,5)} ({lesson.duration || 60} мин)
+                                                                            {formatLessonTime(lesson.lessonDate, lesson.startTime)} ({lesson.duration || 60} мин)
                                                                         </Typography>
                                                                         {studentRate && lesson.status !== 'CANCELLED' && (
                                                                             <Typography variant="caption" display="block" color="success.main">

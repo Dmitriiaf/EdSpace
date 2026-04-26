@@ -1,9 +1,10 @@
 // frontend/src/App.js
-import React, { useState } from 'react';
+import React, { useState, useMemo, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { Box } from '@mui/material';
+import { Box, IconButton, Tooltip } from '@mui/material';
+import { Brightness4 as DarkIcon, Brightness7 as LightIcon } from '@mui/icons-material';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import Sidebar from './components/Sidebar';
@@ -11,7 +12,6 @@ import StepikPage from './pages/StepikPage';
 import StepikCallback from './pages/StepikCallback';
 import LessonPlans from './pages/LessonPlans';
 import TaskBank from './pages/TaskBank';
-// Страницы
 import TutorProgress from './pages/TutorProgress';
 import CompleteRegistration from './pages/CompleteRegistration';
 import ParentRegistration from './pages/ParentRegistration';
@@ -36,16 +36,17 @@ import ParentProfile from './pages/ParentProfile';
 import StudentProgress from './pages/StudentProgress';
 import StudentMaterials from './pages/StudentMaterials';
 
-const theme = createTheme({
-    palette: {
-        primary: { main: '#ff6b6b' },
-        secondary: { main: '#4ecdc4' },
-        background: { default: '#f8f9fa' },
-    },
-    shape: { borderRadius: 12 },
-});
+// 🎨 НОВЫЕ ЦВЕТА
+const COLORS = {
+    murrey: '#8B004A',
+    alabaster: '#F2EFE7',
+};
 
-// ✅ Обёртка для StepikPage с принудительным пересозданием
+// 🎨 Контекст темы
+const ThemeContext = createContext();
+
+export const useThemeContext = () => useContext(ThemeContext);
+
 const StepikPageWrapper = () => {
     const location = useLocation();
     return <StepikPage key={location.pathname + Date.now()} />;
@@ -54,11 +55,56 @@ const StepikPageWrapper = () => {
 const AppContent = () => {
     const { user } = useAuth();
     const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+    const [darkMode, setDarkMode] = useState(() => {
+        const saved = localStorage.getItem('darkMode');
+        return saved ? JSON.parse(saved) : false;
+    });
+
+    const toggleDarkMode = () => {
+        setDarkMode(prev => {
+            const next = !prev;
+            localStorage.setItem('darkMode', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    const theme = useMemo(() => createTheme({
+        palette: {
+            mode: darkMode ? 'dark' : 'light',
+            primary: { main: COLORS.murrey },
+            secondary: { main: '#4ecdc4' },
+            background: {
+                default: darkMode ? '#121212' : COLORS.alabaster,
+                paper: darkMode ? '#1e1e1e' : '#ffffff',
+            },
+            text: {
+                primary: darkMode ? '#ffffff' : '#333333',
+                secondary: darkMode ? '#aaaaaa' : '#666666',
+            },
+        },
+        shape: { borderRadius: 12 },
+        components: {
+            MuiCard: {
+                styleOverrides: {
+                    root: {
+                        backgroundColor: darkMode ? '#1e1e1e' : '#ffffff',
+                        borderColor: darkMode ? '#333' : '#e0e0e0',
+                    },
+                },
+            },
+            MuiPaper: {
+                styleOverrides: {
+                    root: {
+                        backgroundImage: 'none',
+                    },
+                },
+            },
+        },
+    }), [darkMode]);
 
     const isTutor = user?.role === 'tutor';
     const isStudent = user?.role === 'student';
     const isParent = user?.role === 'parent';
-
     const sidebarWidth = isSidebarHovered ? 260 : 70;
 
     const publicRoutes = (
@@ -77,78 +123,106 @@ const AppContent = () => {
     );
 
     if (!user) {
-        return publicRoutes;
+        return (
+            <ThemeProvider theme={theme}>
+                <CssBaseline />
+                {publicRoutes}
+            </ThemeProvider>
+        );
     }
 
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-            <Sidebar onHoverChange={setIsSidebarHovered} />
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    ml: `${sidebarWidth}px`,
-                    minHeight: '100vh',
-                    transition: 'margin-left 0.2s ease-in-out',
-                    bgcolor: '#f8f9fa',
-                    width: `calc(100% - ${sidebarWidth}px)`,
-                }}
-            >
-                <Routes>
-                    {/* Репетитор */}
-                    <Route path="/dashboard" element={<PrivateRoute requiredRole="tutor"><Dashboard /></PrivateRoute>} />
-                    <Route path="/students" element={<PrivateRoute requiredRole="tutor"><Students /></PrivateRoute>} />
-                    <Route path="/courses" element={<PrivateRoute requiredRole="tutor"><Courses /></PrivateRoute>} />
-                    <Route path="/weekly-schedule" element={<PrivateRoute requiredRole="tutor"><WeeklySchedule /></PrivateRoute>} />
-                    <Route path="/finance" element={<PrivateRoute requiredRole="tutor"><Finance /></PrivateRoute>} />
-                    <Route path="/materials" element={<PrivateRoute requiredRole="tutor"><Materials /></PrivateRoute>} />
-                    <Route path="/lessons-archive" element={<PrivateRoute requiredRole="tutor"><LessonsArchive /></PrivateRoute>} />
-                    <Route path="/task-bank" element={<PrivateRoute requiredRole="tutor"><TaskBank /></PrivateRoute>} />
-                    <Route path="/lesson-plans" element={<PrivateRoute requiredRole="tutor"><LessonPlans /></PrivateRoute>} />
-                    <Route path="/stepik" element={<PrivateRoute requiredRole="tutor"><StepikPageWrapper /></PrivateRoute>} />
-                    <Route path="/profile" element={<PrivateRoute requiredRole="tutor"><Profile /></PrivateRoute>} />
-                    <Route path="/student-progress/:id" element={<PrivateRoute requiredRole="tutor"><StudentProgress /></PrivateRoute>} />
-                    <Route path="/progress" element={<PrivateRoute requiredRole="tutor"><TutorProgress /></PrivateRoute>} />
+        <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+                <Sidebar onHoverChange={setIsSidebarHovered} darkMode={darkMode} />
+                
+                {/* Кнопка переключения темы */}
+                <Tooltip title={darkMode ? 'Светлая тема' : 'Тёмная тема'}>
+                    <IconButton
+                        onClick={toggleDarkMode}
+                        sx={{
+                            position: 'fixed',
+                            bottom: 20,
+                            right: 20,
+                            zIndex: 9999,
+                            bgcolor: darkMode ? '#333' : COLORS.murrey,
+                            color: 'white',
+                            '&:hover': {
+                                bgcolor: darkMode ? '#555' : '#6B0038',
+                            },
+                            width: 48,
+                            height: 48,
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                        }}
+                    >
+                        {darkMode ? <LightIcon /> : <DarkIcon />}
+                    </IconButton>
+                </Tooltip>
 
-                    <Route path="/progress" element={<PrivateRoute requiredRole="tutor"><TutorProgress /></PrivateRoute>} />
-                    {/* Ученик */}
-                    <Route path="/student" element={<PrivateRoute requiredRole="student"><StudentDashboard /></PrivateRoute>} />
-                    <Route path="/student/profile" element={<PrivateRoute requiredRole="student"><StudentProfile /></PrivateRoute>} />
-                    <Route path="/student/progress" element={<PrivateRoute requiredRole="student"><StudentProgress /></PrivateRoute>} />
-                    <Route path="/student/materials" element={<PrivateRoute requiredRole="student"><StudentMaterials /></PrivateRoute>} />
+                <Box
+                    component="main"
+                    sx={{
+                        flexGrow: 1,
+                        ml: `${sidebarWidth}px`,
+                        minHeight: '100vh',
+                        transition: 'margin-left 0.2s ease-in-out',
+                        bgcolor: darkMode ? '#121212' : COLORS.alabaster,
+                        width: `calc(100% - ${sidebarWidth}px)`,
+                    }}
+                >
+                    <Routes>
+                        {/* Репетитор */}
+                        <Route path="/dashboard" element={<PrivateRoute requiredRole="tutor"><Dashboard /></PrivateRoute>} />
+                        <Route path="/students" element={<PrivateRoute requiredRole="tutor"><Students /></PrivateRoute>} />
+                        <Route path="/courses" element={<PrivateRoute requiredRole="tutor"><Courses /></PrivateRoute>} />
+                        <Route path="/weekly-schedule" element={<PrivateRoute requiredRole="tutor"><WeeklySchedule /></PrivateRoute>} />
+                        <Route path="/finance" element={<PrivateRoute requiredRole="tutor"><Finance /></PrivateRoute>} />
+                        <Route path="/materials" element={<PrivateRoute requiredRole="tutor"><Materials /></PrivateRoute>} />
+                        <Route path="/lessons-archive" element={<PrivateRoute requiredRole="tutor"><LessonsArchive /></PrivateRoute>} />
+                        <Route path="/task-bank" element={<PrivateRoute requiredRole="tutor"><TaskBank /></PrivateRoute>} />
+                        <Route path="/lesson-plans" element={<PrivateRoute requiredRole="tutor"><LessonPlans /></PrivateRoute>} />
+                        <Route path="/stepik" element={<PrivateRoute requiredRole="tutor"><StepikPageWrapper /></PrivateRoute>} />
+                        <Route path="/profile" element={<PrivateRoute requiredRole="tutor"><Profile /></PrivateRoute>} />
+                        <Route path="/student-progress/:id" element={<PrivateRoute requiredRole="tutor"><StudentProgress /></PrivateRoute>} />
+                        <Route path="/progress" element={<PrivateRoute requiredRole="tutor"><TutorProgress /></PrivateRoute>} />
 
-                    {/* Родитель */}
-                    <Route path="/parent/dashboard" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
-                    <Route path="/parent/children" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
-                    <Route path="/parent/payments" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
-                    <Route path="/parent/profile" element={<PrivateRoute requiredRole="parent"><ParentProfile /></PrivateRoute>} />
+                        {/* Ученик */}
+                        <Route path="/student" element={<PrivateRoute requiredRole="student"><StudentDashboard /></PrivateRoute>} />
+                        <Route path="/student/profile" element={<PrivateRoute requiredRole="student"><StudentProfile /></PrivateRoute>} />
+                        <Route path="/student/progress" element={<PrivateRoute requiredRole="student"><StudentProgress /></PrivateRoute>} />
+                        <Route path="/student/materials" element={<PrivateRoute requiredRole="student"><StudentMaterials /></PrivateRoute>} />
 
-                    {/* Публичные страницы */}
-                    <Route path="/forgot-password" element={<ForgotPassword />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    <Route path="/complete-registration" element={<CompleteRegistration />} />
-                    <Route path="/parent-registration" element={<ParentRegistration />} />
-                    <Route path="/stepik/callback" element={<StepikCallback />} />
+                        {/* Родитель */}
+                        <Route path="/parent/dashboard" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
+                        <Route path="/parent/children" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
+                        <Route path="/parent/payments" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
+                        <Route path="/parent/profile" element={<PrivateRoute requiredRole="parent"><ParentProfile /></PrivateRoute>} />
 
-                    {/* Перенаправление */}
-                    <Route path="/" element={<Navigate to={isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
-                    <Route path="*" element={<Navigate to={isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
-                </Routes>
+                        {/* Публичные страницы */}
+                        <Route path="/forgot-password" element={<ForgotPassword />} />
+                        <Route path="/reset-password" element={<ResetPassword />} />
+                        <Route path="/complete-registration" element={<CompleteRegistration />} />
+                        <Route path="/parent-registration" element={<ParentRegistration />} />
+                        <Route path="/stepik/callback" element={<StepikCallback />} />
+
+                        {/* Перенаправление */}
+                        <Route path="/" element={<Navigate to={isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
+                        <Route path="*" element={<Navigate to={isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
+                    </Routes>
+                </Box>
             </Box>
-        </Box>
+        </ThemeProvider>
     );
 };
 
 function App() {
     return (
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <BrowserRouter>
-                <AuthProvider>
-                    <AppContent />
-                </AuthProvider>
-            </BrowserRouter>
-        </ThemeProvider>
+        <BrowserRouter>
+            <AuthProvider>
+                <AppContent />
+            </AuthProvider>
+        </BrowserRouter>
     );
 }
 

@@ -49,8 +49,6 @@ public class Tutor {
     @Column(nullable = false)
     private String role = "ROLE_TUTOR";
 
-    @Column(name = "timezone")
-    private String timezone = "Europe/Moscow";
 
     @Column(name = "reset_token")
     private String resetToken;
@@ -78,7 +76,6 @@ public class Tutor {
     }
 
     // Геттеры
-    public String getTimezone() { return timezone; }
     public Long getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
@@ -97,7 +94,6 @@ public class Tutor {
     public String getVideoRoomName() { return videoRoomName; }
 
     // Сеттеры
-    public void setTimezone(String timezone) { this.timezone = timezone; }
     public void setEmail(String email) { this.email = email; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public void setFullName(String fullName) { this.fullName = fullName; }

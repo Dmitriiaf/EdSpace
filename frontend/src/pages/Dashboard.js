@@ -1,12 +1,13 @@
-// ========== frontend/src/pages/Dashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ С ОТМЕНОЙ ПЕРЕНОСА) ==========
+// ========== frontend/src/pages/Dashboard.js ==========
 import React, { useState, useEffect } from 'react';
 import {
     Box, Grid, Card, CardContent, Typography,
     Paper, CircularProgress, Alert, Button,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Chip, IconButton, Snackbar,
+    TextField, Chip, Snackbar,
     FormControl, InputLabel, Select, MenuItem, Divider
 } from '@mui/material';
+import { formatLessonTime, formatLessonDate } from '../utils/timezone';
 import {
     Refresh as RefreshIcon,
     Edit as EditIcon,
@@ -18,12 +19,12 @@ import {
     ArrowBack as ArrowBackIcon,
     ArrowForward as ArrowForwardIcon,
     CalendarToday as CalendarTodayIcon,
-    AccessTime as AccessTimeIcon,
     WbSunny as SunIcon,
     Brightness3 as NightIcon,
     Cloud as CloudIcon,
     Videocam as VideocamIcon,
-    Draw as DrawIcon
+    Draw as DrawIcon,
+    Work as WorkIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -43,9 +44,10 @@ import {
     rescheduleLesson,
     addNotes,
     getLessonPlans as fetchLessonPlansAPI,
-    getVariants as fetchVariantsAPI
+    getVariants as fetchVariantsAPI,
+    replaceCancelledWithResurrect
 } from '../services/api';
-// FORCE REBUILD V2 - 2026-04-20 15:15
+
 function Dashboard() {
     const { user } = useAuth();
     const { getStudentRateForTutor } = useStudentRate();
@@ -84,6 +86,13 @@ function Dashboard() {
     const [variants, setVariants] = useState([]);
     const [selectedVariantId, setSelectedVariantId] = useState('');
     const [applyType, setApplyType] = useState('none');
+
+    // ========== НОВЫЕ СОСТОЯНИЯ ДЛЯ F15 ==========
+    const [openReplaceDialog, setOpenReplaceDialog] = useState(false);
+    const [cancelledLesson, setCancelledLesson] = useState(null);
+    const [selectedDebtorId, setSelectedDebtorId] = useState('');
+    const [debtorsList, setDebtorsList] = useState([]);
+    // ============================================
 
     const getGreeting = () => {
         const hour = currentTime.getHours();
@@ -174,8 +183,41 @@ function Dashboard() {
     useEffect(() => {
         if (user) {
             loadAllData();
+            fetchDebtors();
         }
     }, [user, selectedDate]);
+
+    // ========== ЗАГРУЗКА ДОЛЖНИКОВ ==========
+    const fetchDebtors = async () => {
+        try {
+            const [studentsRes, subscriptionsRes] = await Promise.all([
+                axiosInstance.get(`/students/tutor/${user.id}`),
+                axiosInstance.get(`/subscriptions/tutor/${user.id}`)
+            ]);
+            
+            const studentsData = studentsRes.data || [];
+            const subscriptionsData = subscriptionsRes.data || [];
+            
+            const debtorsListData = studentsData.filter(student => {
+                const activeSub = subscriptionsData.find(
+                    sub => sub.student?.id === student.id && sub.status === 'active' && sub.debtLessons > 0
+                );
+                return !!activeSub || (student.missedLessons > 0);
+            }).map(student => {
+                const activeSub = subscriptionsData.find(
+                    sub => sub.student?.id === student.id && sub.status === 'active'
+                );
+                return {
+                    ...student,
+                    debtLessons: activeSub?.debtLessons || student.missedLessons || 0
+                };
+            });
+            
+            setDebtorsList(debtorsListData);
+        } catch (err) {
+            console.error('Ошибка загрузки должников:', err);
+        }
+    };
 
     const loadAllData = async () => {
         setLoading(true);
@@ -198,14 +240,9 @@ function Dashboard() {
             const response = await getAllLessons(user.id);
             const lessonsData = response.data !== undefined ? response.data : response;
             
-            // ✅ Правильная фильтрация
             const filtered = lessonsData.filter(lesson => {
-                // Урок должен быть на выбранную дату
                 if (lesson.lessonDate !== dateStr) return false;
                 
-                // Если урок имеет статус RESCHEDULED и НЕ имеет originalLesson (т.е. это оригинал)
-                // и при этом существует другой урок, который ссылается на него как на originalLesson
-                // то НЕ показываем этот оригинальный урок
                 if (lesson.status === 'RESCHEDULED' && !lesson.originalLesson) {
                     const hasRescheduledLesson = lessonsData.some(l => 
                         l.originalLesson?.id === lesson.id
@@ -213,7 +250,6 @@ function Dashboard() {
                     return !hasRescheduledLesson;
                 }
                 
-                // Все остальные уроки показываем
                 return true;
             });
             
@@ -310,6 +346,7 @@ function Dashboard() {
     const handleRefresh = async () => {
         setRefreshing(true);
         await loadAllData();
+        await fetchDebtors();
         setRefreshing(false);
     };
 
@@ -406,6 +443,7 @@ function Dashboard() {
             setSelectedLesson(null);
             setCancelReason('');
             await loadAllData();
+            await fetchDebtors();
             showSnackbar('❌ Занятие отменено', 'info');
         } catch (err) {
             console.error('Ошибка при отмене занятия:', err);
@@ -413,7 +451,6 @@ function Dashboard() {
         }
     };
 
-    // ✅ НОВАЯ ФУНКЦИЯ: ОТМЕНА ПЕРЕНОСА
     const handleCancelReschedule = async (originalLesson) => {
         if (!window.confirm('Отменить перенос? Оригинальное занятие восстановится, новое будет удалено.')) {
             return;
@@ -521,6 +558,29 @@ function Dashboard() {
         setOpenCancelDialog(true);
     };
 
+    // ========== ОБРАБОТЧИКИ ДЛЯ F15 ==========
+    const handleReplaceClick = (lesson) => {
+        setCancelledLesson(lesson);
+        setSelectedDebtorId('');
+        setOpenReplaceDialog(true);
+    };
+
+    const handleConfirmReplace = async () => {
+        if (!cancelledLesson || !selectedDebtorId) return;
+        
+        try {
+            await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId));
+            showSnackbar('✅ Урок заменён на отработку долга', 'success');
+            setOpenReplaceDialog(false);
+            setCancelledLesson(null);
+            await loadAllData();
+            await fetchDebtors();
+        } catch (err) {
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        }
+    };
+    // ========================================
+
     const goToPreviousDay = () => {
         setSelectedDate(prev => subDays(prev, 1));
     };
@@ -561,14 +621,15 @@ function Dashboard() {
     const decorations = getDecorations();
 
     const LessonCard = ({ lesson }) => {
-        const startTime = lesson.startTime?.slice(0,5) || '--:--';
-        const endTime = lesson.endTime?.slice(0,5) || '--:--';
+        const startTime = formatLessonTime(lesson.lessonDate, lesson.startTime);
+        const endTime = formatLessonTime(lesson.lessonDate, lesson.endTime);
         const courseName = lesson.course?.name || 'Занятие';
         const studentName = lesson.student?.fullName || 'Ученик';
         const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
         
         const isRescheduledNew = lesson.originalLesson !== null && lesson.status === 'RESCHEDULED';
-        const isRescheduledOriginal = lesson.status === 'RESCHEDULED' && !lesson.originalLesson;        const isScheduled = lesson.status === 'SCHEDULED';
+        const isRescheduledOriginal = lesson.status === 'RESCHEDULED' && !lesson.originalLesson;
+        const isScheduled = lesson.status === 'SCHEDULED';
         const isInProgress = lesson.status === 'IN_PROGRESS';
         const isCompleted = lesson.status === 'COMPLETED';
         const isPaid = lesson.status === 'PAID';
@@ -631,7 +692,7 @@ function Dashboard() {
                                         🔄 ПЕРЕНЕСЕНО:
                                     </Typography>
                                     <Typography variant="body2">
-                                        Занятие перенесено на {new Date(rescheduledTarget.lessonDate).toLocaleDateString('ru-RU')} в {rescheduledTarget.startTime?.slice(0,5)}
+                                        Занятие перенесено на {formatLessonDate(rescheduledTarget.lessonDate)} в {formatLessonTime(rescheduledTarget.lessonDate, rescheduledTarget.startTime)}
                                     </Typography>
                                 </Paper>
                             )}
@@ -682,13 +743,12 @@ function Dashboard() {
                         </Box>
                         
                         <Box sx={{ display: 'flex', gap: 1, ml: 2, flexDirection: 'column' }}>
-                            {/* ========== ДЛЯ ОРИГИНАЛЬНОГО (ПЕРЕНЕСЁННОГО) УРОКА ========== */}
                             {isRescheduledOriginal ? (
                                 <>
                                     {rescheduledTarget && (
                                         <Paper sx={{ p: 1, bgcolor: '#FFF3E0', borderRadius: 2, mb: 1 }}>
                                             <Typography variant="caption" color="textSecondary">
-                                                Перенесено на {new Date(rescheduledTarget.lessonDate).toLocaleDateString('ru-RU')} в {rescheduledTarget.startTime?.slice(0,5)}
+                                                Перенесено на {formatLessonDate(rescheduledTarget.lessonDate)} в {formatLessonTime(rescheduledTarget.lessonDate, rescheduledTarget.startTime)}
                                             </Typography>
                                         </Paper>
                                     )}
@@ -702,10 +762,21 @@ function Dashboard() {
                                         <strong>Отменить перенос</strong>
                                     </Button>
                                 </>
+                            ) : isCancelled ? (
+                                // ========== КНОПКА ДЛЯ CANCELLED УРОКА ==========
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="success"
+                                    startIcon={<WorkIcon />}
+                                    onClick={() => handleReplaceClick(lesson)}
+                                >
+                                    🔄 Отработать долг
+                                </Button>
+                                // ============================================
                             ) : (
                                 <>
-                                    {/* Видеозвонок */}
-                                    {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && !isCancelled && (
+                                    {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && (
                                         <Button
                                             size="small"
                                             variant="outlined"
@@ -721,8 +792,7 @@ function Dashboard() {
                                         </Button>
                                     )}
                                     
-                                    {/* Онлайн-доска */}
-                                    {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && !isCancelled && (
+                                    {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && (
                                         <Button
                                             size="small"
                                             variant="outlined"
@@ -738,7 +808,6 @@ function Dashboard() {
                                         </Button>
                                     )}
                                     
-                                    {/* Начать урок */}
                                     {(isScheduled || lesson.status === 'RESCHEDULED') && (
                                         <Button
                                             size="small"
@@ -751,7 +820,6 @@ function Dashboard() {
                                         </Button>
                                     )}
                                     
-                                    {/* Завершить урок и Ученик не пришёл */}
                                     {isInProgress && (
                                         <>
                                             <Button
@@ -775,7 +843,6 @@ function Dashboard() {
                                         </>
                                     )}
                                     
-                                    {/* Перенести и Отмена */}
                                     {(isScheduled || lesson.status === 'RESCHEDULED') && (
                                         <>
                                             <Button
@@ -799,7 +866,6 @@ function Dashboard() {
                                         </>
                                     )}
                                     
-                                    {/* Заметки */}
                                     {(isCompleted || isPaid) && (
                                         <Button
                                             size="small"
@@ -1026,7 +1092,7 @@ function Dashboard() {
                     <DialogContent>
                         <Box sx={{ pt: 2 }}>
                             <Typography variant="subtitle1" gutterBottom>
-                                {selectedLesson?.student?.fullName} | {selectedLesson?.startTime?.slice(0,5)} - {selectedLesson?.endTime?.slice(0,5)}
+                                {selectedLesson?.student?.fullName} | {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)} - {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.endTime)}
                             </Typography>
                             
                             <FormControl fullWidth sx={{ mt: 2, mb: 3 }}>
@@ -1234,6 +1300,58 @@ function Dashboard() {
                     </DialogActions>
                 </Dialog>
 
+                {/* ========== НОВЫЙ ДИАЛОГ ДЛЯ F15 ========== */}
+                <Dialog open={openReplaceDialog} onClose={() => setOpenReplaceDialog(false)} maxWidth="sm" fullWidth>
+                    <DialogTitle>🔄 Заменить отменённый урок на отработку долга</DialogTitle>
+                    <DialogContent>
+                        <Box sx={{ pt: 2 }}>
+                            <Typography variant="body2" color="textSecondary" gutterBottom>
+                                Отменённый урок: {cancelledLesson?.lessonDate} в {formatLessonTime(cancelledLesson?.lessonDate, cancelledLesson?.startTime)}
+                            </Typography>
+                            
+                            {debtorsList.length > 0 ? (
+                                <FormControl fullWidth sx={{ mt: 2 }}>
+                                    <InputLabel>Выберите должника</InputLabel>
+                                    <Select
+                                        value={selectedDebtorId}
+                                        onChange={(e) => setSelectedDebtorId(e.target.value)}
+                                        label="Выберите должника"
+                                    >
+                                        {debtorsList.map(student => (
+                                            <MenuItem key={student.id} value={student.id}>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                                    <Typography>{student.fullName}</Typography>
+                                                    <Chip 
+                                                        label={`Долг: ${student.debtLessons || student.missedLessons || 0}`}
+                                                        size="small"
+                                                        color="warning"
+                                                    />
+                                                </Box>
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            ) : (
+                                <Alert severity="info" sx={{ mt: 2 }}>
+                                    Нет учеников с долгами
+                                </Alert>
+                            )}
+                        </Box>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setOpenReplaceDialog(false)}>Отмена</Button>
+                        <Button 
+                            onClick={handleConfirmReplace} 
+                            variant="contained" 
+                            color="primary"
+                            disabled={!selectedDebtorId}
+                        >
+                            Заменить
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+                {/* ======================================== */}
+
                 <VideoCallModal 
                     open={videoCallOpen} 
                     onClose={() => {
@@ -1277,4 +1395,4 @@ function Dashboard() {
     );
 }
 
-export default Dashboard;// FORCE REBUILD V3
+export default Dashboard;

@@ -3,15 +3,17 @@ package com.example.demo.controller;
 import com.example.demo.entity.Lesson;
 import com.example.demo.entity.Payment;
 import com.example.demo.service.LessonService;
-import com.example.demo.service.PaymentGatewayService;
 import com.example.demo.service.PaymentService;
+import com.example.demo.service.YandexVisionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -21,77 +23,28 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/payments")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {
+        "http://localhost:3000",
+        "http://72.56.238.224",
+        "http://ed-space.ru",
+        "https://ed-space.ru",
+        "https://www.ed-space.ru"
+}, allowCredentials = "true")
 public class PaymentController {
 
     @Autowired
     private PaymentService paymentService;
 
     @Autowired
-    private PaymentGatewayService paymentGatewayService;
-
-    @Autowired
     private LessonService lessonService;
 
-    // ========== НОВЫЙ МЕТОД: СОЗДАНИЕ ПЛАТЕЖА ЧЕРЕЗ ЮKASSA ==========
-    @PostMapping("/create-for-lesson/{lessonId}")
-    @PreAuthorize("hasAnyRole('PARENT', 'TUTOR')")
-    public ResponseEntity<?> createPaymentForLesson(@PathVariable Long lessonId,
-                                                    @RequestAttribute("userId") Long userId,
-                                                    @RequestAttribute("userRole") String userRole) {
-        try {
-            Lesson lesson = lessonService.getLessonById(lessonId);
+    @Autowired(required = false)
+    private YandexVisionService visionService;
 
-            // Проверка прав доступа
-            if ("ROLE_PARENT".equals(userRole)) {
-                if (lesson.getStudent().getParent() == null ||
-                        !lesson.getStudent().getParent().getId().equals(userId)) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
-            } else if ("ROLE_TUTOR".equals(userRole)) {
-                if (!lesson.getTutor().getId().equals(userId)) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
-            }
-
-            // Проверяем, не оплачен ли уже урок
-            if ("PAID".equals(lesson.getStatus())) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Занятие уже оплачено"));
-            }
-
-            // Получаем ставку для этого репетитора
-            BigDecimal amount = lesson.getStudent().getRateForTutor(lesson.getTutor().getId());
-            if (amount == null) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Не указана ставка за занятие"));
-            }
-
-            // Определяем email для чека
-            String customerEmail = lesson.getStudent().getParent() != null ?
-                    lesson.getStudent().getParent().getEmail() :
-                    lesson.getStudent().getEmail();
-
-            if (customerEmail == null || customerEmail.isEmpty()) {
-                customerEmail = lesson.getStudent().getTutors().get(0).getEmail();
-            }
-
-            // Вызываем сервис и получаем URL для оплаты
-            String paymentUrl = paymentGatewayService.createPayment(lesson, amount, customerEmail);
-
-            return ResponseEntity.ok(Map.of(
-                    "paymentUrl", paymentUrl,
-                    "amount", amount,
-                    "message", "Ссылка на оплату создана"
-            ));
-        } catch (Exception e) {
-            log.error("Ошибка создания платежа: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    // ========== СОЗДАТЬ ПЛАТЁЖ ЗА ЗАНЯТИЕ (СТАРЫЙ МЕТОД) ==========
+    // ========== СОЗДАТЬ ПЛАТЁЖ ЗА ЗАНЯТИЕ ==========
     @PostMapping("/lesson")
-    @PreAuthorize("hasRole('TUTOR')")
-    public ResponseEntity<?> createPaymentForLessonOld(@RequestBody Map<String, Object> request) {
+    @PreAuthorize("hasAnyRole('TUTOR', 'PARENT')")
+    public ResponseEntity<?> createPaymentForLesson(@RequestBody Map<String, Object> request) {
         try {
             Payment payment = paymentService.createPaymentForLesson(
                     Long.parseLong(request.get("tutorId").toString()),
@@ -123,6 +76,92 @@ public class PaymentController {
         }
     }
 
+    // ========== ЗАГРУЗКА ЧЕКА РОДИТЕЛЕМ ==========
+    @PostMapping("/{id}/upload-receipt")
+    @PreAuthorize("hasRole('PARENT')")
+    public ResponseEntity<?> uploadReceipt(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file,
+            @RequestAttribute("userId") Long currentUserId,
+            @RequestAttribute("userRole") String userRole) {
+
+        try {
+            Payment payment = paymentService.getPaymentById(id);
+
+            // Проверка доступа
+            if ("ROLE_PARENT".equals(userRole)) {
+                if (payment.getStudent().getParent() == null ||
+                        !payment.getStudent().getParent().getId().equals(currentUserId)) {
+                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+                }
+            }
+
+            // Проверка размера
+            if (file.getSize() > 2 * 1024 * 1024) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Файл слишком большой. Максимум 2MB"));
+            }
+
+            // Проверка типа
+            String contentType = file.getContentType();
+            List<String> allowedTypes = List.of(
+                    "image/jpeg", "image/png", "image/gif", "image/webp",
+                    "application/pdf",
+                    "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            );
+
+            if (contentType == null || !allowedTypes.contains(contentType)) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "Неподдерживаемый формат. Разрешены: JPG, PNG, GIF, WebP, PDF, DOC, DOCX"));
+            }
+
+            // Сохраняем файл
+            String uploadDir = "/opt/EdSpace/uploads/receipts/";
+            File dir = new File(uploadDir);
+            if (!dir.exists()) dir.mkdirs();
+
+            String originalName = file.getOriginalFilename();
+            String extension = ".jpg";
+            if (originalName != null && originalName.contains(".")) {
+                extension = originalName.substring(originalName.lastIndexOf("."));
+            }
+            String fileName = "receipt_" + payment.getId() + "_" + System.currentTimeMillis() + extension;
+            File destFile = new File(uploadDir + fileName);
+            file.transferTo(destFile);
+
+            // Обновляем платёж
+            payment.setReceiptPath("/uploads/receipts/" + fileName);
+            payment.setStatus("PAID");
+            payment.setConfirmedByParent(true);
+            paymentService.savePayment(payment);
+
+            // Обновляем урок, если есть
+            if (payment.getLesson() != null) {
+                Lesson lesson = payment.getLesson();
+                lesson.setStatus("PAID");
+                lesson.setPaidAt(LocalDateTime.now());
+                lessonService.saveLesson(lesson);
+                log.info("✅ Статус урока {} изменён на PAID", lesson.getId());
+            }
+
+            // === УВЕДОМЛЕНИЕ РЕПЕТИТОРУ ===
+            try {
+                paymentService.notifyTutorAboutNewReceipt(payment);
+            } catch (Exception e) {
+                log.warn("Не удалось отправить уведомление репетитору: {}", e.getMessage());
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Чек загружен и ожидает проверки репетитором",
+                    "receiptPath", payment.getReceiptPath(),
+                    "status", payment.getStatus()
+            ));
+        } catch (Exception e) {
+            log.error("Ошибка загрузки чека: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     // ========== ПОЛУЧИТЬ ВСЕ ПЛАТЕЖИ РЕПЕТИТОРА ==========
     @GetMapping("/tutor/{tutorId}")
     @PreAuthorize("hasRole('TUTOR')")
@@ -132,7 +171,6 @@ public class PaymentController {
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             List<Payment> payments = paymentService.getPaymentsByTutor(tutorId);
             return ResponseEntity.ok(payments);
         } catch (RuntimeException e) {
@@ -164,7 +202,6 @@ public class PaymentController {
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             List<Payment> payments = paymentService.getPaymentsByPeriod(tutorId, start, end);
             return ResponseEntity.ok(payments);
         } catch (RuntimeException e) {
@@ -172,7 +209,7 @@ public class PaymentController {
         }
     }
 
-    // ========== ПОЛУЧИТЬ НЕОПЛАЧЕННЫЕ ПЛАТЕЖИ ==========
+    // ========== ПОЛУЧИТЬ НЕПОДТВЕРЖДЁННЫЕ ПЛАТЕЖИ ==========
     @GetMapping("/pending/{tutorId}")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getPendingPayments(@PathVariable Long tutorId,
@@ -181,7 +218,6 @@ public class PaymentController {
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             List<Payment> payments = paymentService.getPendingPayments(tutorId);
             return ResponseEntity.ok(payments);
         } catch (RuntimeException e) {
@@ -201,7 +237,7 @@ public class PaymentController {
         }
     }
 
-    // ========== ОБНОВИТЬ СТАТУС ПЛАТЕЖА ==========
+    // ========== ПОДТВЕРДИТЬ / ОТКЛОНИТЬ ПЛАТЁЖ (РЕПЕТИТОР) ==========
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> updatePaymentStatus(@PathVariable Long id,
@@ -209,30 +245,33 @@ public class PaymentController {
                                                  @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Payment payment = paymentService.getPaymentById(id);
-
             if (!payment.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
-            Payment updatedPayment = paymentService.updatePaymentStatus(id, request.get("status"));
-            return ResponseEntity.ok(updatedPayment);
+            String newStatus = request.get("status");
+            if (newStatus == null || newStatus.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Не указан статус"));
+            }
+            Payment updatedPayment = paymentService.updatePaymentStatus(id, newStatus);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Статус платежа обновлён",
+                    "payment", updatedPayment
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // ========== РОДИТЕЛЬ ПОДТВЕРЖДАЕТ ОПЛАТУ (СТАРЫЙ МЕТОД) ==========
+    // ========== РОДИТЕЛЬ ПОДТВЕРЖДАЕТ ОПЛАТУ (устаревший) ==========
     @PostMapping("/{id}/parent-confirm")
     @PreAuthorize("hasAnyRole('PARENT', 'TUTOR')")
     public ResponseEntity<?> parentConfirmPayment(@PathVariable Long id) {
         try {
             Payment payment = paymentService.parentConfirmPayment(id);
-
             Map<String, Object> response = new HashMap<>();
             response.put("id", payment.getId());
             response.put("status", payment.getStatus());
             response.put("confirmedByParent", payment.isConfirmedByParent());
-
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -247,11 +286,9 @@ public class PaymentController {
                                       @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Payment payment = paymentService.getPaymentById(id);
-
             if (!payment.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             Payment updatedPayment = paymentService.addNotes(id, request.get("notes"));
             return ResponseEntity.ok(updatedPayment);
         } catch (RuntimeException e) {
@@ -266,11 +303,9 @@ public class PaymentController {
                                            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Payment payment = paymentService.getPaymentById(id);
-
             if (!payment.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             paymentService.deletePayment(id);
             return ResponseEntity.ok(Map.of("message", "Платёж успешно удалён"));
         } catch (RuntimeException e) {
@@ -290,7 +325,6 @@ public class PaymentController {
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             Double income = paymentService.getTotalIncome(tutorId, start, end);
             return ResponseEntity.ok(Map.of("totalIncome", income));
         } catch (RuntimeException e) {
@@ -307,7 +341,6 @@ public class PaymentController {
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             Object stats = paymentService.getPaymentStats(tutorId);
             return ResponseEntity.ok(stats);
         } catch (RuntimeException e) {

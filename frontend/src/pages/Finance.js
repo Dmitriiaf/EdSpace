@@ -113,7 +113,7 @@ function Finance() {
             
             const monthPayments = payments.filter(p => {
                 const paymentDate = new Date(p.paymentDate);
-                return paymentDate >= monthStart && paymentDate <= monthEnd && p.status === 'paid';
+                return paymentDate >= monthStart && paymentDate <= monthEnd && (p.status === 'PAID' || p.status === 'CONFIRMED' || p.status === 'paid');
             });
 
             const totalIncome = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -152,7 +152,7 @@ function Finance() {
             const prevMonthEnd = endOfMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1));
             const prevMonthPayments = payments.filter(p => {
                 const paymentDate = new Date(p.paymentDate);
-                return paymentDate >= prevMonthStart && paymentDate <= prevMonthEnd && p.status === 'paid';
+                return paymentDate >= prevMonthStart && paymentDate <= prevMonthEnd && (p.status === 'PAID' || p.status === 'CONFIRMED' || p.status === 'paid');
             });
             const prevTotal = prevMonthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
             const growth = prevTotal > 0 ? ((totalIncome - prevTotal) / prevTotal) * 100 : 0;
@@ -179,7 +179,7 @@ function Finance() {
                 const monthEnd = endOfMonth(month);
                 const monthPayments = payments.filter(p => {
                     const paymentDate = new Date(p.paymentDate);
-                    return paymentDate >= monthStart && paymentDate <= monthEnd && p.status === 'paid';
+                    return paymentDate >= monthStart && paymentDate <= monthEnd && (p.status === 'PAID' || p.status === 'CONFIRMED' || p.status === 'paid');
                 });
                 const monthIncome = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
                 

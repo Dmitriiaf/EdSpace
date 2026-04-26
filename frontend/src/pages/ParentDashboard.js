@@ -12,6 +12,7 @@ import {
     IconButton, Badge, List, ListItem, ListItemText,
     Divider
 } from '@mui/material';
+import { Upload as UploadIcon } from '@mui/icons-material';
 import {
     CheckCircle as CheckIcon,
     Payment as PaymentIcon,
@@ -80,6 +81,21 @@ function ParentDashboard() {
             setLoading(false);
         }
     }, [user]);
+
+    const handleUploadReceipt = async (paymentId, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            await axiosInstance.post(`/payments/${paymentId}/upload-receipt`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            alert('✅ Чек загружен!');
+            fetchAllData(childrenList);
+        } catch (err) {
+            alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
+        }
+    };
 
     const fetchPendingSubscriptions = async (children) => {
         try {
@@ -302,19 +318,50 @@ function ParentDashboard() {
     };
 
     const handlePayLesson = async (lesson) => {
-        try {
-            const response = await axiosInstance.post(`/payments/create-for-lesson/${lesson.id}`, {});
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        // Разрешены изображения и PDF
+        fileInput.accept = 'image/*,.pdf,.doc,.docx';                   fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
             
-            // ✅ Перенаправляем на платёжную страницу ЮKassa
-            if (response.data.paymentUrl) {
-                window.location.href = response.data.paymentUrl;
-            } else {
-                alert('Ошибка: не получена ссылка на оплату');
+            if (file.size > 2 * 1024 * 1024) {
+                alert('Файл слишком большой. Максимум 2MB');
+                return;
             }
-        } catch (err) {
-            console.error('Ошибка создания платежа:', err);
-            alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось создать платёж'));
-        }
+            
+            try {
+                // 1. Создаём платёж
+                const paymentRes = await axiosInstance.post(`/payments/lesson`, {
+                    tutorId: lesson.tutor?.id,
+                    studentId: lesson.student?.id,
+                    amount: getStudentRateForTutor(lesson.student, lesson.tutor?.id),
+                    paymentType: 'single'
+                });
+                
+                const paymentId = paymentRes.data.id;
+                
+                if (!paymentId) {
+                    alert('Ошибка: не удалось создать платёж');
+                    return;
+                }
+                
+                // 2. Загружаем чек
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                await axiosInstance.post(`/payments/${paymentId}/upload-receipt`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                
+                alert('✅ Чек загружен! Репетитор подтвердит оплату.');
+                fetchAllData(childrenList);
+            } catch (err) {
+                console.error('Ошибка:', err);
+                alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
+            }
+        };
+        fileInput.click();
     };
 
     const handleConfirmPayment = async () => {
@@ -357,12 +404,13 @@ function ParentDashboard() {
 
     const getPendingPayments = () => {
         return allLessons.filter(l => {
+            // Только COMPLETED (проведённые, но не оплаченные)
             if (l.status !== 'COMPLETED') return false;
             
+            // Если есть активный абонемент — не показываем
             const hasActiveSubscription = activeSubscriptions.some(s => 
                 s.studentId === l.student?.id
             );
-            
             if (hasActiveSubscription) return false;
             
             return true;
@@ -388,16 +436,22 @@ function ParentDashboard() {
             s.studentId === lesson.student?.id
         );
         
-        if (hasActiveSubscription && lesson.status === 'COMPLETED') {
+        // Абонемент + оплачено/завершено
+        if (hasActiveSubscription && (lesson.status === 'PAID' || lesson.status === 'COMPLETED')) {
             return { label: 'Оплачено (абонемент)', color: 'success' };
         }
         
+        // Абонемент + запланировано
         if (hasActiveSubscription && lesson.status === 'SCHEDULED') {
             return { label: 'Запланировано', color: 'info' };
         }
         
+        // Поурочная оплата — чек загружен, ждёт подтверждения
+        if (lesson.status === 'PAID') {
+            return { label: '✅ Оплачено (ожидает подтверждения)', color: 'success' };
+        }
+        
         switch(lesson.status) {
-            case 'PAID': return { label: 'Оплачено', color: 'success' };
             case 'COMPLETED': return { label: 'Проведено (ждёт оплаты)', color: 'warning' };
             case 'CANCELLED': return { label: 'Отменено', color: 'error' };
             case 'RESCHEDULED': return { label: 'Перенесено', color: 'secondary' };

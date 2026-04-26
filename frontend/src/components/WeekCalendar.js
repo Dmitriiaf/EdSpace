@@ -1,15 +1,16 @@
-// ========== frontend/src/components/WeekCalendar.js ==========
+// ========== frontend/src/components/WeekCalendar.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 import React, { useState } from 'react';
 import {
-    Box, Typography, Paper, Chip, Card, CardContent, Avatar,
-    Menu, MenuItem, Dialog, DialogTitle, DialogContent,
-    DialogActions, Button, TextField, FormControl,
-    InputLabel, Select
+    Box, Typography, Paper, Chip, Menu, MenuItem, Dialog,
+    DialogTitle, DialogContent, DialogActions, Button, TextField,
+    FormControl, InputLabel, Select, Alert
 } from '@mui/material';
+import { getLocalHoursMinutes, formatLessonTime } from '../utils/timezone';
 import { Edit, Delete, Work as WorkIcon } from '@mui/icons-material';
 import { format, addMinutes, parse } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import axiosInstance from '../api/axiosConfig';
+import { replaceCancelledWithResurrect } from '../services/api';
 
 const HOUR_HEIGHT = 60;
 const MIN_STEP = 15;
@@ -31,16 +32,23 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
     const [editForm, setEditForm] = useState({ startTime: '', duration: 60, courseId: '' });
     const [hoverSlot, setHoverSlot] = useState(null);
 
+    // Состояния для F15
+    const [openReplaceDialog, setOpenReplaceDialog] = useState(false);
+    const [cancelledLesson, setCancelledLesson] = useState(null);
+    const [selectedDebtorId, setSelectedDebtorId] = useState('');
+
     const timeSlots = [];
     for (let h = 8; h <= 23; h++) {
         timeSlots.push(`${h.toString().padStart(2, '0')}:00`);
         timeSlots.push(`${h.toString().padStart(2, '0')}:30`);
     }
 
-    const timeToPosition = (timeStr) => {
-        if (!timeStr) return 0;
-        const [h, m] = timeStr.split(':').map(Number);
-        return (h - 8) * HOUR_HEIGHT + (m / 60) * HOUR_HEIGHT - HOUR_HEIGHT / 2;
+    // ✅ Без смещения — блок начинается ровно на линии времени
+    const timeToPosition = (lesson) => {
+        if (!lesson) return 0;
+        const { hours, minutes } = getLocalHoursMinutes(lesson.lessonDate, lesson.startTime);
+        // Без смещения — верхняя граница блока = линия времени
+        return (hours - 8) * HOUR_HEIGHT + (minutes / 60) * HOUR_HEIGHT;
     };
 
     const positionToTime = (y) => {
@@ -57,6 +65,7 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
         return lessons.filter(l => l.lessonDate === dateStr);
     };
 
+    // ✅ Разрешаем стыковку: конец одного = начало другого
     const checkTimeConflict = (date, startTime, duration, excludeLessonId = null) => {
         const dayLessons = getLessonsForDate(date);
         const newStart = parse(startTime, 'HH:mm', new Date());
@@ -66,7 +75,7 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
             if (l.status === 'CANCELLED') return false;
             const lStart = parse(l.startTime.slice(0, 5), 'HH:mm', new Date());
             const lEnd = addMinutes(lStart, l.duration || 60);
-            return !(newEnd <= lStart || newStart >= lEnd);
+            return newStart < lEnd && newEnd > lStart;
         });
     };
 
@@ -171,11 +180,30 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
         }
     };
 
+    // Обработчики для F15
+    const handleReplaceClick = (lesson) => {
+        setCancelledLesson(lesson);
+        setSelectedDebtorId('');
+        setOpenReplaceDialog(true);
+        setAnchorEl(null);
+    };
+
+    const handleConfirmReplace = async () => {
+        if (!cancelledLesson || !selectedDebtorId) return;
+
+        try {
+            await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId));
+            onShowSnackbar('✅ Урок заменён на отработку долга', 'success');
+            setOpenReplaceDialog(false);
+            setCancelledLesson(null);
+            onRefresh();
+        } catch (err) {
+            onShowSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        }
+    };
+
     return (
         <>
-            
-
-            {/* Календарь */}
             <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
                 <Box sx={{ display: 'flex', borderBottom: '1px solid #e0e0e0', bgcolor: '#f8f9fa' }}>
                     <Box sx={{ width: 60, p: 1 }} />
@@ -226,26 +254,48 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
                                     <Box key={idx} sx={{ height: HOUR_HEIGHT / 2, borderBottom: idx % 2 === 0 ? '1px solid #e0e0e0' : '1px solid #f5f5f5' }} />
                                 ))}
 
-                                {hoverSlot && format(hoverSlot.date, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') && (
-                                    <Box
-                                        sx={{
-                                            position: 'absolute',
-                                            top: timeToPosition(hoverSlot.startTime),
-                                            left: 4,
-                                            right: 4,
-                                            height: HOUR_HEIGHT,
-                                            bgcolor: 'rgba(25, 118, 210, 0.1)',
-                                            border: '1px dashed #1976d2',
-                                            borderRadius: 1,
-                                            pointerEvents: 'none',
-                                            zIndex: 20
-                                        }}
-                                    />
-                                )}
+                                {/* ✅ hoverSlot с временем и без смещения */}
+                                {hoverSlot && format(hoverSlot.date, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') && (() => {
+                                    const [h, m] = hoverSlot.startTime.split(':').map(Number);
+                                    const hourTop = (h - 8) * HOUR_HEIGHT;
+                                    const minuteOffset = (m / 60) * HOUR_HEIGHT;
+                                    const top = hourTop + minuteOffset - HOUR_HEIGHT / 4;
+                                    const displayTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                                    return (
+                                        <Box
+                                            sx={{
+                                                position: 'absolute',
+                                                top: top,
+                                                left: 4,
+                                                right: 4,
+                                                height: HOUR_HEIGHT / 2,
+                                                bgcolor: 'rgba(25, 118, 210, 0.15)',
+                                                border: '1px solid #1976d2',
+                                                borderRadius: 1,
+                                                pointerEvents: 'none',
+                                                zIndex: 20,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    color: '#1976d2',
+                                                    fontWeight: 600,
+                                                    fontSize: '0.75rem',
+                                                }}
+                                            >
+                                                {displayTime}
+                                            </Typography>
+                                        </Box>
+                                    );
+                                })()}
 
                                 {dayLessons.map(lesson => {
                                     const statusStyle = STATUS_COLORS[lesson.status] || STATUS_COLORS.SCHEDULED;
-                                    const top = timeToPosition(lesson.startTime.slice(0, 5));
+                                    const top = timeToPosition(lesson);
                                     const height = ((lesson.duration || 60) / 60) * HOUR_HEIGHT;
                                     return (
                                         <Box
@@ -259,7 +309,9 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
                                             onClick={(e) => handleLessonClick(e, lesson)}
                                         >
                                             <Typography variant="caption" fontWeight={600} display="block">{lesson.student?.fullName}</Typography>
-                                            <Typography variant="caption" display="block" fontSize={10}>{lesson.startTime.slice(0, 5)} ({lesson.duration || 60} мин)</Typography>
+                                            <Typography variant="caption" display="block" fontSize={10}>
+                                                {formatLessonTime(lesson.lessonDate, lesson.startTime)} ({lesson.duration || 60} мин)
+                                            </Typography>
                                             {lesson.course && <Typography variant="caption" display="block" fontSize={10} color="textSecondary">{lesson.course.name}</Typography>}
                                         </Box>
                                     );
@@ -271,8 +323,21 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
             </Paper>
 
             <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-                <MenuItem onClick={handleEditLesson}><Edit sx={{ mr: 1, fontSize: 18 }} /> Редактировать</MenuItem>
-                <MenuItem onClick={handleDeleteLesson}><Delete sx={{ mr: 1, fontSize: 18, color: 'error.main' }} /> Удалить</MenuItem>
+                {selectedLesson?.status === 'CANCELLED' ? (
+                    <MenuItem onClick={() => handleReplaceClick(selectedLesson)}>
+                        <WorkIcon sx={{ mr: 1, fontSize: 18, color: 'success.main' }} />
+                        🔄 Заменить на отработку долга
+                    </MenuItem>
+                ) : (
+                    <>
+                        <MenuItem onClick={handleEditLesson}>
+                            <Edit sx={{ mr: 1, fontSize: 18 }} /> Редактировать
+                        </MenuItem>
+                        <MenuItem onClick={handleDeleteLesson}>
+                            <Delete sx={{ mr: 1, fontSize: 18, color: 'error.main' }} /> Удалить
+                        </MenuItem>
+                    </>
+                )}
             </Menu>
 
             <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="sm" fullWidth>
@@ -330,6 +395,56 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
                 <DialogActions>
                     <Button onClick={() => setOpenEditDialog(false)}>Отмена</Button>
                     <Button onClick={handleSaveEdit} variant="contained">Сохранить</Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={openReplaceDialog} onClose={() => setOpenReplaceDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>🔄 Заменить отменённый урок на отработку долга</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ pt: 2 }}>
+                        <Typography variant="body2" color="textSecondary" gutterBottom>
+                            Отменённый урок: {cancelledLesson?.lessonDate} в {cancelledLesson?.startTime?.slice(0,5)}
+                        </Typography>
+
+                        {debtors.length > 0 ? (
+                            <FormControl fullWidth sx={{ mt: 2 }}>
+                                <InputLabel>Выберите должника</InputLabel>
+                                <Select
+                                    value={selectedDebtorId}
+                                    onChange={(e) => setSelectedDebtorId(e.target.value)}
+                                    label="Выберите должника"
+                                >
+                                    {debtors.map(student => (
+                                        <MenuItem key={student.id} value={student.id}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                                <Typography>{student.fullName}</Typography>
+                                                <Chip
+                                                    label={`Долг: ${student.debtLessons || student.missedLessons || 0}`}
+                                                    size="small"
+                                                    color="warning"
+                                                />
+                                            </Box>
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        ) : (
+                            <Alert severity="info" sx={{ mt: 2 }}>
+                                Нет учеников с долгами
+                            </Alert>
+                        )}
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenReplaceDialog(false)}>Отмена</Button>
+                    <Button
+                        onClick={handleConfirmReplace}
+                        variant="contained"
+                        color="primary"
+                        disabled={!selectedDebtorId}
+                    >
+                        Заменить
+                    </Button>
                 </DialogActions>
             </Dialog>
         </>

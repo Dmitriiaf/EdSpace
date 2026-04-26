@@ -435,8 +435,7 @@ function Subscriptions() {
                                         
                                         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, p: 1 }}>
                                             {/* Кнопка редактирования — только для PENDING */}
-                                            {sub.status === 'pending' && (
-                                                <Tooltip title="Редактировать">
+                                            {(sub.status === 'pending' || sub.status === 'active') && (                                                <Tooltip title="Редактировать">
                                                     <IconButton size="small" color="primary" onClick={() => handleEditSubscription(sub)}>
                                                         <Edit fontSize="small" />
                                                     </IconButton>
@@ -555,7 +554,7 @@ function Subscriptions() {
                     <DialogContent>
                         <Box sx={{ pt: 2 }}>
                             <Alert severity="info" sx={{ mb: 2 }}>
-                                Редактирование возможно только для неоплаченных абонементов.
+                                Изменение количества занятий или цены абонемента.
                             </Alert>
                             <TextField
                                 fullWidth

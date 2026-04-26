@@ -12,9 +12,15 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "receipt_path")
+    private String receiptPath;
+
     @ManyToOne
     @JoinColumn(name = "tutor_id", nullable = false)
     private Tutor tutor;
+
+    @Column(name = "receipt_number")
+    private String receiptNumber;
 
     @ManyToOne
     @JoinColumn(name = "student_id", nullable = false)
@@ -89,6 +95,12 @@ public class Payment {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public String getReceiptNumber() { return receiptNumber; }
+    public void setReceiptNumber(String receiptNumber) { this.receiptNumber = receiptNumber; }
+
+    public String getReceiptPath() { return receiptPath; }
+    public void setReceiptPath(String receiptPath) { this.receiptPath = receiptPath; }
 
     public Tutor getTutor() { return tutor; }
     public void setTutor(Tutor tutor) { this.tutor = tutor; }

@@ -165,6 +165,26 @@ public class EmailService {
     }
 
     /**
+     * Отправить простое текстовое письмо
+     */
+    public void sendSimpleEmail(String to, String subject, String body) {
+        try {
+            log.info("📧 Отправка письма на {}: {}", to, subject);
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(username);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(body, false);
+            mailSender.send(message);
+            log.info("✅ Письмо отправлено на {}", to);
+        } catch (MessagingException e) {
+            log.error("❌ Ошибка отправки на {}: {}", to, e.getMessage());
+        }
+    }
+
+
+    /**
      * Отправить письмо для восстановления пароля (HTML)
      */
     public void sendPasswordResetEmail(String email, String userName, String resetToken) {

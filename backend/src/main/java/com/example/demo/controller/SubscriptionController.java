@@ -56,9 +56,9 @@ public class SubscriptionController {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
-            // Редактировать можно только PENDING
-            if (!"PENDING".equalsIgnoreCase(sub.getStatus())) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Нельзя редактировать оплаченный или активный абонемент"));
+            // ✅ Разрешаем редактировать pending и active
+            if (!"pending".equalsIgnoreCase(sub.getStatus()) && !"active".equalsIgnoreCase(sub.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Нельзя редактировать завершённый абонемент"));
             }
 
             if (request.containsKey("lessonsCount")) {
@@ -68,7 +68,7 @@ public class SubscriptionController {
                 sub.setPrice(new BigDecimal(request.get("price").toString()));
             }
 
-            subscriptionService.saveSubscription(sub); // нужно добавить метод save в сервис
+            subscriptionService.saveSubscription(sub);
             return ResponseEntity.ok(sub);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

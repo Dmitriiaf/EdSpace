@@ -72,8 +72,7 @@ public class TutorController {
                     request.get("fullName"),
                     request.get("birthday"),
                     request.get("about"),
-                    request.get("city"),
-                    request.get("timezone")  // ✅ ДОБАВЛЕН timezone
+                    request.get("city")
             );
             tutor.setPasswordHash(null);
             return ResponseEntity.ok(tutor);

@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. База данных PostgreSQL
+  # ==================== ТЕКУЩИЕ СЕРВИСЫ EDSPACE ====================
   postgres:
     image: postgres:15-alpine
     container_name: lmstutor-postgres
@@ -22,31 +22,19 @@ services:
       timeout: 5s
       retries: 5
 
-  # 2. Бэкенд (Spring Boot)
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: lmstutor-backend
     restart: unless-stopped
+    env_file:
+      - .env.docker
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/tutor_workspace
       DB_USERNAME: tutor_user
       DB_PASSWORD: tutor_password
       SERVER_PORT: 8080
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION: 86400000
-      STEPIK_CLIENT_ID: ${STEPIK_CLIENT_ID}
-      STEPIK_CLIENT_SECRET: ${STEPIK_CLIENT_SECRET}
-      STEPIK_REDIRECT_URI: ${STEPIK_REDIRECT_URI}
-      YANDEX_API_KEY: ${YANDEX_API_KEY}
-      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID}
-      MAIL_USERNAME: ${MAIL_USERNAME}
-      MAIL_PASSWORD: ${MAIL_PASSWORD}
-      APP_BASE_URL: ${APP_BASE_URL}
-      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID}
-      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       JITSI_DOMAIN: meet.jit.si
       EXCALIDRAW_URL: https://excalidraw.com
     ports:
@@ -57,7 +45,6 @@ services:
     networks:
       - lmstutor-network
 
-  # 3. Фронтенд (React + Nginx)
   frontend:
     build:
       context: ./frontend
@@ -71,11 +58,40 @@ services:
     networks:
       - lmstutor-network
 
-# Тома для хранения данных (чтобы БД не терялась при перезапуске)
+  # ==================== GLITCHTIP ДЛЯ МОНИТОРИНГА ====================
+  glitchtip-postgres:
+    image: postgres:15-alpine
+    container_name: glitchtip-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - glitchtip_db:/var/lib/postgresql/data
+    networks:
+      - lmstutor-network
+
+  glitchtip-web:
+    image: glitchtip/glitchtip:latest
+    container_name: glitchtip-web
+    restart: unless-stopped
+    depends_on:
+      - glitchtip-postgres
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgres://postgres@glitchtip-postgres/postgres
+      SECRET_KEY: EdSpace_GlitchTip_2026_SecureKey!
+      GLITCHTIP_DOMAIN: https://ed-space.ru
+      DEFAULT_FROM_EMAIL: noreply@ed-space.ru
+      ENABLE_USER_REGISTRATION: "False"
+      VALKEY_URL: ""
+    networks:
+      - lmstutor-network
+
 volumes:
   postgres_data:
+  glitchtip_db:
 
-# Внутренняя сеть для общения контейнеров
 networks:
   lmstutor-network:
     driver: bridge

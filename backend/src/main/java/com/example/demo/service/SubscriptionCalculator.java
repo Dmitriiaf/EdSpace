@@ -72,7 +72,7 @@ public class SubscriptionCalculator {
                     if (!currentDate.isBefore(today)) {
                         count++;
                     }
-                    break;
+                    // ✅ ИСПРАВЛЕНО: убрали break — считаем все шаблоны на этот день
                 }
             }
             currentDate = currentDate.plusDays(1);
@@ -103,7 +103,7 @@ public class SubscriptionCalculator {
                     if (!currentDate.isBefore(today)) {
                         count++;
                     }
-                    break;
+                    // ✅ ИСПРАВЛЕНО: убрали break — считаем все шаблоны на этот день
                 }
             }
             currentDate = currentDate.plusDays(1);

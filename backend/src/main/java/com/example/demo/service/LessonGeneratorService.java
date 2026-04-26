@@ -84,6 +84,12 @@ public class LessonGeneratorService {
                     );
 
                     if (conflict == null) {
+                        // ✅ КОНВЕРТАЦИЯ УБРАНА — используем время из шаблона как есть
+                        int durationMinutes = (int) java.time.Duration.between(
+                                template.getStartTime(),
+                                template.getEndTime()
+                        ).toMinutes();
+
                         Lesson lesson = new Lesson(
                                 template.getTutor(),
                                 template.getStudent(),
@@ -92,7 +98,8 @@ public class LessonGeneratorService {
                                 template.getStartTime(),
                                 template.getEndTime()
                         );
-                        lesson.setWeeklyTemplateId(template.getId());  // ← ТОЧКА С ЗАПЯТОЙ В КОНЦЕ!
+                        lesson.setWeeklyTemplateId(template.getId());
+                        lesson.setDuration(durationMinutes);
                         lessonRepository.save(lesson);
                         createdCount++;
                     } else {

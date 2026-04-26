@@ -108,6 +108,16 @@ export const exportCourseReport = (courseId, startDate, endDate) =>
         params: { courseId, startDate, endDate }
     });
 
+    /**
+ * Заменить отменённый урок на отработку долга
+ */
+export const replaceCancelledWithResurrect = async (lessonId, debtorStudentId) => {
+    const response = await axiosInstance.post(`/lessons/${lessonId}/replace-with-resurrect`, {
+        debtorStudentId
+    });
+    return response.data;
+};
+
 // ========== ВАРИАНТЫ ==========
 export const getVariants = () => 
     axiosInstance.get(`/variants`);

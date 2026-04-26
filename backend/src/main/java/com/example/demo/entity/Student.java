@@ -68,8 +68,6 @@ public class Student {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @Column(name = "timezone")
-    private String timezone = "Europe/Moscow";
 
     @Column(name = "password_hash")
     @JsonIgnore
@@ -94,7 +92,6 @@ public class Student {
     }
 
     // Геттеры
-    public String getTimezone() { return timezone; }
     public List<Course> getCourses() { return courses; }
     public Integer getMissedLessons() { return missedLessons; }
     public Long getId() { return id; }
@@ -115,7 +112,6 @@ public class Student {
     public Boolean getArchived() { return archived; }  // ✅ Геттер
 
     // Сеттеры
-    public void setTimezone(String timezone) { this.timezone = timezone; }
     public void setMissedLessons(Integer missedLessons) { this.missedLessons = missedLessons; }
     public void setId(Long id) { this.id = id; }
     public void setRegistrationCompleted(Boolean registrationCompleted) { this.registrationCompleted = registrationCompleted; }

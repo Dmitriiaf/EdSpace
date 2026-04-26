@@ -20,6 +20,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     List<Payment> findByTutorIdAndStatus(Long tutorId, String status);
 
+    boolean existsByReceiptNumber(String receiptNumber);
+
     List<Payment> findBySubscriptionId(Long subscriptionId);
 
     @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.tutor.id = :tutorId " +
