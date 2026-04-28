@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.example.demo.repository.ParentRepository;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -39,6 +40,9 @@ public class StudentController {
 
     @Autowired
     private StudentRepository studentRepository;
+
+    @Autowired
+    private ParentRepository parentRepository;
 
     @Autowired
     private EmailService emailService;
@@ -289,6 +293,9 @@ public class StudentController {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
             }
+            if (request.containsKey("selfPaid")) {
+                student.setSelfPaid((Boolean) request.get("selfPaid"));
+            }
 
             if (request.get("fullName") != null) {
                 student.setFullName((String) request.get("fullName"));
@@ -430,6 +437,7 @@ public class StudentController {
     private Map<String, Object> studentToMap(Student student, Long tutorId, Subscription subscription) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", student.getId());
+        map.put("selfPaid", student.getSelfPaid() != null ? student.getSelfPaid() : false);
         map.put("fullName", student.getFullName());
         map.put("email", student.getEmail());
         map.put("phone", student.getPhone());
@@ -519,18 +527,28 @@ public class StudentController {
         try {
             Tutor tutor = studentService.getTutorById(tutorId);
 
+            // Проверяем, существует ли уже родитель с таким email
+            Parent existingParent = parentRepository.findByEmail(parentEmail).orElse(null);
+
+            if (existingParent != null && existingParent.getPasswordHash() != null) {
+                // Родитель уже зарегистрирован — просто привязываем ученика
+                student.setParent(existingParent);
+                studentRepository.save(student);
+                System.out.println("✅ Ученик " + student.getFullName() + " привязан к существующему родителю " + parentEmail);
+                return;
+            }
+
             InvitationToken token = new InvitationToken();
             token.setEmail(parentEmail);
             token.setToken(UUID.randomUUID().toString());
             token.setStudentId(student.getId());
             token.setTutorId(tutorId);
+            token.setStudentName(student.getFullName());
             token.setUserType("PARENT");
             token.setExpiresAt(java.time.LocalDateTime.now().plusDays(7));
 
             invitationTokenRepository.save(token);
-
             emailService.sendParentInvitation(token, student.getFullName(), tutor.getFullName());
-
             System.out.println("📧 Приглашение отправлено родителю: " + parentEmail);
 
         } catch (Exception e) {

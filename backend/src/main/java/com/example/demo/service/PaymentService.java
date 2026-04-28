@@ -163,7 +163,7 @@ public class PaymentService {
         // Если подтверждён — обновляем урок
         if ("CONFIRMED".equals(newStatus) && payment.getLesson() != null) {
             Lesson lesson = payment.getLesson();
-            lesson.setStatus("PAID");
+            lesson.setStatus("CONFIRMED");
             lesson.setPaidAt(LocalDateTime.now());
             lessonRepository.save(lesson);
             log.info("✅ Урок {} оплачен (подтверждён платёж {})", lesson.getId(), payment.getId());

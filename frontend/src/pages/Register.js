@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
     Container, Box, TextField, Button, Typography,
-    Paper, Alert, CircularProgress, Grid
+    Paper, Alert, CircularProgress, Grid,
+    FormControlLabel, Checkbox
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,6 +14,7 @@ function Register() {
         password: '',
         phone: ''
     });
+    const [agree, setAgree] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { register } = useAuth();
@@ -28,6 +30,12 @@ function Register() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (!agree) {
+            setError('Необходимо дать согласие на обработку персональных данных');
+            return;
+        }
+
         setLoading(true);
 
         const result = await register(
@@ -50,7 +58,7 @@ function Register() {
         <Container component="main" maxWidth="xs">
             <Paper elevation={3} sx={{ p: 4, mt: 8 }}>
                 <Typography component="h1" variant="h5" align="center" gutterBottom>
-                    Регистрация
+                    Регистрация репетитора
                 </Typography>
 
                 {error && (
@@ -98,11 +106,31 @@ function Register() {
                         value={formData.phone}
                         onChange={handleChange}
                     />
+
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                checked={agree}
+                                onChange={(e) => setAgree(e.target.checked)}
+                                sx={{ color: '#8B004A', '&.Mui-checked': { color: '#8B004A' } }}
+                            />
+                        }
+                        label={
+                            <Typography variant="body2">
+                                Я даю{' '}
+                                <Link to="/privacy" target="_blank" style={{ color: '#8B004A' }}>
+                                    согласие на обработку персональных данных
+                                </Link>
+                            </Typography>
+                        }
+                        sx={{ mt: 1 }}
+                    />
+
                     <Button
                         type="submit"
                         fullWidth
                         variant="contained"
-                        sx={{ mt: 3, mb: 2 }}
+                        sx={{ mt: 3, mb: 2, bgcolor: '#8B004A', '&:hover': { bgcolor: '#6B0038' } }}
                         disabled={loading}
                     >
                         {loading ? <CircularProgress size={24} /> : 'Зарегистрироваться'}

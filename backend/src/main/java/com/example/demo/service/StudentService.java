@@ -141,20 +141,24 @@ public class StudentService {
             savedStudent.setParent(parent);
             studentRepository.save(savedStudent);
 
-            // Создаём токен для родителя
-            InvitationToken parentToken = new InvitationToken();
-            parentToken.setEmail(parentEmail);
-            parentToken.setUserType("PARENT");
-            parentToken.setStudentId(savedStudent.getId());
-            parentToken.setStudentName(name);
-            parentToken.setTutorId(tutorId);
-            invitationTokenRepository.save(parentToken);
+            // Отправляем приглашение ТОЛЬКО если родитель ещё не зарегистрирован
+            if (parent.getPasswordHash() == null) {
+                InvitationToken parentToken = new InvitationToken();
+                parentToken.setEmail(parentEmail);
+                parentToken.setUserType("PARENT");
+                parentToken.setStudentId(savedStudent.getId());
+                parentToken.setStudentName(name);
+                parentToken.setTutorId(tutorId);
+                invitationTokenRepository.save(parentToken);
 
-            try {
-                emailService.sendParentInvitation(parentToken, name, tutor.getFullName());
-                log.info("📧 Приглашение отправлено родителю {}", parentEmail);
-            } catch (Exception e) {
-                log.error("Не удалось отправить email родителю: {}", e.getMessage());
+                try {
+                    emailService.sendParentInvitation(parentToken, name, tutor.getFullName());
+                    log.info("📧 Приглашение отправлено родителю {}", parentEmail);
+                } catch (Exception e) {
+                    log.error("Не удалось отправить email родителю: {}", e.getMessage());
+                }
+            } else {
+                log.info("✅ Родитель {} уже зарегистрирован — приглашение не отправляется", parentEmail);
             }
         }
 
@@ -273,7 +277,7 @@ public class StudentService {
         if (parent == null) {
             parent = new Parent();
             parent.setEmail(email);
-            parent.setFullName("Родитель " + studentFullName);
+            parent.setFullName(studentFullName);
             parent.setRole("ROLE_PARENT");
             parent.setCreatedAt(LocalDateTime.now());
             parent = parentRepository.save(parent);

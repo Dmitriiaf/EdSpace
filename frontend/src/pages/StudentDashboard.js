@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/StudentDashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ С ВИДЕОЗВОНКОМ) ==========
+// ========== frontend/src/pages/StudentDashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 import React, { useState, useEffect, useMemo } from 'react';
 import axiosInstance from '../api/axiosConfig';
 import {
@@ -11,6 +11,8 @@ import {
     Fade, FormControl, InputLabel, Select, MenuItem,
     Breadcrumbs, Link as MuiLink, Stack, Collapse
 } from '@mui/material';
+import { Payment as PaymentIcon } from '@mui/icons-material';
+import { useStudentRate } from '../hooks/useStudentRate';
 import {
     CalendarToday as CalendarIcon,
     History as HistoryIcon,
@@ -75,7 +77,8 @@ const LessonStatusBadge = ({ status }) => {
     const config = {
         'SCHEDULED': { label: 'Запланировано', color: '#3B82F6', bg: '#EFF6FF', icon: ScheduleIcon },
         'COMPLETED': { label: 'Проведено', color: '#F59E0B', bg: '#FFFBEB', icon: CheckIcon },
-        'PAID': { label: 'Оплачено', color: '#10B981', bg: '#ECFDF5', icon: CheckIcon },
+        'PAID': { label: '⏳ Оплачено (ожидает)', color: '#F59E0B', bg: '#FFFBEB', icon: ScheduleIcon },        
+        'CONFIRMED': { label: 'Подтверждено', color: '#10B981', bg: '#ECFDF5', icon: CheckIcon },
         'CANCELLED': { label: 'Отменено', color: '#EF4444', bg: '#FEF2F2', icon: CancelIcon },
         'RESCHEDULED': { label: 'Перенесено', color: '#8B5CF6', bg: '#F5F3FF', icon: ScheduleIcon }
     };
@@ -99,7 +102,9 @@ const LessonStatusBadge = ({ status }) => {
 };
 
 function StudentDashboard() {
+    const { getStudentRateForTutor } = useStudentRate();
     const { user } = useAuth();
+    const [studentSelfPaid, setStudentSelfPaid] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [mainTabValue, setMainTabValue] = useState(0);
@@ -169,22 +174,32 @@ function StudentDashboard() {
 
     const stats = useMemo(() => {
         const now = new Date();
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
         const monthLessons = filteredLessons.filter(l => {
             const d = new Date(l.lessonDate);
             return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
         
-        const upcoming = filteredLessons.filter(l => {
+        const upcomingCount = filteredLessons.filter(l => {
             const d = new Date(`${l.lessonDate}T${l.startTime}`);
-            return d > now && l.status === 'SCHEDULED';
-        }).sort((a, b) => new Date(`${a.lessonDate}T${a.startTime}`) - new Date(`${b.lessonDate}T${b.startTime}`));
+            return d > now && (l.status === 'SCHEDULED' || l.status === 'RESCHEDULED') && d <= endOfMonth;
+        }).length;
+
+        const nextLesson = filteredLessons
+            .filter(l => {
+                const d = new Date(`${l.lessonDate}T${l.startTime}`);
+                return d > now && (l.status === 'SCHEDULED' || l.status === 'RESCHEDULED');
+            })
+            .sort((a, b) => new Date(`${a.lessonDate}T${a.startTime}`) - new Date(`${b.lessonDate}T${b.startTime}`))[0] || null;
 
         return {
             total: monthLessons.length,
-            completed: monthLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID').length,
-            upcoming: upcoming.length,
+            completed: monthLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID' || l.status === 'CONFIRMED').length,
+            upcoming: upcomingCount,
+            rescheduled: monthLessons.filter(l => l.status === 'RESCHEDULED').length,
             cancelled: monthLessons.filter(l => l.status === 'CANCELLED').length,
-            nextLesson: upcoming[0] || null
+            nextLesson: nextLesson
         };
     }, [filteredLessons]);
 
@@ -194,28 +209,56 @@ function StudentDashboard() {
             .sort((a, b) => a.startTime?.localeCompare(b.startTime));
     }, [filteredLessons, selectedDate]);
 
-    const getHomeworkForLesson = (lesson) => {
+    // ==================== НОВАЯ ЛОГИКА ДЗ ====================
+    
+    /**
+     * Найти ДЗ к ЭТОМУ уроку (из предыдущего проведённого)
+     * Показывается ТОЛЬКО для первого будущего урока после проведённого
+     */
+    const getHomeworkForNextLesson = (lesson) => {
         if (!lesson || !filteredLessons.length) return null;
         
         const studentId = lesson.student?.id;
         const courseId = lesson.course?.id;
+        const lessonDateTime = new Date(`${lesson.lessonDate}T${lesson.startTime}`);
         
-        const previousLessons = filteredLessons
+        // Ищем последний завершённый урок перед этим
+        const previousCompleted = filteredLessons
             .filter(l => {
+                if (l.id === lesson.id) return false;
                 const sameStudent = l.student?.id === studentId;
                 const sameCourse = l.course?.id === courseId;
-                const isBefore = new Date(l.lessonDate) < new Date(lesson.lessonDate);
-                return sameStudent && sameCourse && isBefore;
+                const isCompleted = l.status === 'COMPLETED' || l.status === 'PAID' || l.status === 'CONFIRMED';
+                const lDateTime = new Date(`${l.lessonDate}T${l.startTime}`);
+                return sameStudent && sameCourse && isCompleted && lDateTime < lessonDateTime;
             })
-            .sort((a, b) => new Date(b.lessonDate) - new Date(a.lessonDate));
+            .sort((a, b) => {
+                const aDate = new Date(`${a.lessonDate}T${a.startTime}`);
+                const bDate = new Date(`${b.lessonDate}T${b.startTime}`);
+                return bDate - aDate; // самый поздний первый
+            });
         
-        for (let prevLesson of previousLessons) {
-            if (prevLesson.nextLessonPlan) {
-                return {
-                    text: prevLesson.nextLessonPlan,
-                    fromLesson: prevLesson
-                };
-            }
+        if (previousCompleted.length === 0) return null;
+        
+        const lastCompleted = previousCompleted[0];
+        
+        // Проверяем, что между последним завершённым и этим уроком нет других будущих уроков
+        const futureBetween = filteredLessons.filter(l => {
+            if (l.id === lesson.id || l.id === lastCompleted.id) return false;
+            const sameStudent = l.student?.id === studentId;
+            const sameCourse = l.course?.id === courseId;
+            const lDateTime = new Date(`${l.lessonDate}T${l.startTime}`);
+            const lastDateTime = new Date(`${lastCompleted.lessonDate}T${lastCompleted.startTime}`);
+            return sameStudent && sameCourse && lDateTime > lastDateTime && lDateTime < lessonDateTime && l.status === 'SCHEDULED';
+        });
+        
+        if (futureBetween.length > 0) return null; // Есть другие будущие уроки между — не показываем
+        
+        if (lastCompleted.nextLessonPlan) {
+            return {
+                text: lastCompleted.nextLessonPlan,
+                fromLesson: lastCompleted
+            };
         }
         
         return null;
@@ -232,7 +275,7 @@ function StudentDashboard() {
     const fetchAllData = async () => {
         setLoading(true);
         try {
-            await Promise.all([fetchLessons(), fetchMaterials(), fetchHomeworkStats()]);
+            await Promise.all([fetchLessons(), fetchMaterials(), fetchHomeworkStats(), fetchStudentProfile()]);
         } catch (err) {
             setError('Ошибка загрузки данных');
         } finally {
@@ -264,6 +307,14 @@ function StudentDashboard() {
         } finally {
             setHomeworkLoading(false);
         }
+    };
+
+    const fetchStudentProfile = async () => {
+        try {
+            const studentId = user?.allIds?.[0] || user?.id;
+            const response = await axiosInstance.get(`/students/${studentId}`);
+            setStudentSelfPaid(response.data.selfPaid || false);
+        } catch (err) {}
     };
 
     const fetchLessons = async () => {
@@ -403,6 +454,46 @@ function StudentDashboard() {
         </Box>
     );
 
+    const handlePayLesson = async (lesson) => {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*,.pdf,.doc,.docx';
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (file.size > 2 * 1024 * 1024) {
+                alert('Файл слишком большой. Максимум 2MB');
+                return;
+            }
+            
+            try {
+                const rate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
+                const paymentRes = await axiosInstance.post('/payments/lesson', {
+                    tutorId: lesson.tutor?.id,
+                    studentId: lesson.student?.id,
+                    amount: rate,
+                    paymentType: 'single'
+                });
+                
+                const paymentId = paymentRes.data.id;
+                if (!paymentId) { alert('Ошибка: не удалось создать платёж'); return; }
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                await axiosInstance.post(`/payments/${paymentId}/upload-receipt`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                
+                alert('✅ Чек загружен! Репетитор подтвердит оплату.');
+                fetchAllData();
+            } catch (err) {
+                alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
+            }
+        };
+        fileInput.click();
+    };
+
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
             <Box sx={{ 
@@ -500,11 +591,12 @@ function StudentDashboard() {
                         { label: 'Всего занятий', value: stats.total, icon: CalendarIcon, color: '#6366F1', bg: '#EEF2FF' },
                         { label: 'Проведено', value: stats.completed, icon: CheckIcon, color: '#10B981', bg: '#ECFDF5' },
                         { label: 'Предстоит', value: stats.upcoming, icon: ScheduleIcon, color: '#F59E0B', bg: '#FFFBEB' },
+                        { label: 'Перенесено', value: stats.rescheduled, icon: ScheduleIcon, color: '#8B5CF6', bg: '#F5F3FF' },
                         { label: 'Отменено', value: stats.cancelled, icon: CancelIcon, color: '#EF4444', bg: '#FEF2F2' }
                     ].map((stat, i) => {
                         const Icon = stat.icon;
                         return (
-                            <Grid item xs={6} sm={3} key={i}>
+                            <Grid item xs={6} sm={2.4} key={i}>
                                 <Card sx={{ 
                                     borderRadius: 4, 
                                     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
@@ -515,7 +607,7 @@ function StudentDashboard() {
                                     <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
                                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <Box>
-                                                <Typography variant="h4" sx={{ fontWeight: 700, color: stat.color }}>
+                                                <Typography variant="h4" sx={{ fontWeight: 700, color: stat.color, fontSize: '1.8rem' }}>
                                                     {stat.value}
                                                 </Typography>
                                                 <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
@@ -523,15 +615,15 @@ function StudentDashboard() {
                                                 </Typography>
                                             </Box>
                                             <Box sx={{ 
-                                                width: 40, 
-                                                height: 40, 
+                                                width: 36, 
+                                                height: 36, 
                                                 borderRadius: 3, 
                                                 bgcolor: stat.bg, 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
                                                 justifyContent: 'center' 
                                             }}>
-                                                <Icon sx={{ color: stat.color, fontSize: 20 }} />
+                                                <Icon sx={{ color: stat.color, fontSize: 18 }} />
                                             </Box>
                                         </Box>
                                     </CardContent>
@@ -591,6 +683,21 @@ function StudentDashboard() {
                                     Подробнее
                                 </Button>
                             </Box>
+                            {/* ДЗ к ближайшему занятию */}
+                            {(() => {
+                                const hw = getHomeworkForNextLesson(stats.nextLesson);
+                                if (hw) return (
+                                    <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 2 }}>
+                                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                                            🎯 Задано к этому уроку:
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                            {hw.text}
+                                        </Typography>
+                                    </Box>
+                                );
+                                return null;
+                            })()}
                         </CardContent>
                     </Card>
                 )}
@@ -702,10 +809,10 @@ function StudentDashboard() {
                                 ) : (
                                     <Stack spacing={1.5}>
                                         {lessonsOnSelectedDate.map(lesson => {
-                                            const homework = getHomeworkForLesson(lesson);
+                                            const homework = getHomeworkForNextLesson(lesson);
                                             const isExpanded = expandedLessonId === lesson.id;
-                                            const isPastLesson = new Date(lesson.lessonDate) < new Date();
-                                            const canJoin = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
+                                            const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID' || lesson.status === 'CONFIRMED';
+                                            const isFuture = lesson.status === 'SCHEDULED';
                                             
                                             return (
                                                 <Card 
@@ -729,8 +836,7 @@ function StudentDashboard() {
                                                                 minHeight: homework ? 80 : 40, 
                                                                 borderRadius: 3,
                                                                 bgcolor: lesson.status === 'CANCELLED' ? '#EF4444' : 
-                                                                         lesson.status === 'COMPLETED' ? '#F59E0B' :
-                                                                         lesson.status === 'PAID' ? '#10B981' : '#6366F1',
+                                                                         isCompleted ? '#10B981' : '#6366F1',
                                                                 alignSelf: 'stretch'
                                                             }} />
                                                             <Box sx={{ flex: 1 }}>
@@ -747,66 +853,40 @@ function StudentDashboard() {
                                                                     {lesson.tutor?.fullName}
                                                                 </Typography>
                                                                 
-                                                                {(canJoin || isPastLesson) && lesson.status !== 'CANCELLED' && (
+                                                                {/* Кнопки действий */}
+                                                                {isFuture && lesson.status !== 'CANCELLED' && (
                                                                     <>
-                                                                        <Button
-                                                                            size="small"
-                                                                            variant="outlined"
-                                                                            color="primary"
+                                                                        <Button size="small" variant="outlined" color="primary"
                                                                             startIcon={<VideocamIcon />}
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleOpenVideoCall(lesson);
-                                                                            }}
-                                                                            sx={{ mt: 1, mr: 1 }}
-                                                                        >
-                                                                            Видеозвонок
-                                                                        </Button>
-                                                                        <Button
-                                                                            size="small"
-                                                                            variant="outlined"
-                                                                            color="secondary"
+                                                                            onClick={(e) => { e.stopPropagation(); handleOpenVideoCall(lesson); }}
+                                                                            sx={{ mt: 1, mr: 1 }}>Видеозвонок</Button>
+                                                                        <Button size="small" variant="outlined" color="secondary"
                                                                             startIcon={<DrawIcon />}
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleOpenWhiteboard(lesson);
-                                                                            }}
-                                                                            sx={{ mt: 1 }}
-                                                                        >
-                                                                            Онлайн-доска
-                                                                        </Button>
+                                                                            onClick={(e) => { e.stopPropagation(); handleOpenWhiteboard(lesson); }}
+                                                                            sx={{ mt: 1 }}>Онлайн-доска</Button>
                                                                     </>
                                                                 )}
+                                                                {studentSelfPaid && isCompleted && lesson.status !== 'PAID' && lesson.status !== 'CONFIRMED' && (
+                                                                    <Button size="small" variant="contained" color="success"
+                                                                        startIcon={<PaymentIcon />}
+                                                                        onClick={(e) => { e.stopPropagation(); handlePayLesson(lesson); }}
+                                                                        sx={{ mt: 1, borderRadius: 2, textTransform: 'none' }}>
+                                                                        Оплатить {(getStudentRateForTutor(lesson.student, lesson.tutor?.id) || 0)} ₽
+                                                                    </Button>
+                                                                )}
                                                                 
-                                                                {homework && (
+                                                                {/* ДЗ для будущего урока */}
+                                                                {homework && isFuture && (
                                                                     <Box sx={{ mt: 1.5 }}>
-                                                                        <Button
-                                                                            size="small"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setExpandedLessonId(isExpanded ? null : lesson.id);
-                                                                            }}
+                                                                        <Button size="small"
+                                                                            onClick={(e) => { e.stopPropagation(); setExpandedLessonId(isExpanded ? null : lesson.id); }}
                                                                             endIcon={isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                                                            sx={{ 
-                                                                                color: '#6366F1', 
-                                                                                textTransform: 'none',
-                                                                                p: 0,
-                                                                                minWidth: 'auto',
-                                                                                '&:hover': { bgcolor: 'transparent', color: '#4F46E5' }
-                                                                            }}
-                                                                        >
+                                                                            sx={{ color: '#6366F1', textTransform: 'none', p: 0, minWidth: 'auto', '&:hover': { bgcolor: 'transparent', color: '#4F46E5' } }}>
                                                                             <AssignmentIcon sx={{ fontSize: 16, mr: 0.5 }} />
                                                                             Пройдено на прошлом уроке
                                                                         </Button>
-                                                                        
                                                                         <Collapse in={isExpanded}>
-                                                                            <Box sx={{ 
-                                                                                mt: 1.5, 
-                                                                                p: 2, 
-                                                                                bgcolor: '#FFFBEB', 
-                                                                                borderRadius: 2,
-                                                                                borderLeft: '3px solid #F59E0B'
-                                                                            }}>
+                                                                            <Box sx={{ mt: 1.5, p: 2, bgcolor: '#FFFBEB', borderRadius: 2, borderLeft: '3px solid #F59E0B' }}>
                                                                                 <Typography variant="body2" sx={{ color: '#374151', whiteSpace: 'pre-wrap' }}>
                                                                                     {homework.text}
                                                                                 </Typography>
@@ -815,6 +895,18 @@ function StudentDashboard() {
                                                                                 </Typography>
                                                                             </Box>
                                                                         </Collapse>
+                                                                    </Box>
+                                                                )}
+                                                                
+                                                                {/* Для проведённого урока — показать заметки */}
+                                                                {isCompleted && lesson.notes && (
+                                                                    <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#ECFDF5', borderRadius: 2, borderLeft: '3px solid #10B981' }}>
+                                                                        <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
+                                                                            📝 Что делали:
+                                                                        </Typography>
+                                                                        <Typography variant="body2" sx={{ color: '#374151', whiteSpace: 'pre-wrap' }}>
+                                                                            {lesson.notes?.length > 60 ? lesson.notes.substring(0, 60) + '...' : lesson.notes}
+                                                                        </Typography>
                                                                     </Box>
                                                                 )}
                                                             </Box>
@@ -1412,6 +1504,7 @@ function StudentDashboard() {
                     </TabPanel>
                 </Paper>
 
+                {/* ==================== МОДАЛЬНОЕ ОКНО ==================== */}
                 <Dialog 
                     open={!!selectedLesson} 
                     onClose={() => setSelectedLesson(null)}
@@ -1453,28 +1546,48 @@ function StudentDashboard() {
                                         <LessonStatusBadge status={selectedLesson.status} />
                                     </Box>
                                     
-                                    {getHomeworkForLesson(selectedLesson) && (
-                                        <Box sx={{ p: 2, bgcolor: '#FFFBEB', borderRadius: 2, borderLeft: '3px solid #F59E0B' }}>
+                                    {/* Пройдено на уроке (notes) */}
+                                    {selectedLesson.notes && (
+                                        <Box sx={{ p: 2, bgcolor: '#ECFDF5', borderRadius: 2, borderLeft: '3px solid #10B981' }}>
                                             <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
-                                                <AssignmentIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
-                                                Пройдено на прошлом уроке
+                                                📝 Пройдено на уроке
                                             </Typography>
                                             <Typography variant="body2" sx={{ mt: 0.5, color: '#374151' }}>
-                                                {getHomeworkForLesson(selectedLesson).text}
-                                            </Typography>
-                                        </Box>
-                                    )}
-                                    
-                                    {selectedLesson.notes && (
-                                        <Box sx={{ p: 2, bgcolor: '#F9FAFB', borderRadius: 2 }}>
-                                            <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
-                                                Заметки
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ mt: 0.5 }}>
                                                 {selectedLesson.notes}
                                             </Typography>
                                         </Box>
                                     )}
+                                    
+                                    {/* Задано к следующему (nextLessonPlan) */}
+                                    {selectedLesson.nextLessonPlan && (
+                                        <Box sx={{ p: 2, bgcolor: '#FFFBEB', borderRadius: 2, borderLeft: '3px solid #F59E0B' }}>
+                                            <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
+                                                🎯 Задано к следующему уроку
+                                            </Typography>
+                                            <Typography variant="body2" sx={{ mt: 0.5, color: '#374151' }}>
+                                                {selectedLesson.nextLessonPlan}
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                    
+                                    {/* ДЗ к этому уроку (если это будущий урок) */}
+                                    {selectedLesson.status === 'SCHEDULED' && (() => {
+                                        const hw = getHomeworkForNextLesson(selectedLesson);
+                                        if (hw) return (
+                                            <Box sx={{ p: 2, bgcolor: '#EFF6FF', borderRadius: 2, borderLeft: '3px solid #3B82F6' }}>
+                                                <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
+                                                    📋 Задано к этому уроку
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ mt: 0.5, color: '#374151' }}>
+                                                    {hw.text}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: '#9CA3AF', display: 'block', mt: 1 }}>
+                                                    от {format(new Date(hw.fromLesson.lessonDate), 'd MMM', { locale: ru })}
+                                                </Typography>
+                                            </Box>
+                                        );
+                                        return null;
+                                    })()}
                                 </Stack>
                             </DialogContent>
                             <DialogActions sx={{ px: 3, py: 2 }}>
@@ -1499,7 +1612,7 @@ function StudentDashboard() {
                     } : null}
                 />
             </Box>
-                        <WhiteboardModal 
+            <WhiteboardModal 
                 open={whiteboardOpen} 
                 onClose={() => {
                     setWhiteboardOpen(false);

@@ -43,7 +43,7 @@ public class PaymentController {
 
     // ========== СОЗДАТЬ ПЛАТЁЖ ЗА ЗАНЯТИЕ ==========
     @PostMapping("/lesson")
-    @PreAuthorize("hasAnyRole('TUTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'PARENT', 'STUDENT')")
     public ResponseEntity<?> createPaymentForLesson(@RequestBody Map<String, Object> request) {
         try {
             Payment payment = paymentService.createPaymentForLesson(
@@ -60,7 +60,7 @@ public class PaymentController {
 
     // ========== СОЗДАТЬ ПЛАТЁЖ ==========
     @PostMapping
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'PARENT')")
     public ResponseEntity<?> createPayment(@RequestBody Map<String, Object> request) {
         try {
             Payment payment = paymentService.createPayment(
@@ -78,7 +78,7 @@ public class PaymentController {
 
     // ========== ЗАГРУЗКА ЧЕКА РОДИТЕЛЕМ ==========
     @PostMapping("/{id}/upload-receipt")
-    @PreAuthorize("hasRole('PARENT')")
+    @PreAuthorize("hasAnyRole('PARENT', 'STUDENT')")
     public ResponseEntity<?> uploadReceipt(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file,
@@ -89,9 +89,10 @@ public class PaymentController {
             Payment payment = paymentService.getPaymentById(id);
 
             // Проверка доступа
-            if ("ROLE_PARENT".equals(userRole)) {
+            if ("ROLE_PARENT".equals(userRole) || "ROLE_STUDENT".equals(userRole)) {
                 if (payment.getStudent().getParent() == null ||
-                        !payment.getStudent().getParent().getId().equals(currentUserId)) {
+                        (!payment.getStudent().getParent().getId().equals(currentUserId) &&
+                                !payment.getStudent().getId().equals(currentUserId))) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
             }

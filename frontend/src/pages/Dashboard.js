@@ -599,7 +599,8 @@ function Dashboard() {
 
     const getLessonColor = (lesson) => {
         if (lesson.status === 'CANCELLED') return 'error';
-        if (lesson.status === 'PAID') return 'success';
+        if (lesson.status === 'CONFIRMED') return 'success';
+        if (lesson.status === 'PAID') return 'warning';
         if (lesson.status === 'COMPLETED') return 'warning';
         if (lesson.status === 'IN_PROGRESS') return 'info';
         if (lesson.status === 'RESCHEDULED') return 'secondary';
@@ -608,7 +609,8 @@ function Dashboard() {
 
     const getStatusText = (lesson) => {
         if (lesson.status === 'CANCELLED') return 'Отменено';
-        if (lesson.status === 'PAID') return 'Оплачено';
+        if (lesson.status === 'CONFIRMED') return '✅ Подтверждено';
+        if (lesson.status === 'PAID') return '⏳ Оплачено (ждёт проверки)';
         if (lesson.status === 'COMPLETED') return 'Проведено (ждёт оплаты)';
         if (lesson.status === 'IN_PROGRESS') return 'В процессе';
         if (lesson.status === 'RESCHEDULED') return 'Перенесено';

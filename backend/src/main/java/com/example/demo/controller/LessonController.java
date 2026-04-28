@@ -179,6 +179,8 @@ public class LessonController {
             );
 
             newLesson.setDuration(cancelledLesson.getDuration());
+            newLesson.setOriginalLesson(cancelledLesson);  // ✅ Связываем с отменённым уроком
+            newLesson.setStatus("SCHEDULED");
             lessonService.saveLesson(newLesson);
 
             // 8. Уменьшаем долг должника
@@ -202,8 +204,10 @@ public class LessonController {
                 }
             }
 
-            // 9. Удаляем отменённый урок
-            lessonService.deleteLesson(id);
+            // 9. Меняем статус отменённого урока на RESCHEDULED (вместо удаления)
+            cancelledLesson.setStatus("RESCHEDULED");
+            cancelledLesson.setUpdatedAt(LocalDateTime.now());
+            lessonService.saveLesson(cancelledLesson);
 
             // 10. Уведомление родителю должника
             if (debtor.getParent() != null) {
@@ -424,8 +428,11 @@ public class LessonController {
             boolean isSubscription = "subscription".equals(completedLesson.getStudent().getPaymentType());
 
             if (isSubscription) {
+                completedLesson.setStatus("CONFIRMED");
+                completedLesson.setPaidAt(LocalDateTime.now());
                 subscriptionService.useLessonForStudent(completedLesson.getStudent().getId());
-            } else {
+                lessonService.saveLesson(completedLesson);
+            }else {
                 if (completedLesson.getStudent().getParent() != null) {
                     String message = String.format(
                             "✅ Урок по %s с %s (%s %s) завершён. Пожалуйста, подтвердите оплату.",

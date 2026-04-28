@@ -9,6 +9,8 @@
     "@mui/material": "^7.3.9",
     "@mui/x-date-pickers": "^8.27.2",
     "@mui/x-date-pickers-pro": "^8.27.2",
+    "@sentry/browser": "^10.50.0",
+    "@sentry/react": "^10.50.0",
     "@tanstack/react-query": "^5.90.21",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",

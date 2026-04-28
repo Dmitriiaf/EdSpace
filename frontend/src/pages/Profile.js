@@ -70,6 +70,8 @@ const Profile = () => {
     });
     
     const [passwordDialog, setPasswordDialog] = useState(false);
+    const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+    const [avatarTab, setAvatarTab] = useState(0);
     const [passwordData, setPasswordData] = useState({
         currentPassword: '',
         newPassword: '',
@@ -325,10 +327,10 @@ const Profile = () => {
                                 overlap="circular"
                                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                                 badgeContent={
-                                    <Tooltip title="Изменить фото">
+                                    <Tooltip title="Изменить аватар">
                                         <IconButton
                                             size="small"
-                                            onClick={handleAvatarClick}
+                                            onClick={() => setAvatarDialogOpen(true)}
                                             sx={{
                                                 bgcolor: '#ff6b6b',
                                                 color: 'white',
@@ -352,18 +354,11 @@ const Profile = () => {
                                         cursor: 'pointer',
                                         '&:hover': { opacity: 0.9 }
                                     }}
-                                    onClick={handleAvatarClick}
+                                    onClick={() => setAvatarDialogOpen(true)}
                                 >
                                     {!avatar && (profile.fullName?.charAt(0) || 'U')}
                                 </Avatar>
                             </Badge>
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                style={{ display: 'none' }}
-                                accept="image/*"
-                                onChange={handleFileChange}
-                            />
                         </Box>
                         
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -753,6 +748,102 @@ const Profile = () => {
                     </Paper>
                 </Grid>
             </Grid>
+                        {/* Скрытый input для загрузки фото */}
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                            accept="image/*"
+                            onChange={handleFileChange}
+                        />
+                        {/* Диалог выбора аватара */}
+            <Dialog open={avatarDialogOpen} onClose={() => setAvatarDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Выберите аватар</DialogTitle>
+                <DialogContent>
+                    <Tabs value={avatarTab} onChange={(e, v) => setAvatarTab(v)} sx={{ mb: 2 }}>
+                        <Tab label="Галерея" sx={{ textTransform: 'none' }} />
+                        <Tab label="Загрузить фото" sx={{ textTransform: 'none' }} />
+                    </Tabs>
+                    
+                    {avatarTab === 0 && (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
+                            {[
+                                { bg: '#ff6b6b', icon: '👨‍🏫' },
+                                { bg: '#4ecdc4', icon: '👩‍🏫' },
+                                { bg: '#45b7d1', icon: '🎓' },
+                                { bg: '#f9ca24', icon: '📚' },
+                                { bg: '#6c5ce7', icon: '🧠' },
+                                { bg: '#a29bfe', icon: '💡' },
+                                { bg: '#fd79a8', icon: '🌟' },
+                                { bg: '#00b894', icon: '🚀' },
+                                { bg: '#e17055', icon: '🦊' },
+                                { bg: '#0984e3', icon: '🐼' },
+                                { bg: '#d63031', icon: '🔥' },
+                                { bg: '#636e72', icon: '💎' },
+                            ].map((preset, i) => (
+                                <Avatar
+                                    key={i}
+                                    onClick={() => {
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = 140;
+                                        canvas.height = 140;
+                                        const ctx = canvas.getContext('2d');
+                                        ctx.fillStyle = preset.bg;
+                                        ctx.fillRect(0, 0, 140, 140);
+                                        ctx.font = '64px Arial';
+                                        ctx.textAlign = 'center';
+                                        ctx.textBaseline = 'middle';
+                                        ctx.fillText(preset.icon, 70, 70);
+                                        const dataUrl = canvas.toDataURL();
+                                        setAvatar(dataUrl);
+                                        setAvatarDialogOpen(false);
+                                        // Сохраняем на сервер
+                                        axiosInstance.post(`/tutors/${user.id}/avatar`, { avatar: dataUrl })
+                                            .then(() => {
+                                                showSnackbar('Аватар обновлён', 'success');
+                                                window.dispatchEvent(new CustomEvent('avatar-updated', { detail: dataUrl }));
+                                            })
+                                            .catch(() => showSnackbar('Ошибка при сохранении', 'error'));
+                                    }}
+                                    sx={{
+                                        width: 80,
+                                        height: 80,
+                                        bgcolor: preset.bg,
+                                        fontSize: 36,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        '&:hover': { transform: 'scale(1.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }
+                                    }}
+                                >
+                                    {preset.icon}
+                                </Avatar>
+                            ))}
+                        </Box>
+                    )}
+                    
+                    {avatarTab === 1 && (
+                        <Box sx={{ textAlign: 'center', py: 3 }}>
+                            <Button
+                                variant="outlined"
+                                startIcon={<PhotoCameraIcon />}
+                                onClick={() => {
+                                    fileInputRef.current?.click();
+                                    setAvatarDialogOpen(false);
+                                }}
+                                sx={{ borderRadius: 2, textTransform: 'none', mb: 2 }}
+                            >
+                                Выбрать фото с устройства
+                            </Button>
+                            <Typography variant="caption" color="textSecondary" display="block">
+                                JPG, PNG до 2MB
+                            </Typography>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setAvatarDialogOpen(false)}>Закрыть</Button>
+                </DialogActions>
+            </Dialog>
             
             {/* Диалог смены пароля */}
             <Dialog open={passwordDialog} onClose={() => setPasswordDialog(false)} maxWidth="sm" fullWidth>

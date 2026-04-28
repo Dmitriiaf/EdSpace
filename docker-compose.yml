@@ -30,6 +30,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env.docker
+    volumes:
+      - ./uploads:/opt/EdSpace/uploads
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/tutor_workspace
       DB_USERNAME: tutor_user
@@ -53,6 +55,10 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./uploads:/opt/EdSpace/uploads
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - backend
     networks:

@@ -8,6 +8,7 @@ import { Brightness4 as DarkIcon, Brightness7 as LightIcon } from '@mui/icons-ma
 import { AuthProvider, useAuth } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import Sidebar from './components/Sidebar';
+import LandingPage from './pages/LandingPage';
 import StepikPage from './pages/StepikPage';
 import StepikCallback from './pages/StepikCallback';
 import LessonPlans from './pages/LessonPlans';
@@ -18,6 +19,7 @@ import ParentRegistration from './pages/ParentRegistration';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Login from './pages/Login';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import Register from './pages/Register';
 import StudentLogin from './pages/StudentLogin';
 import ParentLogin from './pages/ParentLogin';
@@ -109,6 +111,8 @@ const AppContent = () => {
 
     const publicRoutes = (
         <Routes>
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/student-login" element={<StudentLogin />} />
@@ -118,7 +122,7 @@ const AppContent = () => {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/complete-registration" element={<CompleteRegistration />} />
             <Route path="/parent-registration" element={<ParentRegistration />} />
-            <Route path="*" element={<Navigate to="/login" />} />
+            <Route path="*" element={<Navigate to="/" />} />
         </Routes>
     );
 

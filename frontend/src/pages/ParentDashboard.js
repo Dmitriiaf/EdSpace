@@ -63,20 +63,37 @@ function ParentDashboard() {
     const [selectedLessonNotes, setSelectedLessonNotes] = useState({ notes: '', nextLessonPlan: '' });
 
     useEffect(() => {
-        if (user && user.children && user.children.length > 0) {
-            const childrenListFromAuth = user.children.map(child => ({
-                id: child.id,
-                fullName: child.fullName,
-                email: child.email,
-                allIds: child.allIds || [child.id]
-            }));
-            setChildrenList(childrenListFromAuth);
-            if (childrenListFromAuth.length === 1) {
-                setSelectedChild(childrenListFromAuth[0].id);
-            }
-            fetchAllData(childrenListFromAuth);
-            fetchPendingSubscriptions(childrenListFromAuth);
-            checkPartiallyPaidSubscriptions(childrenListFromAuth);
+        if (user && user.id) {
+            const loadChildren = async () => {
+                setLoading(true);
+                try {
+                    // Загружаем актуальный список детей из API
+                    const childrenRes = await axiosInstance.get(`/students/parent/${user.id}`);
+                    const freshChildren = (childrenRes.data || []).map(child => ({
+                        id: child.id,
+                        fullName: child.fullName,
+                        email: child.email,
+                        allIds: [child.id]
+                    }));
+                    
+                    setChildrenList(freshChildren);
+                    
+                    if (freshChildren.length === 1) {
+                        setSelectedChild(freshChildren[0].id);
+                    }
+                    
+                    // Загружаем все данные для этих детей
+                    await fetchAllData(freshChildren);
+                    await fetchPendingSubscriptions(freshChildren);
+                    await checkPartiallyPaidSubscriptions(freshChildren);
+                } catch (err) {
+                    console.error('Ошибка загрузки:', err);
+                    setError('Ошибка загрузки данных');
+                } finally {
+                    setLoading(false);
+                }
+            };
+            loadChildren();
         } else {
             setLoading(false);
         }
@@ -185,40 +202,102 @@ function ParentDashboard() {
     };
 
     const handleAdditionalPayment = async (subscription) => {
-        if (!window.confirm(`Необходимо доплатить ${subscription.remainingAmount} ₽ за дополнительные занятия. Продолжить?`)) {
-            return;
-        }
-        
-        try {
-            await axiosInstance.post(`/subscriptions/${subscription.id}/additional-pay`, { 
-                amount: subscription.remainingAmount 
-            });
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*,.pdf,.doc,.docx';
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
             
-            alert('✅ Доплата произведена успешно!');
+            if (file.size > 2 * 1024 * 1024) {
+                alert('Файл слишком большой. Максимум 2MB');
+                return;
+            }
             
-            await fetchAllData(childrenList);
-            await fetchPendingSubscriptions(childrenList);
-            await checkPartiallyPaidSubscriptions(childrenList);
+            if (!window.confirm(`Доплатить ${subscription.remainingAmount} ₽?`)) return;
             
-        } catch (err) {
-            alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось произвести доплату'));
-        }
+            try {
+                // 1. Создаём платёж
+                const paymentRes = await axiosInstance.post('/payments', {
+                    tutorId: subscription.tutor?.id,
+                    studentId: subscription.studentId || subscription.student?.id,
+                    amount: subscription.remainingAmount,
+                    paymentType: 'subscription',
+                    status: 'PAID'
+                });
+                const paymentId = paymentRes.data.id;
+                if (!paymentId) { alert('Ошибка: не удалось создать платёж'); return; }
+                
+                // 2. Загружаем чек
+                const formData = new FormData();
+                formData.append('file', file);
+                await axiosInstance.post(`/payments/${paymentId}/upload-receipt`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                
+                // 3. Доплата
+                await axiosInstance.post(`/subscriptions/${subscription.id}/additional-pay`, { 
+                    amount: subscription.remainingAmount 
+                });
+                
+                alert('✅ Чек загружен! Репетитор подтвердит оплату.');
+                fetchAllData(childrenList);
+                fetchPendingSubscriptions(childrenList);
+                checkPartiallyPaidSubscriptions(childrenList);
+            } catch (err) {
+                alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
+            }
+        };
+        fileInput.click();
     };
 
-    const handlePaySubscription = async (subscriptionId) => {
-        try {
-            await axiosInstance.post(`/subscriptions/${subscriptionId}/pay`, {});
-            alert('✅ Абонемент оплачен!');
-            await fetchPendingSubscriptions(childrenList);
-            await fetchAllData(childrenList);
-            await checkPartiallyPaidSubscriptions(childrenList);
-        } catch (err) {
-            alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось оплатить абонемент'));
-        }
+    const handlePaySubscription = async (subscription) => {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*,.pdf,.doc,.docx';
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (file.size > 2 * 1024 * 1024) {
+                alert('Файл слишком большой. Максимум 2MB');
+                return;
+            }
+            
+            try {
+                // 1. Создаём платёж
+                const paymentRes = await axiosInstance.post('/payments', {
+                    tutorId: subscription.tutor?.id,
+                    studentId: subscription.studentId || subscription.student?.id,
+                    amount: subscription.price,
+                    paymentType: 'subscription',
+                    status: 'PAID'
+                });
+                const paymentId = paymentRes.data.id;
+                if (!paymentId) { alert('Ошибка: не удалось создать платёж'); return; }
+                
+                // 2. Загружаем чек
+                const formData = new FormData();
+                formData.append('file', file);
+                await axiosInstance.post(`/payments/${paymentId}/upload-receipt`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                
+                // 3. Активируем абонемент
+                await axiosInstance.post(`/subscriptions/${subscription.id}/pay`, {});
+                
+                alert('✅ Чек загружен! Репетитор подтвердит оплату.');
+                fetchAllData(childrenList);
+                fetchPendingSubscriptions(childrenList);
+                checkPartiallyPaidSubscriptions(childrenList);
+            } catch (err) {
+                alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
+            }
+        };
+        fileInput.click();
     };
 
     const fetchAllData = async (children) => {
-        setLoading(true);
         try {
             // ✅ Исправлено: axiosInstance
             try {
@@ -244,7 +323,6 @@ function ParentDashboard() {
                 
                 for (const studentId of allStudentIds) {
                     try {
-                        // ✅ Исправлено: API-функция
                         const lessonsRes = await getLessonsByStudent(studentId);
                         const lessonsArray = lessonsRes.data !== undefined ? lessonsRes.data : lessonsRes;
                         const lessonsWithChild = lessonsArray.map(lesson => ({
@@ -259,7 +337,6 @@ function ParentDashboard() {
                     }
                     
                     try {
-                        // ✅ Исправлено: axiosInstance
                         const paymentsRes = await axiosInstance.get(`/payments/student/${studentId}`);
                         const paymentsWithChild = paymentsRes.data.map(payment => ({
                             ...payment,
@@ -283,17 +360,26 @@ function ParentDashboard() {
         } catch (err) {
             console.error('Ошибка:', err);
             setError('Ошибка загрузки данных');
-        } finally {
-            setLoading(false);
         }
     };
 
     const handleRefresh = async () => {
-        if (!childrenList.length) return;
         setRefreshing(true);
-        await fetchAllData(childrenList);
-        await fetchPendingSubscriptions(childrenList);
-        await checkPartiallyPaidSubscriptions(childrenList);
+        try {
+            const childrenRes = await axiosInstance.get(`/students/parent/${user.id}`);
+            const freshChildren = (childrenRes.data || []).map(child => ({
+                id: child.id,
+                fullName: child.fullName,
+                email: child.email,
+                allIds: [child.id]
+            }));
+            setChildrenList(freshChildren);
+            await fetchAllData(freshChildren);
+            await fetchPendingSubscriptions(freshChildren);
+            await checkPartiallyPaidSubscriptions(freshChildren);
+        } catch (err) {
+            console.error('Ошибка обновления:', err);
+        }
         setRefreshing(false);
     };
 
@@ -389,12 +475,17 @@ function ParentDashboard() {
     };
 
     const getFilteredLessons = () => {
-        if (selectedChild === 'all') {
-            return allLessons;
-        }
-        return allLessons.filter(l => l.childId === parseInt(selectedChild));
+        const now = new Date();
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        let lessons = selectedChild === 'all' ? allLessons : allLessons.filter(l => l.childId === parseInt(selectedChild));
+        
+        // Показываем только уроки до конца текущего месяца
+        return lessons.filter(l => {
+            const d = new Date(l.lessonDate);
+            return d <= endOfMonth;
+        });
     };
-
     const getFilteredPayments = () => {
         if (selectedChild === 'all') {
             return allPayments;
@@ -403,11 +494,15 @@ function ParentDashboard() {
     };
 
     const getPendingPayments = () => {
+        const now = new Date();
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
         return allLessons.filter(l => {
-            // Только COMPLETED (проведённые, но не оплаченные)
             if (l.status !== 'COMPLETED') return false;
             
-            // Если есть активный абонемент — не показываем
+            const d = new Date(l.lessonDate);
+            if (d > endOfMonth) return false;
+            
             const hasActiveSubscription = activeSubscriptions.some(s => 
                 s.studentId === l.student?.id
             );
@@ -436,19 +531,18 @@ function ParentDashboard() {
             s.studentId === lesson.student?.id
         );
         
-        // Абонемент + оплачено/завершено
-        if (hasActiveSubscription && (lesson.status === 'PAID' || lesson.status === 'COMPLETED')) {
+        // Для активного абонемента все уроки считаются оплаченными
+        if (hasActiveSubscription) {
+            if (lesson.status === 'CANCELLED') return { label: 'Отменено', color: 'error' };
+            if (lesson.status === 'SCHEDULED') return { label: 'Запланировано (абонемент)', color: 'info' };
             return { label: 'Оплачено (абонемент)', color: 'success' };
         }
         
-        // Абонемент + запланировано
-        if (hasActiveSubscription && lesson.status === 'SCHEDULED') {
-            return { label: 'Запланировано', color: 'info' };
+        if (lesson.status === 'CONFIRMED') {
+            return { label: '✅ Оплачено (подтверждено)', color: 'success' };
         }
-        
-        // Поурочная оплата — чек загружен, ждёт подтверждения
         if (lesson.status === 'PAID') {
-            return { label: '✅ Оплачено (ожидает подтверждения)', color: 'success' };
+            return { label: '⏳ Оплачено (ожидает подтверждения)', color: 'warning' };
         }
         
         switch(lesson.status) {
@@ -651,7 +745,7 @@ function ParentDashboard() {
                                                 color="success"
                                                 size="small"
                                                 startIcon={<PaymentIcon />}
-                                                onClick={() => handlePaySubscription(sub.id)}
+                                                onClick={() => handlePaySubscription(sub)}
                                             >
                                                 Оплатить абонемент
                                             </Button>
@@ -879,7 +973,7 @@ function ParentDashboard() {
                                         <TableCell>
                                             <Chip 
                                                 icon={<SchoolIcon />}
-                                                label={payment.lesson?.course?.name || payment.courseName || 'Занятие'}
+                                                label={payment.courseName || payment.lesson?.course?.name || 'Занятие'}
                                                 size="small"
                                                 color="primary"
                                                 variant="outlined"
@@ -888,7 +982,7 @@ function ParentDashboard() {
                                         <TableCell>
                                             <Chip 
                                                 icon={<PersonIcon />}
-                                                label={payment.lesson?.tutor?.fullName || payment.tutorName || 'Неизвестно'}
+                                                label={payment.tutorName || payment.tutor?.fullName || payment.lesson?.tutor?.fullName || 'Неизвестно'}
                                                 size="small"
                                                 variant="outlined"
                                             />

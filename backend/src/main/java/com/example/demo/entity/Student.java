@@ -62,6 +62,9 @@ public class Student {
     @Column(name = "payment_type", length = 50)
     private String paymentType = "single";
 
+    @Column(name = "self_paid")
+    private Boolean selfPaid = false;
+
     @Column(name = "registration_completed")
     private Boolean registrationCompleted = false;
 
@@ -100,6 +103,7 @@ public class Student {
     public Parent getParent() { return parent; }
     public String getFullName() { return fullName; }
     public String getEmail() { return email; }
+    public Boolean getSelfPaid() { return selfPaid; }
     public String getPhone() { return phone; }
     public String getParentName() { return parentName; }
     public String getParentPhone() { return parentPhone; }
@@ -114,6 +118,7 @@ public class Student {
     // Сеттеры
     public void setMissedLessons(Integer missedLessons) { this.missedLessons = missedLessons; }
     public void setId(Long id) { this.id = id; }
+    public void setSelfPaid(Boolean selfPaid) { this.selfPaid = selfPaid; }
     public void setRegistrationCompleted(Boolean registrationCompleted) { this.registrationCompleted = registrationCompleted; }
     public void setTutors(List<Tutor> tutors) { this.tutors = tutors; }
     public void setRates(List<StudentRate> rates) { this.rates = rates; }

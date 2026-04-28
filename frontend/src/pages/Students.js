@@ -9,7 +9,7 @@ import {
     CircularProgress, Avatar, Tooltip, InputAdornment,
     Card, CardContent, Grid,
     Badge, Divider, LinearProgress, CardActions,
-    Collapse
+    Collapse, Checkbox, FormControlLabel
 } from '@mui/material';
 import { 
     Add, Edit, Delete, PersonAdd, Search, 
@@ -233,6 +233,7 @@ function Students() {
                 ratePerLesson: getStudentRate(student) || '',
                 paymentType: student.paymentType || 'single', 
                 parentEmail: student.parent?.email || '',
+                selfPaid: student.selfPaid || false,
                 tutorId: user.id
             });
         } else {
@@ -242,7 +243,8 @@ function Students() {
                 email: '', 
                 ratePerLesson: '', 
                 paymentType: 'single', 
-                parentEmail: '', 
+                parentEmail: '',
+                selfPaid: false,
                 tutorId: user.id 
             });
             setExistingStudent(null);
@@ -272,6 +274,7 @@ function Students() {
                 ratePerLesson: formData.ratePerLesson ? parseFloat(formData.ratePerLesson) : null,
                 paymentType: formData.paymentType, 
                 parentEmail: formData.parentEmail || null,
+                selfPaid: formData.selfPaid || false,
                 tutorId: user.id
             };
             
@@ -612,6 +615,17 @@ function Students() {
                             </Select>
                         </FormControl>
                         <TextField fullWidth label="Email родителя (необязательно)" name="parentEmail" type="email" value={formData.parentEmail || ''} onChange={handleInputChange} margin="normal" helperText="На этот email будет отправлено приглашение для родителя" InputProps={{ startAdornment: (<InputAdornment position="start"><Email sx={{ color: '#9CA3AF' }} /></InputAdornment>) }} />
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={formData.selfPaid || false}
+                                    onChange={(e) => setFormData({...formData, selfPaid: e.target.checked})}
+                                    sx={{ color: '#6366F1', '&.Mui-checked': { color: '#6366F1' } }}
+                                />
+                            }
+                            label="Самостоятельная оплата (ученик сам загружает чеки)"
+                            sx={{ mt: 1 }}
+                        />
                         <Alert severity="info" sx={{ mt: 2 }}>После добавления ученик и родитель получат приглашения на email для завершения регистрации.</Alert>
                         <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
                             <Button fullWidth variant="outlined" onClick={handleCloseDialog}>Отмена</Button>
