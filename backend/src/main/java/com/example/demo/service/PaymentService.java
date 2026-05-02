@@ -89,7 +89,7 @@ public class PaymentService {
         return paymentRepository.save(payment);
     }
 
-    public Payment createPaymentForLesson(Long tutorId, Long studentId, Double amount, String paymentType) {
+    public Payment createPaymentForLesson(Long tutorId, Long studentId, Double amount, String paymentType, Long lessonId) {
         Tutor tutor = tutorRepository.findById(tutorId)
                 .orElseThrow(() -> new NotFoundException("Репетитор", "id", tutorId));
         Student student = studentRepository.findById(studentId)
@@ -97,11 +97,18 @@ public class PaymentService {
 
         Payment payment = new Payment(tutor, student, amount, LocalDateTime.now(), paymentType, "PAID");
 
-        List<Lesson> completedLessons = lessonRepository.findByStudentIdAndTutorIdAndStatus(studentId, tutorId, "COMPLETED");
-        if (!completedLessons.isEmpty()) {
-            Lesson lastLesson = completedLessons.get(completedLessons.size() - 1);
-            payment.setLesson(lastLesson);
-            payment.setLessonDate(lastLesson.getLessonDate());
+        if (lessonId != null) {
+            Lesson lesson = lessonRepository.findById(lessonId).orElse(null);
+            if (lesson != null) {
+                payment.setLesson(lesson);
+                payment.setLessonDate(lesson.getLessonDate());
+                if (lesson.getCourse() != null) {
+                    payment.setCourseName(lesson.getCourse().getName());
+                }
+                if (lesson.getTutor() != null) {
+                    payment.setTutorName(lesson.getTutor().getFullName());
+                }
+            }
         }
 
         return paymentRepository.save(payment);

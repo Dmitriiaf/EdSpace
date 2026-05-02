@@ -73,14 +73,13 @@ public class LessonService {
             }
         }
 
-        // ✅ ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ТЕСТА DRAG-AND-DROP
-        // String conflict = conflictChecker.checkConflicts(
-        //         tutorId, student.getEmail(), lessonDate, startTime, endTime);
-        //
-        // if (conflict != null) {
-        //     log.warn("Конфликт при создании занятия: {}", conflict);
-        //     throw new BusinessException(conflict);
-        // }
+        String conflict = conflictChecker.checkConflicts(
+                tutorId, student.getEmail(), lessonDate, startTime, endTime);
+
+        if (conflict != null) {
+            log.warn("Конфликт при создании занятия: {}", conflict);
+            throw new BusinessException(conflict);
+        }
 
         Lesson lesson = new Lesson(tutor, student, course, lessonDate, startTime, endTime);
         Lesson savedLesson = lessonRepository.save(lesson);
@@ -144,7 +143,9 @@ public class LessonService {
         log.info("Завершение занятия: id={}", lessonId);
 
         Lesson lesson = getLessonById(lessonId);
-        boolean isSubscription = "subscription".equals(lesson.getStudent().getPaymentType());
+        boolean isSubscription = "subscription".equals(
+                lesson.getStudent().getPaymentTypeForTutor(lesson.getTutor().getId())
+        );
 
         if (lesson.getOriginalLesson() != null && "RESCHEDULED".equals(lesson.getStatus())) {
             return completeRescheduledLesson(lessonId, notes, nextLessonPlan);
@@ -211,7 +212,9 @@ public class LessonService {
             throw new BusinessException("Не найдено исходное занятие");
         }
 
-        boolean isSubscription = "subscription".equals(originalLesson.getStudent().getPaymentType());
+        boolean isSubscription = "subscription".equals(
+                originalLesson.getStudent().getPaymentTypeForTutor(originalLesson.getTutor().getId())
+        );
 
         // Переносим заметки в оригинальный урок
         if (notes != null && !notes.isEmpty()) {
@@ -261,8 +264,6 @@ public class LessonService {
         lesson.setPaidAt(LocalDateTime.now());
 
         Lesson savedLesson = lessonRepository.save(lesson);
-        paymentService.createPaymentForLesson(savedLesson);
-
         log.info("Оплата подтверждена для занятия: id={}", lessonId);
         return savedLesson;
     }

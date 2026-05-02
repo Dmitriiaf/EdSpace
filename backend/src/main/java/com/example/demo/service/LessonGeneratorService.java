@@ -1,4 +1,3 @@
-// ========== backend/src/main/java/com/example/demo/service/LessonGeneratorService.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -9,11 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.YearMonth;
+import java.time.*;
 import java.util.List;
 
-@Slf4j  // ✅ Добавлена аннотация Lombok для логирования
+@Slf4j
 @Service
 public class LessonGeneratorService {
 
@@ -25,6 +23,9 @@ public class LessonGeneratorService {
 
     @Autowired
     private StudentRepository studentRepository;
+
+    @Autowired
+    private TutorRepository tutorRepository;
 
     @Autowired
     private LessonConflictChecker conflictChecker;
@@ -64,10 +65,26 @@ public class LessonGeneratorService {
             for (WeeklyTemplate template : templates) {
                 if (template.getDayOfWeek() == dayOfWeek) {
 
+                    // ✅ КОНВЕРТАЦИЯ В UTC
+                    // Получаем часовой пояс репетитора из шаблона
+                    Tutor tutor = template.getTutor();
+                    String tutorTimezone = tutor.getTimezone() != null ? tutor.getTimezone() : "Asia/Krasnoyarsk";
+
+                    // Конвертируем локальное время шаблона в UTC
+                    ZonedDateTime tutorZonedStart = ZonedDateTime.of(currentDate, template.getStartTime(), ZoneId.of(tutorTimezone));
+                    ZonedDateTime tutorZonedEnd = ZonedDateTime.of(currentDate, template.getEndTime(), ZoneId.of(tutorTimezone));
+                    ZonedDateTime utcZonedStart = tutorZonedStart.withZoneSameInstant(ZoneId.of("UTC"));
+                    ZonedDateTime utcZonedEnd = tutorZonedEnd.withZoneSameInstant(ZoneId.of("UTC"));
+
+                    LocalTime utcStartTime = utcZonedStart.toLocalTime();
+                    LocalTime utcEndTime = utcZonedEnd.toLocalTime();
+                    // Дата может измениться при конвертации (например, 23:00 UTC+7 → 16:00 UTC)
+                    LocalDate utcLessonDate = utcZonedStart.toLocalDate();
+
                     boolean hasAnyLesson = lessonRepository.existsByTutorIdAndLessonDateAndStartTime(
                             template.getTutor().getId(),
-                            currentDate,
-                            template.getStartTime()
+                            utcLessonDate,
+                            utcStartTime
                     );
 
                     if (hasAnyLesson) {
@@ -78,28 +95,26 @@ public class LessonGeneratorService {
                     String conflict = conflictChecker.checkConflicts(
                             template.getTutor().getId(),
                             template.getStudent().getEmail(),
-                            currentDate,
-                            template.getStartTime(),
-                            template.getEndTime()
+                            utcLessonDate,
+                            utcStartTime,
+                            utcEndTime
                     );
 
                     if (conflict == null) {
-                        // ✅ КОНВЕРТАЦИЯ УБРАНА — используем время из шаблона как есть
-                        int durationMinutes = (int) java.time.Duration.between(
-                                template.getStartTime(),
-                                template.getEndTime()
-                        ).toMinutes();
+                        int durationMinutes = (int) Duration.between(utcStartTime, utcEndTime).toMinutes();
 
                         Lesson lesson = new Lesson(
                                 template.getTutor(),
                                 template.getStudent(),
                                 template.getCourse(),
-                                currentDate,
-                                template.getStartTime(),
-                                template.getEndTime()
+                                utcLessonDate,
+                                utcStartTime,
+                                utcEndTime
                         );
                         lesson.setWeeklyTemplateId(template.getId());
                         lesson.setDuration(durationMinutes);
+                        lesson.setBoardRoomName("edspace-board-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+                        lesson.setJitsiRoomName("edspace-jitsi-" + java.util.UUID.randomUUID().toString().substring(0, 8));
                         lessonRepository.save(lesson);
                         createdCount++;
                     } else {
@@ -127,7 +142,7 @@ public class LessonGeneratorService {
         YearMonth currentMonth = YearMonth.now();
 
         List<Student> subscriptionStudents = studentRepository.findAll().stream()
-                .filter(s -> "subscription".equals(s.getPaymentType()))
+                .filter(s -> s.getRates().stream().anyMatch(r -> "subscription".equals(r.getPaymentType())))
                 .toList();
 
         log.info("Найдено учеников на абонементе: {}", subscriptionStudents.size());
@@ -165,7 +180,9 @@ public class LessonGeneratorService {
             return;
         }
 
-        if (!"subscription".equals(student.getPaymentType())) {
+        boolean isSubscription = student.getRates().stream()
+                .anyMatch(r -> "subscription".equals(r.getPaymentType()));
+        if (!isSubscription) {
             log.info("  → Ученик не на абонементе, пропускаем");
             return;
         }

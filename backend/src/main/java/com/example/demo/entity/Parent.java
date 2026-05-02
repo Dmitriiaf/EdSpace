@@ -14,6 +14,12 @@ public class Parent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "reset_token_expiry")
+    private LocalDateTime resetTokenExpiry;
+
+    @Column(name = "reset_token")
+    private String resetToken;
+
     @Column(nullable = false)
     private String fullName;
 
@@ -54,6 +60,8 @@ public class Parent {
     }
 
     // Геттеры
+    public String getResetToken() { return resetToken; }
+    public LocalDateTime getResetTokenExpiry() { return resetTokenExpiry; }
     public Long getId() { return id; }
     public String getFullName() { return fullName; }
     public String getEmail() { return email; }
@@ -65,6 +73,8 @@ public class Parent {
     public Boolean getRegistrationCompleted() { return registrationCompleted; }  // ✅ Геттер
 
     // Сеттеры
+    public void setResetTokenExpiry(LocalDateTime resetTokenExpiry) { this.resetTokenExpiry = resetTokenExpiry; }
+    public void setResetToken(String resetToken) { this.resetToken = resetToken; }
     public void setId(Long id) { this.id = id; }
     public void setFullName(String fullName) { this.fullName = fullName; }
     public void setEmail(String email) { this.email = email; }

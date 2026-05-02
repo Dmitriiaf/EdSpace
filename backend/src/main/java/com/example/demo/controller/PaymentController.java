@@ -46,11 +46,13 @@ public class PaymentController {
     @PreAuthorize("hasAnyRole('TUTOR', 'PARENT', 'STUDENT')")
     public ResponseEntity<?> createPaymentForLesson(@RequestBody Map<String, Object> request) {
         try {
+            Long lessonId = request.get("lessonId") != null ? Long.parseLong(request.get("lessonId").toString()) : null;
             Payment payment = paymentService.createPaymentForLesson(
                     Long.parseLong(request.get("tutorId").toString()),
                     Long.parseLong(request.get("studentId").toString()),
                     Double.parseDouble(request.get("amount").toString()),
-                    (String) request.get("paymentType")
+                    (String) request.get("paymentType"),
+                    lessonId
             );
             return ResponseEntity.ok(payment);
         } catch (RuntimeException e) {

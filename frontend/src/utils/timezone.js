@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 export const utcToLocalTime = (lessonDate, timeStr) => {
     if (!lessonDate || !timeStr) return null;
     // Создаём UTC-дату (Z на конце указывает, что это UTC)
-    return new Date(`${lessonDate}T${timeStr}`);
+    return new Date(`${lessonDate}T${timeStr}Z`);
 };
 
 /**

@@ -17,7 +17,6 @@ import java.time.LocalDate;
 @CrossOrigin(origins = "http://localhost:3000")
 public class WeeklyTemplateController {
 
-
     @Autowired
     private LessonRepository lessonRepository;
 
@@ -29,7 +28,6 @@ public class WeeklyTemplateController {
     public ResponseEntity<?> getTemplates(@PathVariable Long tutorId,
                                           @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
-            // ✅ IDOR FIX: Репетитор может видеть только СВОИ шаблоны
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
@@ -48,18 +46,24 @@ public class WeeklyTemplateController {
         try {
             Long tutorId = Long.parseLong(request.get("tutorId").toString());
 
-            // ✅ IDOR FIX: Проверяем, что репетитор создаёт шаблон для себя
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
+
+            // ✅ Обработка 24:00 → 00:00
+            String startTimeStr = request.get("startTime").toString();
+            String endTimeStr = request.get("endTime").toString();
+
+            if ("24:00:00".equals(startTimeStr) || "24:00".equals(startTimeStr)) startTimeStr = "00:00:00";
+            if ("24:00:00".equals(endTimeStr) || "24:00".equals(endTimeStr)) endTimeStr = "00:00:00";
 
             WeeklyTemplate template = templateService.createTemplate(
                     tutorId,
                     Long.parseLong(request.get("studentId").toString()),
                     request.get("courseId") != null ? Long.parseLong(request.get("courseId").toString()) : null,
                     Integer.parseInt(request.get("dayOfWeek").toString()),
-                    LocalTime.parse(request.get("startTime").toString()),
-                    LocalTime.parse(request.get("endTime").toString())
+                    LocalTime.parse(startTimeStr),
+                    LocalTime.parse(endTimeStr)
             );
             return ResponseEntity.ok(template);
         } catch (RuntimeException e) {
@@ -75,18 +79,24 @@ public class WeeklyTemplateController {
         try {
             WeeklyTemplate template = templateService.getTemplateById(id);
 
-            // ✅ IDOR FIX: Проверяем, что шаблон принадлежит текущему репетитору
             if (!template.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
+
+            // ✅ Обработка 24:00 → 00:00
+            String startTimeStr = request.get("startTime").toString();
+            String endTimeStr = request.get("endTime").toString();
+
+            if ("24:00:00".equals(startTimeStr) || "24:00".equals(startTimeStr)) startTimeStr = "00:00:00";
+            if ("24:00:00".equals(endTimeStr) || "24:00".equals(endTimeStr)) endTimeStr = "00:00:00";
 
             WeeklyTemplate updatedTemplate = templateService.updateTemplate(
                     id,
                     Long.parseLong(request.get("studentId").toString()),
                     request.get("courseId") != null ? Long.parseLong(request.get("courseId").toString()) : null,
                     Integer.parseInt(request.get("dayOfWeek").toString()),
-                    LocalTime.parse(request.get("startTime").toString()),
-                    LocalTime.parse(request.get("endTime").toString())
+                    LocalTime.parse(startTimeStr),
+                    LocalTime.parse(endTimeStr)
             );
             return ResponseEntity.ok(updatedTemplate);
         } catch (RuntimeException e) {
@@ -102,7 +112,6 @@ public class WeeklyTemplateController {
         try {
             WeeklyTemplate template = templateService.getTemplateById(id);
 
-            // ✅ IDOR FIX: Проверяем, что шаблон принадлежит текущему репетитору
             if (!template.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
@@ -121,16 +130,13 @@ public class WeeklyTemplateController {
         try {
             WeeklyTemplate template = templateService.getTemplateById(id);
 
-            // ✅ IDOR FIX: Проверяем, что шаблон принадлежит текущему репетитору
             if (!template.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
-            // ✅ Удаляем все будущие уроки, созданные по этому шаблону
             LocalDate today = LocalDate.now();
             int deletedLessons = lessonRepository.deleteFutureLessonsByTemplateId(id, today);
 
-            // Удаляем сам шаблон
             templateService.deleteTemplate(id);
 
             String message = deletedLessons > 0

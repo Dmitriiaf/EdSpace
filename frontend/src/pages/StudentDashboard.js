@@ -11,6 +11,7 @@ import {
     Fade, FormControl, InputLabel, Select, MenuItem,
     Breadcrumbs, Link as MuiLink, Stack, Collapse
 } from '@mui/material';
+import { formatLessonTime, formatLessonDate } from '../utils/timezone';
 import { Payment as PaymentIcon } from '@mui/icons-material';
 import { useStudentRate } from '../hooks/useStudentRate';
 import {
@@ -42,7 +43,6 @@ import {
     Info as InfoIcon,
     Videocam as VideocamIcon
 } from '@mui/icons-material';
-import WhiteboardModal from '../components/WhiteboardModal';
 import { Draw as DrawIcon } from '@mui/icons-material';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { PickersDay } from '@mui/x-date-pickers/PickersDay';
@@ -53,7 +53,7 @@ import { format, isSameDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { getLessonsByStudent, getStudentProgressStats, getProgressTimeline } from '../services/api';
-import VideoCallModal from '../components/VideoCallModal';
+import LessonRoom from '../components/LessonRoom';
 
 const FileTypeIcon = ({ fileName, size = 40 }) => {
     const ext = fileName?.split('.').pop()?.toLowerCase();
@@ -108,8 +108,6 @@ function StudentDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [mainTabValue, setMainTabValue] = useState(0);
-    const [whiteboardOpen, setWhiteboardOpen] = useState(false);
-    const [selectedLessonForBoard, setSelectedLessonForBoard] = useState(null);
     const [allLessons, setAllLessons] = useState([]);
     const [homeworkStats, setHomeworkStats] = useState(null);
     const [progressTimeline, setProgressTimeline] = useState([]);
@@ -117,7 +115,8 @@ function StudentDashboard() {
     const [selectedLesson, setSelectedLesson] = useState(null);
     const [selectedTutorId, setSelectedTutorId] = useState('all');
     const [expandedLessonId, setExpandedLessonId] = useState(null);
-    
+    const [lessonRoomOpen, setLessonRoomOpen] = useState(false);
+    const [selectedLessonForRoom, setSelectedLessonForRoom] = useState(null);
     const [materials, setMaterials] = useState([]);
     const [folders, setFolders] = useState([]);
     const [allMaterialsData, setAllMaterialsData] = useState({ materials: [], folders: [] });
@@ -131,8 +130,6 @@ function StudentDashboard() {
     const [homeworkList, setHomeworkList] = useState([]);
     const [homeworkLoading, setHomeworkLoading] = useState(false);
 
-    const [videoCallOpen, setVideoCallOpen] = useState(false);
-    const [selectedLessonForCall, setSelectedLessonForCall] = useState(null);
 
     const getAgeText = (age) => {
         if (age % 10 === 1 && age % 100 !== 11) return 'год';
@@ -150,10 +147,7 @@ function StudentDashboard() {
         };
     };
 
-    const handleOpenWhiteboard = (lesson) => {
-        setSelectedLessonForBoard(lesson);
-        setWhiteboardOpen(true);
-    };
+
 
     const birthdayInfo = checkBirthday();
 
@@ -437,10 +431,6 @@ function StudentDashboard() {
         } catch (err) {}
     };
 
-    const handleOpenVideoCall = (lesson) => {
-        setSelectedLessonForCall(lesson);
-        setVideoCallOpen(true);
-    };
 
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
@@ -473,7 +463,8 @@ function StudentDashboard() {
                     tutorId: lesson.tutor?.id,
                     studentId: lesson.student?.id,
                     amount: rate,
-                    paymentType: 'single'
+                    paymentType: 'single',
+                    lessonId: lesson.id
                 });
                 
                 const paymentId = paymentRes.data.id;
@@ -655,7 +646,7 @@ function StudentDashboard() {
                                         {format(new Date(stats.nextLesson.lessonDate), 'd MMMM', { locale: ru })}
                                     </Typography>
                                     <Typography variant="h6" sx={{ fontWeight: 400, opacity: 0.9 }}>
-                                        {stats.nextLesson.startTime?.slice(0,5)} — {stats.nextLesson.endTime?.slice(0,5)}
+                                        {formatLessonTime(stats.nextLesson.lessonDate, stats.nextLesson.startTime)} — {formatLessonTime(stats.nextLesson.lessonDate, stats.nextLesson.endTime)}
                                     </Typography>
                                 </Box>
                                 <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
@@ -812,7 +803,7 @@ function StudentDashboard() {
                                             const homework = getHomeworkForNextLesson(lesson);
                                             const isExpanded = expandedLessonId === lesson.id;
                                             const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID' || lesson.status === 'CONFIRMED';
-                                            const isFuture = lesson.status === 'SCHEDULED';
+                                            const isFuture = lesson.status === 'SCHEDULED' || lesson.status === 'IN_PROGRESS';
                                             
                                             return (
                                                 <Card 
@@ -842,7 +833,7 @@ function StudentDashboard() {
                                                             <Box sx={{ flex: 1 }}>
                                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                                                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                                                                        {lesson.startTime?.slice(0,5)} — {lesson.endTime?.slice(0,5)}
+                                                                        {formatLessonTime(lesson.lessonDate, lesson.startTime)} — {formatLessonTime(lesson.lessonDate, lesson.endTime)}
                                                                     </Typography>
                                                                     <LessonStatusBadge status={lesson.status} />
                                                                 </Box>
@@ -855,16 +846,12 @@ function StudentDashboard() {
                                                                 
                                                                 {/* Кнопки действий */}
                                                                 {isFuture && lesson.status !== 'CANCELLED' && (
-                                                                    <>
-                                                                        <Button size="small" variant="outlined" color="primary"
-                                                                            startIcon={<VideocamIcon />}
-                                                                            onClick={(e) => { e.stopPropagation(); handleOpenVideoCall(lesson); }}
-                                                                            sx={{ mt: 1, mr: 1 }}>Видеозвонок</Button>
-                                                                        <Button size="small" variant="outlined" color="secondary"
-                                                                            startIcon={<DrawIcon />}
-                                                                            onClick={(e) => { e.stopPropagation(); handleOpenWhiteboard(lesson); }}
-                                                                            sx={{ mt: 1 }}>Онлайн-доска</Button>
-                                                                    </>
+                                                                    <Button size="small" variant="contained" color="primary"
+                                                                        startIcon={<VideocamIcon />}
+                                                                        onClick={(e) => { e.stopPropagation(); setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); }}
+                                                                        sx={{ mt: 1 }}>
+                                                                        Начать урок
+                                                                    </Button>
                                                                 )}
                                                                 {studentSelfPaid && isCompleted && lesson.status !== 'PAID' && lesson.status !== 'CONFIRMED' && (
                                                                     <Button size="small" variant="contained" color="success"
@@ -1373,7 +1360,7 @@ function StudentDashboard() {
                                                 >
                                                     <TableCell>{format(new Date(lesson.lessonDate), 'd MMM yyyy', { locale: ru })}</TableCell>
                                                     <TableCell sx={{ fontFamily: 'monospace' }}>
-                                                        {lesson.startTime?.slice(0,5)}—{lesson.endTime?.slice(0,5)}
+                                                        {formatLessonTime(lesson.lessonDate, lesson.startTime)}—{formatLessonTime(lesson.lessonDate, lesson.endTime)}
                                                     </TableCell>
                                                     <TableCell>{lesson.course?.name || '—'}</TableCell>
                                                     <TableCell>{lesson.tutor?.fullName || '—'}</TableCell>
@@ -1533,7 +1520,7 @@ function StudentDashboard() {
                                                 {format(new Date(selectedLesson.lessonDate), 'd MMMM yyyy', { locale: ru })}
                                             </Typography>
                                             <Typography variant="body2" sx={{ color: '#6B7280', fontFamily: 'monospace' }}>
-                                                {selectedLesson.startTime?.slice(0,5)} — {selectedLesson.endTime?.slice(0,5)}
+                                                {formatLessonTime(selectedLesson.lessonDate, selectedLesson.startTime)} — {formatLessonTime(selectedLesson.lessonDate, selectedLesson.endTime)}
                                             </Typography>
                                         </Box>
                                     </Box>
@@ -1597,35 +1584,21 @@ function StudentDashboard() {
                     )}
                 </Dialog>
 
-                <VideoCallModal 
-                    open={videoCallOpen} 
+                <LessonRoom 
+                    open={lessonRoomOpen} 
                     onClose={() => {
-                        setVideoCallOpen(false);
-                        setSelectedLessonForCall(null);
+                        setLessonRoomOpen(false);
+                        setSelectedLessonForRoom(null);
                     }}
-                    lessonId={selectedLessonForCall?.id}
-                    lessonInfo={selectedLessonForCall ? {
-                        studentName: selectedLessonForCall.student?.fullName,
-                        startTime: selectedLessonForCall.startTime,
-                        endTime: selectedLessonForCall.endTime,
-                        tutorName: selectedLessonForCall.tutor?.fullName
+                    lessonId={selectedLessonForRoom?.id}
+                    lessonInfo={selectedLessonForRoom ? {
+                        studentName: selectedLessonForRoom.student?.fullName,
+                        tutorName: selectedLessonForRoom.tutor?.fullName,
+                        startTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.startTime),
+                        endTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.endTime)
                     } : null}
                 />
             </Box>
-            <WhiteboardModal 
-                open={whiteboardOpen} 
-                onClose={() => {
-                    setWhiteboardOpen(false);
-                    setSelectedLessonForBoard(null);
-                }}
-                lessonId={selectedLessonForBoard?.id}
-                lessonInfo={selectedLessonForBoard ? {
-                    studentName: selectedLessonForBoard.student?.fullName,
-                    tutorName: selectedLessonForBoard.tutor?.fullName,
-                    startTime: selectedLessonForBoard.startTime,
-                    endTime: selectedLessonForBoard.endTime
-                } : null}
-            />
         </LocalizationProvider>
     );
 }

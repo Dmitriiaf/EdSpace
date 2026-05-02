@@ -19,7 +19,12 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/homework")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {
+        "http://localhost:3000",
+        "http://ed-space.ru",
+        "https://ed-space.ru",
+        "https://www.ed-space.ru"
+}, allowCredentials = "true")
 public class HomeworkController {
 
     @Autowired

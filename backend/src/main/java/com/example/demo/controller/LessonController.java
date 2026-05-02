@@ -4,6 +4,7 @@ import com.example.demo.entity.Lesson;
 import com.example.demo.entity.Parent;
 import com.example.demo.entity.Student;
 import com.example.demo.entity.Subscription;
+import com.example.demo.entity.Tutor;
 import com.example.demo.service.LessonService;
 import com.example.demo.service.LessonGeneratorService;
 import com.example.demo.service.SubscriptionService;
@@ -12,6 +13,8 @@ import com.example.demo.service.StudentService;
 import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.SubscriptionRepository;
 import com.example.demo.repository.LessonRepository;
+import com.example.demo.repository.TutorRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,11 +22,12 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
-import com.example.demo.entity.Tutor;
-import com.example.demo.repository.TutorRepository;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/lessons")
 @CrossOrigin(origins = {
@@ -126,35 +130,28 @@ public class LessonController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Не указан ID должника"));
             }
 
-            // 1. Получаем отменённый урок
             Lesson cancelledLesson = lessonService.getLessonById(id);
 
-            // 2. Проверяем права доступа
             boolean hasTutor = cancelledLesson.getStudent().getTutors().stream()
                     .anyMatch(t -> t.getId().equals(currentUserId));
             if (!hasTutor) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
-            // 3. Проверяем, что урок отменён
             if (!"CANCELLED".equals(cancelledLesson.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Можно заменить только отменённый урок"));
             }
 
-            // 4. Получаем должника
             Student debtor = studentService.getStudentById(debtorStudentId);
 
-            // 5. Проверяем, что должник привязан к этому репетитору
             boolean debtorHasTutor = debtor.getTutors().stream()
                     .anyMatch(t -> t.getId().equals(currentUserId));
             if (!debtorHasTutor) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ к должнику запрещён"));
             }
 
-            // 6. Проверяем, что у должника есть долг
             boolean hasDebt = false;
-            if ("subscription".equals(debtor.getPaymentType())) {
-                Optional<Subscription> activeSubOpt = subscriptionRepository
+            if ("subscription".equals(debtor.getPaymentTypeForTutor(currentUserId))) {                Optional<Subscription> activeSubOpt = subscriptionRepository
                         .findByStudentIdAndTutorIdAndStatus(debtorStudentId, currentUserId, "ACTIVE");
                 if (activeSubOpt.isPresent()) {
                     Subscription sub = activeSubOpt.get();
@@ -168,7 +165,7 @@ public class LessonController {
                 return ResponseEntity.badRequest().body(Map.of("error", "У ученика нет долгов"));
             }
 
-            // 7. Создаём новый урок с должником
+            // Время из cancelledLesson уже в UTC, используем как есть
             Lesson newLesson = lessonService.createLesson(
                     currentUserId,
                     debtorStudentId,
@@ -179,14 +176,12 @@ public class LessonController {
             );
 
             newLesson.setDuration(cancelledLesson.getDuration());
-            newLesson.setOriginalLesson(cancelledLesson);  // ✅ Связываем с отменённым уроком
+            newLesson.setOriginalLesson(cancelledLesson);
             newLesson.setStatus("SCHEDULED");
             lessonService.saveLesson(newLesson);
 
-            // 8. Уменьшаем долг должника
             boolean debtReduced = false;
-            if ("subscription".equals(debtor.getPaymentType())) {
-                Optional<Subscription> activeSubOpt = subscriptionRepository
+            if ("subscription".equals(debtor.getPaymentTypeForTutor(currentUserId))) {                Optional<Subscription> activeSubOpt = subscriptionRepository
                         .findByStudentIdAndTutorIdAndStatus(debtorStudentId, currentUserId, "ACTIVE");
                 if (activeSubOpt.isPresent()) {
                     Subscription sub = activeSubOpt.get();
@@ -204,16 +199,13 @@ public class LessonController {
                 }
             }
 
-            // 9. Меняем статус отменённого урока на RESCHEDULED (вместо удаления)
             cancelledLesson.setStatus("RESCHEDULED");
             cancelledLesson.setUpdatedAt(LocalDateTime.now());
             lessonService.saveLesson(cancelledLesson);
 
-            // 10. Уведомление родителю должника
             if (debtor.getParent() != null) {
                 String message = String.format(
-                        "🔄 Отработка пропущенного занятия!\n" +
-                                "Ученик %s посетит занятие %s в %s вместо отменённого урока.",
+                        "🔄 Отработка пропущенного занятия!\nУченик %s посетит занятие %s в %s вместо отменённого урока.",
                         debtor.getFullName(),
                         cancelledLesson.getLessonDate().toString(),
                         cancelledLesson.getStartTime().toString().substring(0, 5)
@@ -225,7 +217,7 @@ public class LessonController {
                 );
             }
 
-            System.out.println("✅ Отменённый урок id=" + id + " заменён на отработку долга ученика id=" + debtorStudentId);
+            log.debug("Отменённый урок id={} заменён на отработку долга ученика id={}", id, debtorStudentId);
 
             return ResponseEntity.ok(Map.of(
                     "message", debtReduced ? "✅ Долг списан, урок создан" : "✅ Урок создан",
@@ -234,7 +226,7 @@ public class LessonController {
             ));
 
         } catch (RuntimeException e) {
-            System.err.println("Ошибка при замене урока на отработку долга: " + e.getMessage());
+            log.error("Ошибка при замене урока на отработку долга: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -264,8 +256,6 @@ public class LessonController {
         }
         try {
             List<Lesson> lessons = lessonService.getAllLessons(tutorId);
-            // ✅ КОНВЕРТАЦИЯ УБРАНА — возвращаем UTC как есть
-            // Фронтенд сам сконвертирует в локальное время браузера
             return ResponseEntity.ok(lessons);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -377,21 +367,46 @@ public class LessonController {
             Integer duration = request.get("duration") != null ?
                     Integer.parseInt(request.get("duration").toString()) : 60;
 
-            // ✅ НИКАКОЙ КОНВЕРТАЦИИ — сохраняем как есть
-            LocalDate lessonDate = LocalDate.parse(request.get("lessonDate").toString());
-            LocalTime startTime = LocalTime.parse(request.get("startTime").toString());
-            LocalTime endTime = startTime.plusMinutes(duration);
+            Tutor tutor = tutorRepository.findById(tutorId)
+                    .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
+            String tutorTimezone = tutor.getTimezone() != null ? tutor.getTimezone() : "Asia/Krasnoyarsk";
+
+            LocalDate localLessonDate = LocalDate.parse(request.get("lessonDate").toString());
+
+            String startTimeStr = request.get("startTime").toString();
+            boolean isMidnight = "24:00:00".equals(startTimeStr) || "24:00".equals(startTimeStr);
+            if (isMidnight) {
+                startTimeStr = "00:00:00";
+            }
+            LocalTime localStartTime = LocalTime.parse(startTimeStr);
+
+            if (isMidnight) {
+                localLessonDate = localLessonDate.plusDays(1);
+            }
+
+            ZonedDateTime tutorZonedDateTime = ZonedDateTime.of(localLessonDate, localStartTime, ZoneId.of(tutorTimezone));
+            ZonedDateTime utcZonedDateTime = tutorZonedDateTime.withZoneSameInstant(ZoneId.of("UTC"));
+
+            LocalDate utcLessonDate = utcZonedDateTime.toLocalDate();
+            LocalTime utcStartTime = utcZonedDateTime.toLocalTime();
+            LocalTime utcEndTime = utcStartTime.plusMinutes(duration);
 
             Lesson lesson = lessonService.createLesson(
                     tutorId,
                     Long.parseLong(request.get("studentId").toString()),
                     request.get("courseId") != null ? Long.parseLong(request.get("courseId").toString()) : null,
-                    lessonDate,
-                    startTime,
-                    endTime
+                    utcLessonDate,
+                    utcStartTime,
+                    utcEndTime
             );
 
             lesson.setDuration(duration);
+            if (lesson.getBoardRoomName() == null || lesson.getBoardRoomName().isEmpty()) {
+                lesson.setBoardRoomName("edspace-board-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+            }
+            if (lesson.getJitsiRoomName() == null || lesson.getJitsiRoomName().isEmpty()) {
+                lesson.setJitsiRoomName("edspace-jitsi-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+            }
             lessonService.saveLesson(lesson);
 
             return ResponseEntity.ok(lesson);
@@ -418,21 +433,22 @@ public class LessonController {
 
             Lesson completedLesson;
 
-            // ✅ Если это перенесённый урок — используем специальный метод
             if (lesson.getOriginalLesson() != null && "RESCHEDULED".equals(lesson.getStatus())) {
                 completedLesson = lessonService.completeRescheduledLesson(id, notes, nextLessonPlan);
             } else {
                 completedLesson = lessonService.completeLesson(id, notes, nextLessonPlan);
             }
 
-            boolean isSubscription = "subscription".equals(completedLesson.getStudent().getPaymentType());
+            boolean isSubscription = "subscription".equals(
+                    completedLesson.getStudent().getPaymentTypeForTutor(completedLesson.getTutor().getId())
+            );
 
             if (isSubscription) {
                 completedLesson.setStatus("CONFIRMED");
                 completedLesson.setPaidAt(LocalDateTime.now());
                 subscriptionService.useLessonForStudent(completedLesson.getStudent().getId());
                 lessonService.saveLesson(completedLesson);
-            }else {
+            } else {
                 if (completedLesson.getStudent().getParent() != null) {
                     String message = String.format(
                             "✅ Урок по %s с %s (%s %s) завершён. Пожалуйста, подтвердите оплату.",
@@ -521,11 +537,7 @@ public class LessonController {
             }
 
             String reason = request != null ? request.get("reason") : null;
-            String originalStatus = lesson.getStatus();
-
-            // Прямая проверка: если причина "Ученик не пришёл" — это неявка
             boolean isNoShow = "ROLE_TUTOR".equals(userRole);
-
 
             lesson.setStatus("CANCELLED");
 
@@ -535,14 +547,12 @@ public class LessonController {
                 lesson.setNotes(reason != null && !reason.isEmpty() ? "❌ Отменено: " + reason : "❌ Отменено");
             }
 
-            // Обработка долгов
             Student student = lesson.getStudent();
 
             if (isNoShow) {
-                System.out.println("🔍 [DEBUG] isNoShow=true, student=" + student.getFullName() + ", paymentType=" + student.getPaymentType());
+                log.debug("isNoShow=true, student={}, paymentType={}", student.getFullName(), student.getPaymentType());
 
-                if ("subscription".equals(student.getPaymentType())) {
-                    System.out.println("🔍 [DEBUG] Ищем ACTIVE абонемент для studentId=" + student.getId() + ", tutorId=" + currentUserId);
+                if ("subscription".equals(student.getPaymentTypeForTutor(currentUserId))) {                    log.debug("Ищем ACTIVE абонемент для studentId={}, tutorId={}", student.getId(), currentUserId);
 
                     Optional<Subscription> activeSubOpt = subscriptionRepository
                             .findByStudentIdAndTutorIdAndStatus(student.getId(), currentUserId, "active");
@@ -552,15 +562,15 @@ public class LessonController {
                         int newDebt = (sub.getDebtLessons() != null ? sub.getDebtLessons() : 0) + 1;
                         sub.setDebtLessons(newDebt);
                         subscriptionRepository.save(sub);
-                        System.out.println("✅ [DEBUG] Долг обновлён! id=" + sub.getId() + ", debt_lessons=" + newDebt);
+                        log.debug("Долг обновлён! id={}, debt_lessons={}", sub.getId(), newDebt);
                     } else {
-                        System.out.println("❌ [DEBUG] ACTIVE абонемент НЕ НАЙДЕН!");
+                        log.debug("ACTIVE абонемент НЕ НАЙДЕН!");
                     }
                 } else {
                     int newMissed = (student.getMissedLessons() != null ? student.getMissedLessons() : 0) + 1;
                     student.setMissedLessons(newMissed);
                     studentRepository.save(student);
-                    System.out.println("✅ [DEBUG] Пропуск обновлён! missed_lessons=" + newMissed);
+                    log.debug("Пропуск обновлён! missed_lessons={}", newMissed);
                 }
             }
 
@@ -611,11 +621,41 @@ public class LessonController {
             if (!hasTutor) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
+
+            Tutor tutor = tutorRepository.findById(currentUserId)
+                    .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
+            String tutorTimezone = tutor.getTimezone() != null ? tutor.getTimezone() : "Asia/Krasnoyarsk";
+
+            LocalDate localNewDate = LocalDate.parse(request.get("newDate").toString());
+
+            String newStartTimeStr = request.get("newStartTime").toString();
+            boolean isMidnightStart = "24:00:00".equals(newStartTimeStr) || "24:00".equals(newStartTimeStr);
+            if (isMidnightStart) {
+                newStartTimeStr = "00:00:00";
+            }
+            LocalTime localNewStartTime = LocalTime.parse(newStartTimeStr);
+
+            String newEndTimeStr = request.get("newEndTime").toString();
+            boolean isMidnightEnd = "24:00:00".equals(newEndTimeStr) || "24:00".equals(newEndTimeStr);
+            if (isMidnightEnd) {
+                newEndTimeStr = "00:00:00";
+            }
+            LocalTime localNewEndTime = LocalTime.parse(newEndTimeStr);
+
+            if (isMidnightStart) {
+                localNewDate = localNewDate.plusDays(1);
+            }
+
+            ZonedDateTime tutorZonedStart = ZonedDateTime.of(localNewDate, localNewStartTime, ZoneId.of(tutorTimezone));
+            ZonedDateTime tutorZonedEnd = ZonedDateTime.of(localNewDate, localNewEndTime, ZoneId.of(tutorTimezone));
+            ZonedDateTime utcZonedStart = tutorZonedStart.withZoneSameInstant(ZoneId.of("UTC"));
+            ZonedDateTime utcZonedEnd = tutorZonedEnd.withZoneSameInstant(ZoneId.of("UTC"));
+
             Lesson rescheduledLesson = lessonService.rescheduleLesson(
                     id,
-                    LocalDate.parse(request.get("newDate").toString()),
-                    LocalTime.parse(request.get("newStartTime").toString()),
-                    LocalTime.parse(request.get("newEndTime").toString())
+                    utcZonedStart.toLocalDate(),
+                    utcZonedStart.toLocalTime(),
+                    utcZonedEnd.toLocalTime()
             );
             return ResponseEntity.ok(Map.of("message", "Занятие успешно перенесено", "lesson", rescheduledLesson));
         } catch (RuntimeException e) {
@@ -654,58 +694,86 @@ public class LessonController {
                                              @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Long studentId = request.get("studentId") != null ? Long.parseLong(request.get("studentId").toString()) : null;
-            LocalDate newDate = LocalDate.parse(request.get("newDate").toString());
-            LocalTime newStartTime = LocalTime.parse(request.get("newStartTime").toString());
-            LocalTime newEndTime = LocalTime.parse(request.get("newEndTime").toString());
-
-            System.out.println("🔍 [RESURRECT] studentId=" + studentId + ", tutorId=" + currentUserId);
 
             if (studentId == null) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Не указан studentId"));
             }
 
+            Tutor tutor = tutorRepository.findById(currentUserId)
+                    .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
+            String tutorTimezone = tutor.getTimezone() != null ? tutor.getTimezone() : "Asia/Krasnoyarsk";
+
+            LocalDate localNewDate = LocalDate.parse(request.get("newDate").toString());
+
+            String newStartTimeStr = request.get("newStartTime").toString();
+            boolean isMidnight = "24:00:00".equals(newStartTimeStr) || "24:00".equals(newStartTimeStr);
+            if (isMidnight) {
+                newStartTimeStr = "00:00:00";
+                localNewDate = localNewDate.plusDays(1);
+            }
+            LocalTime newStartTime = LocalTime.parse(newStartTimeStr);
+
+            String newEndTimeStr = request.get("newEndTime").toString();
+            boolean isMidnightEnd = "24:00:00".equals(newEndTimeStr) || "24:00".equals(newEndTimeStr);
+            if (isMidnightEnd) {
+                newEndTimeStr = "00:00:00";
+            }
+            LocalTime newEndTime = LocalTime.parse(newEndTimeStr);
+
+            ZonedDateTime tutorZonedStart = ZonedDateTime.of(localNewDate, newStartTime, ZoneId.of(tutorTimezone));
+            ZonedDateTime utcZonedStart = tutorZonedStart.withZoneSameInstant(ZoneId.of("UTC"));
+            ZonedDateTime utcZonedEnd = utcZonedStart.plusMinutes(
+                    java.time.Duration.between(newStartTime, newEndTime).toMinutes()
+            ).withZoneSameInstant(ZoneId.of("UTC"));
+
+            log.debug("[RESURRECT] studentId={}, tutorId={}", studentId, currentUserId);
+
             Student student = studentService.getStudentById(studentId);
-            System.out.println("🔍 [RESURRECT] student: " + student.getFullName() + ", paymentType=" + student.getPaymentType());
+            log.debug("[RESURRECT] student: {}, paymentType={}", student.getFullName(), student.getPaymentType());
 
             boolean hasTutor = student.getTutors().stream().anyMatch(t -> t.getId().equals(currentUserId));
             if (!hasTutor) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
 
-            Lesson newLesson = lessonService.createLesson(currentUserId, studentId, null, newDate, newStartTime, newEndTime);
+            Lesson newLesson = lessonService.createLesson(
+                    currentUserId, studentId, null,
+                    utcZonedStart.toLocalDate(),
+                    utcZonedStart.toLocalTime(),
+                    utcZonedEnd.toLocalTime()
+            );
 
             boolean debtReduced = false;
 
-            if ("subscription".equals(student.getPaymentType())) {
-                System.out.println("🔍 [RESURRECT] Looking for active subscription: studentId=" + studentId + ", tutorId=" + currentUserId);
+            if ("subscription".equals(student.getPaymentTypeForTutor(currentUserId))) {                log.debug("[RESURRECT] Looking for active subscription: studentId={}, tutorId={}", studentId, currentUserId);
 
                 Optional<Subscription> activeSubOpt = subscriptionRepository
                         .findByStudentIdAndTutorIdAndStatus(studentId, currentUserId, "ACTIVE");
 
                 if (activeSubOpt.isPresent()) {
                     Subscription sub = activeSubOpt.get();
-                    System.out.println("🔍 [RESURRECT] Found subscription id=" + sub.getId() + ", debt_lessons=" + sub.getDebtLessons());
+                    log.debug("[RESURRECT] Found subscription id={}, debt_lessons={}", sub.getId(), sub.getDebtLessons());
 
                     if (sub.getDebtLessons() != null && sub.getDebtLessons() > 0) {
                         sub.setDebtLessons(sub.getDebtLessons() - 1);
                         subscriptionRepository.save(sub);
                         debtReduced = true;
-                        System.out.println("✅ [RESURRECT] Debt reduced to " + sub.getDebtLessons());
+                        log.debug("[RESURRECT] Debt reduced to {}", sub.getDebtLessons());
                     } else {
-                        System.out.println("⚠️ [RESURRECT] Debt lessons is null or 0");
+                        log.debug("[RESURRECT] Debt lessons is null or 0");
                     }
                 } else {
-                    System.out.println("❌ [RESURRECT] Active subscription NOT FOUND for studentId=" + studentId + ", tutorId=" + currentUserId);
+                    log.debug("[RESURRECT] Active subscription NOT FOUND for studentId={}, tutorId={}", studentId, currentUserId);
                 }
             } else {
-                System.out.println("🔍 [RESURRECT] Payment type is NOT subscription, it's: " + student.getPaymentType());
+                log.debug("[RESURRECT] Payment type is NOT subscription, it's: {}", student.getPaymentType());
             }
 
             String message = debtReduced ? "✅ Долг списан" : "✅ Занятие создано";
-            System.out.println("🔍 [RESURRECT] Final message: " + message);
+            log.debug("[RESURRECT] Final message: {}", message);
 
             return ResponseEntity.ok(Map.of("message", message, "lesson", newLesson));
 
         } catch (RuntimeException e) {
-            e.printStackTrace();
+            log.error("Ошибка в resurrectLesson: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -750,7 +818,9 @@ public class LessonController {
             if (!Lesson.STATUS_IN_PROGRESS.equals(lesson.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Урок не в процессе"));
             }
-            boolean isSubscription = "subscription".equals(lesson.getStudent().getPaymentType());
+            boolean isSubscription = "subscription".equals(
+                    lesson.getStudent().getPaymentTypeForTutor(lesson.getTutor().getId())
+            );
             if (isSubscription) {
                 lesson.setStatus(Lesson.STATUS_PAID);
                 lesson.setPaidAt(LocalDateTime.now());
@@ -782,16 +852,14 @@ public class LessonController {
         try {
             Lesson lesson = lessonService.getLessonById(id);
 
-            // IDOR: проверяем, что урок принадлежит репетитору
             boolean hasTutor = lesson.getStudent().getTutors().stream()
                     .anyMatch(t -> t.getId().equals(currentUserId));
             if (!hasTutor) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
-            int deletedCount = 1; // текущий урок
+            int deletedCount = 1;
 
-            // ✅ Если нужно удалить из шаблона — удаляем все будущие уроки с теми же параметрами
             if (deleteFromTemplate) {
                 List<Lesson> futureTemplateLessons = lessonRepository.findFutureTemplateLessons(
                         lesson.getTutor().getId(),
@@ -803,14 +871,13 @@ public class LessonController {
                 );
 
                 for (Lesson futureLesson : futureTemplateLessons) {
-                    if (!futureLesson.getId().equals(id)) { // не удаляем текущий урок дважды
+                    if (!futureLesson.getId().equals(id)) {
                         lessonRepository.delete(futureLesson);
                         deletedCount++;
                     }
                 }
             }
 
-            // Удаляем текущий урок
             lessonService.deleteLesson(id);
 
             String message = deleteFromTemplate
@@ -825,8 +892,6 @@ public class LessonController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
-
-
 
     @PostMapping("/{id}/start")
     @PreAuthorize("hasRole('TUTOR')")

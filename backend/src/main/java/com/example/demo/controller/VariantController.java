@@ -1,4 +1,3 @@
-// ========== backend/src/main/java/com/example/demo/controller/VariantController.java (ПОЛНАЯ ЗАМЕНА С ЛОГАМИ) ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.Homework;
@@ -7,6 +6,7 @@ import com.example.demo.repository.HomeworkRepository;
 import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.TutorRepository;
 import com.example.demo.service.VariantService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/variants")
 @CrossOrigin(origins = "http://localhost:3000")
@@ -116,8 +117,6 @@ public class VariantController {
         }
     }
 
-
-
     @PostMapping("/{id}/assign")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> assignVariant(@PathVariable Long id,
@@ -130,14 +129,10 @@ public class VariantController {
                 dueDate = LocalDateTime.parse(request.get("dueDate").toString());
             }
 
-            System.out.println("📌 НАЗНАЧЕНИЕ ВАРИАНТА:");
-            System.out.println("   variantId: " + id);
-            System.out.println("   studentId: " + studentId);
-            System.out.println("   tutorId: " + tutorId);
-            System.out.println("   dueDate: " + dueDate);
+            log.debug("НАЗНАЧЕНИЕ ВАРИАНТА: variantId={}, studentId={}, tutorId={}, dueDate={}", id, studentId, tutorId, dueDate);
 
             Variant variant = variantService.getVariantById(id);
-            System.out.println("   variant URL: " + variant.getUrl());
+            log.debug("variant URL: {}", variant.getUrl());
 
             Homework homework = new Homework();
             homework.setTutor(tutorRepository.findById(tutorId).orElse(null));
@@ -149,15 +144,14 @@ public class VariantController {
             homework.setUpdatedAt(LocalDateTime.now());
 
             Homework saved = homeworkRepository.save(homework);
-            System.out.println("✅ Homework saved with ID: " + saved.getId());
+            log.debug("Homework saved with ID: {}", saved.getId());
 
             return ResponseEntity.ok(Map.of(
                     "message", "Вариант назначен ученику",
                     "homework", saved
             ));
         } catch (Exception e) {
-            System.err.println("❌ Ошибка назначения варианта: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Ошибка назначения варианта: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

@@ -1,6 +1,3 @@
-// ========== StudentRate.java ==========
-// Путь: backend/src/main/java/com/example/demo/entity/StudentRate.java
-
 package com.example.demo.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -29,12 +26,22 @@ public class StudentRate {
     @Column(name = "rate_per_lesson", precision = 10, scale = 2)
     private BigDecimal ratePerLesson;
 
+    @Column(name = "payment_type", length = 50)
+    private String paymentType = "single";
+
     public StudentRate() {}
 
     public StudentRate(Student student, Tutor tutor, BigDecimal ratePerLesson) {
         this.student = student;
         this.tutor = tutor;
         this.ratePerLesson = ratePerLesson;
+    }
+
+    public StudentRate(Student student, Tutor tutor, BigDecimal ratePerLesson, String paymentType) {
+        this.student = student;
+        this.tutor = tutor;
+        this.ratePerLesson = ratePerLesson;
+        this.paymentType = paymentType;
     }
 
     public Long getId() {
@@ -67,5 +74,13 @@ public class StudentRate {
 
     public void setRatePerLesson(BigDecimal ratePerLesson) {
         this.ratePerLesson = ratePerLesson;
+    }
+
+    public String getPaymentType() {
+        return paymentType;
+    }
+
+    public void setPaymentType(String paymentType) {
+        this.paymentType = paymentType;
     }
 }

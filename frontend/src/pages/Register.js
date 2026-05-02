@@ -37,7 +37,8 @@ function Register() {
         }
 
         setLoading(true);
-
+        
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const result = await register(
             formData.email,
             formData.password,

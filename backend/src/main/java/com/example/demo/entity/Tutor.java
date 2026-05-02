@@ -26,6 +26,9 @@ public class Tutor {
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
+    @Column(name = "timezone")
+    private String timezone = "Asia/Krasnoyarsk";  // по умолчанию Красноярск
+
     @Column(name = "avatar")
     private String avatar;
 
@@ -76,6 +79,7 @@ public class Tutor {
     }
 
     // Геттеры
+    public String getTimezone() { return timezone; }
     public Long getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
@@ -94,6 +98,7 @@ public class Tutor {
     public String getVideoRoomName() { return videoRoomName; }
 
     // Сеттеры
+    public void setTimezone(String timezone) { this.timezone = timezone; }
     public void setEmail(String email) { this.email = email; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public void setFullName(String fullName) { this.fullName = fullName; }

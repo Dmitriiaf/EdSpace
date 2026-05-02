@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "lesson")
@@ -96,6 +97,8 @@ public class Lesson {
         this.lessonDate = lessonDate;
         this.startTime = startTime;
         this.endTime = endTime;
+        this.boardRoomName = "edspace-board-" + UUID.randomUUID().toString().substring(0, 8);
+        this.jitsiRoomName = "edspace-jitsi-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     // Геттеры

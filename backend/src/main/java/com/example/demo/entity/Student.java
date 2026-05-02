@@ -71,6 +71,11 @@ public class Student {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "reset_token")
+    private String resetToken;
+
+    @Column(name = "reset_token_expiry")
+    private LocalDateTime resetTokenExpiry;
 
     @Column(name = "password_hash")
     @JsonIgnore
@@ -95,6 +100,8 @@ public class Student {
     }
 
     // Геттеры
+    public String getResetToken() { return resetToken; }
+    public LocalDateTime getResetTokenExpiry() { return resetTokenExpiry; }
     public List<Course> getCourses() { return courses; }
     public Integer getMissedLessons() { return missedLessons; }
     public Long getId() { return id; }
@@ -116,8 +123,10 @@ public class Student {
     public Boolean getArchived() { return archived; }  // ✅ Геттер
 
     // Сеттеры
+    public void setResetToken(String resetToken) { this.resetToken = resetToken; }
     public void setMissedLessons(Integer missedLessons) { this.missedLessons = missedLessons; }
     public void setId(Long id) { this.id = id; }
+    public void setResetTokenExpiry(LocalDateTime resetTokenExpiry) { this.resetTokenExpiry = resetTokenExpiry; }
     public void setSelfPaid(Boolean selfPaid) { this.selfPaid = selfPaid; }
     public void setRegistrationCompleted(Boolean registrationCompleted) { this.registrationCompleted = registrationCompleted; }
     public void setTutors(List<Tutor> tutors) { this.tutors = tutors; }
@@ -164,6 +173,28 @@ public class Student {
             }
         }
         rates.add(new StudentRate(this, tutor, rate));
+    }
+
+    public void setRateForTutor(Tutor tutor, BigDecimal rate, String paymentType) {
+        if (this.rates == null) this.rates = new ArrayList<>();
+        for (StudentRate sr : rates) {
+            if (sr.getTutor() != null && sr.getTutor().getId().equals(tutor.getId())) {
+                sr.setRatePerLesson(rate);
+                sr.setPaymentType(paymentType);
+                return;
+            }
+        }
+        rates.add(new StudentRate(this, tutor, rate, paymentType));
+    }
+
+    public String getPaymentTypeForTutor(Long tutorId) {
+        if (rates == null) return "single";
+        for (StudentRate rate : rates) {
+            if (rate.getTutor() != null && rate.getTutor().getId().equals(tutorId)) {
+                return rate.getPaymentType() != null ? rate.getPaymentType() : "single";
+            }
+        }
+        return paymentType; // fallback на общее поле
     }
 
     @Transient

@@ -1,18 +1,15 @@
-// ========== frontend/src/pages/ParentDashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/pages/ParentDashboard.js (МОБИЛЬНАЯ ВЕРСИЯ) ==========
 import React, { useState, useEffect } from 'react';
-// ✅ Правильный импорт
 import axiosInstance from '../api/axiosConfig';
 import {
     Box, Grid, Card, CardContent, Typography,
     Paper, Chip, CircularProgress, Alert, Button,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    Table, TableBody, TableCell, TableContainer,
-    TableHead, TableRow, Tabs, Tab, Avatar,
+    Tabs, Tab, Avatar,
     FormControl, InputLabel, Select, MenuItem,
     IconButton, Badge, List, ListItem, ListItemText,
     Divider
 } from '@mui/material';
-import { Upload as UploadIcon } from '@mui/icons-material';
 import {
     CheckCircle as CheckIcon,
     Payment as PaymentIcon,
@@ -24,11 +21,12 @@ import {
     Close as CloseIcon,
     Edit as EditIcon,
     CardGiftcard as SubscriptionIcon,
-    Warning as WarningIcon
+    Warning as WarningIcon,
+    CameraAlt as CameraIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
-// ✅ Импорт из объединённого API
+import { formatLessonTime } from '../utils/timezone';
 import { getLessonsByStudent, confirmPayment } from '../services/api';
 
 function TabPanel({ children, value, index }) {
@@ -67,7 +65,6 @@ function ParentDashboard() {
             const loadChildren = async () => {
                 setLoading(true);
                 try {
-                    // Загружаем актуальный список детей из API
                     const childrenRes = await axiosInstance.get(`/students/parent/${user.id}`);
                     const freshChildren = (childrenRes.data || []).map(child => ({
                         id: child.id,
@@ -82,7 +79,6 @@ function ParentDashboard() {
                         setSelectedChild(freshChildren[0].id);
                     }
                     
-                    // Загружаем все данные для этих детей
                     await fetchAllData(freshChildren);
                     await fetchPendingSubscriptions(freshChildren);
                     await checkPartiallyPaidSubscriptions(freshChildren);
@@ -99,21 +95,6 @@ function ParentDashboard() {
         }
     }, [user]);
 
-    const handleUploadReceipt = async (paymentId, file) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        try {
-            await axiosInstance.post(`/payments/${paymentId}/upload-receipt`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            alert('✅ Чек загружен!');
-            fetchAllData(childrenList);
-        } catch (err) {
-            alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
-        }
-    };
-
     const fetchPendingSubscriptions = async (children) => {
         try {
             let allPending = [];
@@ -121,7 +102,6 @@ function ParentDashboard() {
             
             for (const child of children) {
                 try {
-                    // ✅ Исправлено: axiosInstance и правильный URL
                     const studentRes = await axiosInstance.get(`/students/${child.id}`);
                     const student = studentRes.data;
                     
@@ -166,7 +146,6 @@ function ParentDashboard() {
             for (const child of children) {
                 try {
                     const response = await axiosInstance.get(`/subscriptions/student/${child.id}`);
-                    
                     const subscriptions = response.data;
                     
                     for (const sub of subscriptions) {
@@ -201,23 +180,28 @@ function ParentDashboard() {
         }
     };
 
-    const handleAdditionalPayment = async (subscription) => {
+    const createFileInput = (onFileSelected) => {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
-        fileInput.accept = 'image/*,.pdf,.doc,.docx';
-        fileInput.onchange = async (e) => {
+        fileInput.accept = 'image/*';
+        fileInput.setAttribute('capture', 'environment');
+        fileInput.onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
             if (file.size > 2 * 1024 * 1024) {
                 alert('Файл слишком большой. Максимум 2MB');
                 return;
             }
-            
+            onFileSelected(file);
+        };
+        fileInput.click();
+    };
+
+    const handleAdditionalPayment = (subscription) => {
+        createFileInput(async (file) => {
             if (!window.confirm(`Доплатить ${subscription.remainingAmount} ₽?`)) return;
             
             try {
-                // 1. Создаём платёж
                 const paymentRes = await axiosInstance.post('/payments', {
                     tutorId: subscription.tutor?.id,
                     studentId: subscription.studentId || subscription.student?.id,
@@ -228,14 +212,12 @@ function ParentDashboard() {
                 const paymentId = paymentRes.data.id;
                 if (!paymentId) { alert('Ошибка: не удалось создать платёж'); return; }
                 
-                // 2. Загружаем чек
                 const formData = new FormData();
                 formData.append('file', file);
                 await axiosInstance.post(`/payments/${paymentId}/upload-receipt`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 
-                // 3. Доплата
                 await axiosInstance.post(`/subscriptions/${subscription.id}/additional-pay`, { 
                     amount: subscription.remainingAmount 
                 });
@@ -247,25 +229,12 @@ function ParentDashboard() {
             } catch (err) {
                 alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
             }
-        };
-        fileInput.click();
+        });
     };
 
-    const handlePaySubscription = async (subscription) => {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = 'image/*,.pdf,.doc,.docx';
-        fileInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            if (file.size > 2 * 1024 * 1024) {
-                alert('Файл слишком большой. Максимум 2MB');
-                return;
-            }
-            
+    const handlePaySubscription = (subscription) => {
+        createFileInput(async (file) => {
             try {
-                // 1. Создаём платёж
                 const paymentRes = await axiosInstance.post('/payments', {
                     tutorId: subscription.tutor?.id,
                     studentId: subscription.studentId || subscription.student?.id,
@@ -276,14 +245,12 @@ function ParentDashboard() {
                 const paymentId = paymentRes.data.id;
                 if (!paymentId) { alert('Ошибка: не удалось создать платёж'); return; }
                 
-                // 2. Загружаем чек
                 const formData = new FormData();
                 formData.append('file', file);
                 await axiosInstance.post(`/payments/${paymentId}/upload-receipt`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 
-                // 3. Активируем абонемент
                 await axiosInstance.post(`/subscriptions/${subscription.id}/pay`, {});
                 
                 alert('✅ Чек загружен! Репетитор подтвердит оплату.');
@@ -293,13 +260,11 @@ function ParentDashboard() {
             } catch (err) {
                 alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
             }
-        };
-        fileInput.click();
+        });
     };
 
     const fetchAllData = async (children) => {
         try {
-            // ✅ Исправлено: axiosInstance
             try {
                 const notificationsRes = await axiosInstance.get(`/notifications/parent/${user.id}`);
                 setNotifications(notificationsRes.data || []);
@@ -403,36 +368,23 @@ function ParentDashboard() {
         }
     };
 
-    const handlePayLesson = async (lesson) => {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        // Разрешены изображения и PDF
-        fileInput.accept = 'image/*,.pdf,.doc,.docx';                   fileInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            if (file.size > 2 * 1024 * 1024) {
-                alert('Файл слишком большой. Максимум 2MB');
-                return;
-            }
-            
+    const handlePayLesson = (lesson) => {
+        createFileInput(async (file) => {
             try {
-                // 1. Создаём платёж
                 const paymentRes = await axiosInstance.post(`/payments/lesson`, {
                     tutorId: lesson.tutor?.id,
                     studentId: lesson.student?.id,
                     amount: getStudentRateForTutor(lesson.student, lesson.tutor?.id),
-                    paymentType: 'single'
+                    paymentType: 'single',
+                    lessonId: lesson.id
                 });
                 
                 const paymentId = paymentRes.data.id;
-                
                 if (!paymentId) {
                     alert('Ошибка: не удалось создать платёж');
                     return;
                 }
                 
-                // 2. Загружаем чек
                 const formData = new FormData();
                 formData.append('file', file);
                 
@@ -446,15 +398,13 @@ function ParentDashboard() {
                 console.error('Ошибка:', err);
                 alert('Ошибка: ' + (err.response?.data?.error || 'Не удалось загрузить чек'));
             }
-        };
-        fileInput.click();
+        });
     };
 
     const handleConfirmPayment = async () => {
         if (!selectedLesson) return;
         
         try {
-            // ✅ Исправлено: API-функция
             await confirmPayment(selectedLesson.id);
             setOpenPaymentDialog(false);
             setSelectedLesson(null);
@@ -480,16 +430,14 @@ function ParentDashboard() {
         
         let lessons = selectedChild === 'all' ? allLessons : allLessons.filter(l => l.childId === parseInt(selectedChild));
         
-        // Показываем только уроки до конца текущего месяца
         return lessons.filter(l => {
             const d = new Date(l.lessonDate);
             return d <= endOfMonth;
         });
     };
+
     const getFilteredPayments = () => {
-        if (selectedChild === 'all') {
-            return allPayments;
-        }
+        if (selectedChild === 'all') return allPayments;
         return allPayments.filter(p => p.childId === parseInt(selectedChild));
     };
 
@@ -499,51 +447,35 @@ function ParentDashboard() {
         
         return allLessons.filter(l => {
             if (l.status !== 'COMPLETED') return false;
-            
             const d = new Date(l.lessonDate);
             if (d > endOfMonth) return false;
-            
-            const hasActiveSubscription = activeSubscriptions.some(s => 
-                s.studentId === l.student?.id
-            );
+            const hasActiveSubscription = activeSubscriptions.some(s => s.studentId === l.student?.id);
             if (hasActiveSubscription) return false;
-            
             return true;
         });
     };
 
     const getFilteredPendingSubscriptions = () => {
-        if (selectedChild === 'all') {
-            return pendingSubscriptions;
-        }
+        if (selectedChild === 'all') return pendingSubscriptions;
         return pendingSubscriptions.filter(s => s.childId === parseInt(selectedChild));
     };
 
     const getFilteredPartiallyPaidSubscriptions = () => {
-        if (selectedChild === 'all') {
-            return partiallyPaidSubscriptions;
-        }
+        if (selectedChild === 'all') return partiallyPaidSubscriptions;
         return partiallyPaidSubscriptions.filter(s => s.childId === parseInt(selectedChild));
     };
 
     const getLessonStatus = (lesson) => {
-        const hasActiveSubscription = activeSubscriptions.some(s => 
-            s.studentId === lesson.student?.id
-        );
+        const hasActiveSubscription = activeSubscriptions.some(s => s.studentId === lesson.student?.id);
         
-        // Для активного абонемента все уроки считаются оплаченными
         if (hasActiveSubscription) {
             if (lesson.status === 'CANCELLED') return { label: 'Отменено', color: 'error' };
             if (lesson.status === 'SCHEDULED') return { label: 'Запланировано (абонемент)', color: 'info' };
             return { label: 'Оплачено (абонемент)', color: 'success' };
         }
         
-        if (lesson.status === 'CONFIRMED') {
-            return { label: '✅ Оплачено (подтверждено)', color: 'success' };
-        }
-        if (lesson.status === 'PAID') {
-            return { label: '⏳ Оплачено (ожидает подтверждения)', color: 'warning' };
-        }
+        if (lesson.status === 'CONFIRMED') return { label: '✅ Оплачено (подтверждено)', color: 'success' };
+        if (lesson.status === 'PAID') return { label: '⏳ Оплачено (ожидает подтверждения)', color: 'warning' };
         
         switch(lesson.status) {
             case 'COMPLETED': return { label: 'Проведено (ждёт оплаты)', color: 'warning' };
@@ -567,7 +499,7 @@ function ParentDashboard() {
     const formatDateTime = (dateStr, timeStr) => {
         if (!dateStr) return '-';
         const date = new Date(dateStr);
-        return `${date.toLocaleDateString('ru-RU')} ${timeStr?.slice(0,5) || ''}`;
+        return `${date.toLocaleDateString('ru-RU')} ${formatLessonTime(dateStr, timeStr) || ''}`;
     };
 
     const getSelectedChildData = () => {
@@ -588,12 +520,12 @@ function ParentDashboard() {
     );
 
     return (
-        <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h4">
-                    Здравствуйте, {user?.fullName}! 👋
+        <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '2rem' }, fontWeight: 600 }}>
+                    {user?.fullName?.split(' ')[0]}! 👋
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                     <IconButton onClick={handleOpenNotifications}>
                         <Badge badgeContent={unreadCount} color="error">
                             <NotificationsIcon />
@@ -604,413 +536,261 @@ function ParentDashboard() {
                         startIcon={<RefreshIcon />}
                         onClick={handleRefresh}
                         disabled={refreshing}
+                        size="small"
+                        sx={{ display: { xs: 'none', sm: 'flex' } }}
                     >
                         {refreshing ? 'Обновление...' : 'Обновить'}
                     </Button>
                 </Box>
             </Box>
 
-            {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {childrenList.length > 0 && (
-                <Paper sx={{ p: 2, mb: 3 }}>
-                    <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} md={4}>
-                            <FormControl fullWidth size="small">
-                                <InputLabel>Выберите ребенка</InputLabel>
-                                <Select
-                                    value={selectedChild}
-                                    onChange={handleChildChange}
-                                    label="Выберите ребенка"
-                                >
-                                    <MenuItem value="all">Все дети</MenuItem>
-                                    {childrenList.map(child => (
-                                        <MenuItem key={child.id} value={child.id}>
-                                            {child.fullName}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-                    </Grid>
+                <Paper sx={{ p: { xs: 1.5, sm: 2 }, mb: 2 }}>
+                    <FormControl fullWidth size="small">
+                        <InputLabel>Ребёнок</InputLabel>
+                        <Select value={selectedChild} onChange={handleChildChange} label="Ребёнок">
+                            <MenuItem value="all">Все дети</MenuItem>
+                            {childrenList.map(child => (
+                                <MenuItem key={child.id} value={child.id}>{child.fullName}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
                 </Paper>
             )}
 
-            {filteredPartiallyPaidSubscriptions.length > 0 && (
-                <Paper sx={{ p: 3, mb: 3, bgcolor: '#FFF8E1' }}>
-                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <WarningIcon color="warning" />
-                        Требуется доплата за дополнительные занятия
-                    </Typography>
-                    
-                    <TableContainer component={Paper} variant="outlined">
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Ребенок</TableCell>
-                                    <TableCell>Период</TableCell>
-                                    <TableCell align="center">Занятий</TableCell>
-                                    <TableCell align="right">Оплачено</TableCell>
-                                    <TableCell align="right">Осталось</TableCell>
-                                    <TableCell align="right">Действия</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {filteredPartiallyPaidSubscriptions.map(sub => (
-                                    <TableRow key={sub.id}>
-                                        <TableCell>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Avatar sx={{ width: 30, height: 30, bgcolor: '#ED6C02' }}>
-                                                    {sub.childName?.[0] || '?'}
-                                                </Avatar>
-                                                {sub.childName}
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>
-                                            {new Date(sub.startDate).toLocaleDateString()} - 
-                                            {new Date(sub.endDate).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell align="center">{sub.lessonsCount}</TableCell>
-                                        <TableCell align="right">
-                                            <Typography variant="body2" color="success.main">
-                                                {sub.paidAmount.toLocaleString()} ₽
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell align="right">
-                                            <Typography variant="body1" fontWeight="bold" color="warning.main">
-                                                {sub.remainingAmount.toLocaleString()} ₽
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell align="right">
-                                            <Button
-                                                variant="contained"
-                                                color="warning"
-                                                size="small"
-                                                startIcon={<PaymentIcon />}
-                                                onClick={() => handleAdditionalPayment(sub)}
-                                            >
-                                                Доплатить {sub.remainingAmount.toLocaleString()} ₽
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </Paper>
-            )}
-
+            {/* ========== АБОНЕМЕНТЫ К ОПЛАТЕ ========== */}
             {filteredPendingSubscriptions.length > 0 && (
-                <Paper sx={{ p: 3, mb: 3, bgcolor: '#e8f5e9' }}>
-                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <SubscriptionIcon color="primary" />
-                        Абонементы, ожидающие оплаты
+                <Paper sx={{ p: { xs: 1.5, sm: 3 }, mb: 2, bgcolor: '#e8f5e9' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <SubscriptionIcon color="primary" fontSize="small" />
+                        Абонементы к оплате
                     </Typography>
                     
-                    <TableContainer component={Paper} variant="outlined">
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Ребенок</TableCell>
-                                    <TableCell>Период</TableCell>
-                                    <TableCell align="center">Занятий</TableCell>
-                                    <TableCell align="right">Сумма</TableCell>
-                                    <TableCell align="right">Действия</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {filteredPendingSubscriptions.map(sub => (
-                                    <TableRow key={sub.id}>
-                                        <TableCell>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Avatar sx={{ width: 30, height: 30, bgcolor: '#1976d2' }}>
-                                                    {sub.childName?.[0] || '?'}
-                                                </Avatar>
-                                                {sub.childName}
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>
-                                            {new Date(sub.startDate).toLocaleDateString()} - 
-                                            {new Date(sub.endDate).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell align="center">{sub.lessonsCount}</TableCell>
-                                        <TableCell align="right">
-                                            <Typography variant="body1" fontWeight="bold">
-                                                {sub.price.toLocaleString()} ₽
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        {filteredPendingSubscriptions.map(sub => (
+                            <Card key={sub.id} sx={{ border: '1px solid #C8E6C9' }}>
+                                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <Avatar sx={{ width: 32, height: 32, bgcolor: '#1976d2', fontSize: 14 }}>
+                                            {sub.childName?.[0] || '?'}
+                                        </Avatar>
+                                        <Box>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{sub.childName}</Typography>
+                                            <Typography variant="caption" color="textSecondary">
+                                                {new Date(sub.startDate).toLocaleDateString()} – {new Date(sub.endDate).toLocaleDateString()}
                                             </Typography>
-                                        </TableCell>
-                                        <TableCell align="right">
-                                            <Button
-                                                variant="contained"
-                                                color="success"
-                                                size="small"
-                                                startIcon={<PaymentIcon />}
-                                                onClick={() => handlePaySubscription(sub)}
-                                            >
-                                                Оплатить абонемент
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Box>
+                                            <Typography variant="caption" color="textSecondary">{sub.lessonsCount} занятий</Typography>
+                                            <Typography variant="body1" sx={{ fontWeight: 600 }}>{sub.price.toLocaleString()} ₽</Typography>
+                                        </Box>
+                                        <Button variant="contained" color="success" size="small" startIcon={<PaymentIcon />}
+                                            onClick={() => handlePaySubscription(sub)}>
+                                            Оплатить
+                                        </Button>
+                                    </Box>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </Box>
                 </Paper>
             )}
 
-            {pendingPayments.length > 0 && (
-                <Paper sx={{ p: 3, mb: 3, bgcolor: '#fff8e1' }}>
-                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PaymentIcon color="warning" />
-                        Ожидают оплаты (поурочно)
+            {/* ========== ДОПЛАТА ========== */}
+            {filteredPartiallyPaidSubscriptions.length > 0 && (
+                <Paper sx={{ p: { xs: 1.5, sm: 3 }, mb: 2, bgcolor: '#FFF8E1' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <WarningIcon color="warning" fontSize="small" />
+                        Требуется доплата
                     </Typography>
                     
-                    <TableContainer component={Paper} variant="outlined">
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Ребенок</TableCell>
-                                    <TableCell>Предмет</TableCell>
-                                    <TableCell>Репетитор</TableCell>
-                                    <TableCell>Дата и время</TableCell>
-                                    <TableCell>Сумма</TableCell>
-                                    <TableCell align="right">Действия</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {pendingPayments.map(lesson => {
-                                    const correctRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
-                                    return (
-                                        <TableRow key={lesson.id}>
-                                            <TableCell>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <Avatar sx={{ width: 30, height: 30, bgcolor: '#1976d2' }}>
-                                                        {lesson.childName?.[0] || '?'}
-                                                    </Avatar>
-                                                    {lesson.childName}
-                                                </Box>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    icon={<SchoolIcon />}
-                                                    label={lesson.course?.name || 'Занятие'}
-                                                    size="small"
-                                                    color="primary"
-                                                    variant="outlined"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    icon={<PersonIcon />}
-                                                    label={lesson.tutor?.fullName || 'Неизвестно'}
-                                                    size="small"
-                                                    variant="outlined"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                {formatDateTime(lesson.lessonDate, lesson.startTime)}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Typography variant="body1" fontWeight="bold">
-                                                    {correctRate || 0} ₽
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell align="right">
-                                                <Button
-                                                    variant="contained"
-                                                    color="success"
-                                                    size="small"
-                                                    startIcon={<PaymentIcon />}
-                                                    onClick={() => handlePayLesson(lesson)}
-                                                >
-                                                    Оплатить {correctRate || 0} ₽
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        {filteredPartiallyPaidSubscriptions.map(sub => (
+                            <Card key={sub.id} sx={{ border: '1px solid #FFCC80' }}>
+                                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <Avatar sx={{ width: 32, height: 32, bgcolor: '#ED6C02', fontSize: 14 }}>
+                                            {sub.childName?.[0] || '?'}
+                                        </Avatar>
+                                        <Box>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{sub.childName}</Typography>
+                                            <Typography variant="caption" color="textSecondary">
+                                                Оплачено {sub.paidAmount.toLocaleString()} ₽ из {sub.price.toLocaleString()} ₽
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Typography variant="body1" sx={{ fontWeight: 600, color: '#E65100' }}>
+                                            Ещё {sub.remainingAmount.toLocaleString()} ₽
+                                        </Typography>
+                                        <Button variant="contained" color="warning" size="small" startIcon={<PaymentIcon />}
+                                            onClick={() => handleAdditionalPayment(sub)}>
+                                            Доплатить
+                                        </Button>
+                                    </Box>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </Box>
                 </Paper>
             )}
 
-            <Paper sx={{ width: '100%', mb: 3 }}>
-                <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
-                    <Tab icon={<HistoryIcon />} label="История занятий" />
-                    <Tab icon={<PaymentIcon />} label="История платежей" />
+            {/* ========== ПОУРОЧНАЯ ОПЛАТА ========== */}
+            {pendingPayments.length > 0 && (
+                <Paper sx={{ p: { xs: 1.5, sm: 3 }, mb: 2, bgcolor: '#FFF8E1' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PaymentIcon color="warning" fontSize="small" />
+                        Ожидают оплаты
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        {pendingPayments.map(lesson => {
+                            const correctRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
+                            return (
+                                <Card key={lesson.id} sx={{ border: '1px solid #FFE0B2' }}>
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                            <Avatar sx={{ width: 32, height: 32, bgcolor: '#1976d2', fontSize: 14 }}>
+                                                {lesson.childName?.[0] || '?'}
+                                            </Avatar>
+                                            <Box sx={{ flex: 1 }}>
+                                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{lesson.childName}</Typography>
+                                                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                                    <Chip icon={<SchoolIcon />} label={lesson.course?.name || 'Занятие'} size="small" variant="outlined" />
+                                                    <Chip icon={<PersonIcon />} label={lesson.tutor?.fullName || '—'} size="small" variant="outlined" />
+                                                </Box>
+                                            </Box>
+                                        </Box>
+                                        <Typography variant="caption" color="textSecondary">
+                                            {formatDateTime(lesson.lessonDate, lesson.startTime)}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                                            <Typography variant="body1" sx={{ fontWeight: 600 }}>{correctRate || 0} ₽</Typography>
+                                            <Button variant="contained" color="success" size="small" startIcon={<CameraIcon />}
+                                                onClick={() => handlePayLesson(lesson)}>
+                                                Оплатить
+                                            </Button>
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+                    </Box>
+                </Paper>
+            )}
+
+            {/* ========== ВКЛАДКИ: ИСТОРИЯ ========== */}
+            <Paper sx={{ width: '100%', mb: 2 }}>
+                <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)} variant="fullWidth">
+                    <Tab icon={<HistoryIcon />} label="Занятия" sx={{ textTransform: 'none', fontSize: '0.8rem' }} />
+                    <Tab icon={<PaymentIcon />} label="Платежи" sx={{ textTransform: 'none', fontSize: '0.8rem' }} />
                 </Tabs>
             </Paper>
 
             <TabPanel value={tabValue} index={0}>
-                <Typography variant="h5" gutterBottom>
-                    История занятий {selectedChild !== 'all' ? getSelectedChildData()?.fullName : 'всех детей'}
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                    {selectedChild !== 'all' ? getSelectedChildData()?.fullName : 'Все дети'}
                 </Typography>
                 
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Ребенок</TableCell>
-                                <TableCell>Предмет</TableCell>
-                                <TableCell>Репетитор</TableCell>
-                                <TableCell>Дата и время</TableCell>
-                                <TableCell>Статус</TableCell>
-                                <TableCell>Заметки</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {filteredLessons.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={6} align="center">
-                                        <Alert severity="info">
-                                            {selectedChild !== 'all' 
-                                                ? `У ${getSelectedChildData()?.fullName} нет истории занятий` 
-                                                : 'Нет истории занятий'}
-                                        </Alert>
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                filteredLessons.map(lesson => {
-                                    const status = getLessonStatus(lesson);
-                                    return (
-                                        <TableRow key={lesson.id}>
-                                            <TableCell>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <Avatar sx={{ width: 30, height: 30, bgcolor: '#1976d2' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {filteredLessons.length === 0 ? (
+                        <Alert severity="info">Нет занятий</Alert>
+                    ) : (
+                        filteredLessons.map(lesson => {
+                            const status = getLessonStatus(lesson);
+                            return (
+                                <Card key={lesson.id} sx={{ border: '1px solid #E0E0E0' }}>
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <Box>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                                    <Avatar sx={{ width: 28, height: 28, bgcolor: '#1976d2', fontSize: 12 }}>
                                                         {lesson.childName?.[0] || '?'}
                                                     </Avatar>
-                                                    {lesson.childName}
+                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                        {lesson.childName}
+                                                    </Typography>
                                                 </Box>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    icon={<SchoolIcon />}
-                                                    label={lesson.course?.name || 'Занятие'}
-                                                    size="small"
-                                                    color="primary"
-                                                    variant="outlined"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    icon={<PersonIcon />}
-                                                    label={lesson.tutor?.fullName || 'Неизвестно'}
-                                                    size="small"
-                                                    variant="outlined"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                {formatDateTime(lesson.lessonDate, lesson.startTime)}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    label={status.label}
-                                                    color={status.color}
-                                                    size="small"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                {lesson.notes ? (
-                                                    <Button 
-                                                        size="small" 
-                                                        variant="text" 
-                                                        onClick={() => handleOpenNotes(lesson)}
-                                                        startIcon={<EditIcon />}
-                                                    >
-                                                        Просмотреть
+                                                <Typography variant="body2" color="textSecondary">
+                                                    {lesson.course?.name || 'Занятие'} с {lesson.tutor?.fullName || '—'}
+                                                </Typography>
+                                                <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                    {formatDateTime(lesson.lessonDate, lesson.startTime)}
+                                                </Typography>
+                                                {lesson.notes && (
+                                                    <Button size="small" variant="text" sx={{ mt: 0.5, p: 0, minWidth: 'auto', textTransform: 'none' }}
+                                                        onClick={() => handleOpenNotes(lesson)}>
+                                                        📝 Заметки
                                                     </Button>
-                                                ) : '-'}
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                                                )}
+                                            </Box>
+                                            <Chip label={status.label} color={status.color} size="small" />
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })
+                    )}
+                </Box>
             </TabPanel>
 
             <TabPanel value={tabValue} index={1}>
-                <Typography variant="h5" gutterBottom>
-                    История платежей {selectedChild !== 'all' ? getSelectedChildData()?.fullName : 'всех детей'}
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                    {selectedChild !== 'all' ? getSelectedChildData()?.fullName : 'Все дети'}
                 </Typography>
                 
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Ребенок</TableCell>
-                                <TableCell>Предмет</TableCell>
-                                <TableCell>Репетитор</TableCell>
-                                <TableCell>Дата оплаты</TableCell>
-                                <TableCell>За занятие от</TableCell>
-                                <TableCell>Сумма</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {filteredPayments.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={6} align="center">
-                                        <Alert severity="info">
-                                            {selectedChild !== 'all' 
-                                                ? `У ${getSelectedChildData()?.fullName} нет истории платежей` 
-                                                : 'Нет истории платежей'}
-                                        </Alert>
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                filteredPayments.map(payment => (
-                                    <TableRow key={payment.id}>
-                                        <TableCell>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Avatar sx={{ width: 30, height: 30, bgcolor: '#1976d2' }}>
-                                                    {payment.childName?.[0] || '?'}
-                                                </Avatar>
-                                                {payment.childName}
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip 
-                                                icon={<SchoolIcon />}
-                                                label={payment.courseName || payment.lesson?.course?.name || 'Занятие'}
-                                                size="small"
-                                                color="primary"
-                                                variant="outlined"
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip 
-                                                icon={<PersonIcon />}
-                                                label={payment.tutorName || payment.tutor?.fullName || payment.lesson?.tutor?.fullName || 'Неизвестно'}
-                                                size="small"
-                                                variant="outlined"
-                                            />
-                                        </TableCell>
-                                        <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                                        <TableCell>
-                                            {payment.lessonDate ? formatDate(payment.lessonDate) : '-'}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Typography variant="body1" fontWeight="bold">
-                                                {payment.amount} ₽
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {filteredPayments.length === 0 ? (
+                        <Alert severity="info">Нет платежей</Alert>
+                    ) : (
+                        filteredPayments.map(payment => (
+                            <Card key={payment.id} sx={{ border: '1px solid #E0E0E0' }}>
+                                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                        <Avatar sx={{ width: 28, height: 28, bgcolor: '#1976d2', fontSize: 12 }}>
+                                            {payment.childName?.[0] || '?'}
+                                        </Avatar>
+                                        <Box sx={{ flex: 1 }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{payment.childName}</Typography>
+                                            <Typography variant="caption" color="textSecondary">
+                                                {payment.courseName || payment.lesson?.course?.name || 'Занятие'}
+                                                {' • '}
+                                                {payment.tutorName || payment.tutor?.fullName || '—'}
                                             </Typography>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Box>
+                                            <Typography variant="caption" color="textSecondary">
+                                                {formatDate(payment.paymentDate)}
+                                            </Typography>
+                                            {payment.lessonDate && (
+                                                <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
+                                                    Занятие: {formatDate(payment.lessonDate)}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                                            {payment.amount} ₽
+                                        </Typography>
+                                    </Box>
+                                </CardContent>
+                            </Card>
+                        ))
+                    )}
+                </Box>
             </TabPanel>
 
+            {/* ============ ДИАЛОГИ ============ */}
             <Dialog open={openNotifications} onClose={() => setOpenNotifications(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="h6">Уведомления</Typography>
-                        <IconButton onClick={() => setOpenNotifications(false)}>
-                            <CloseIcon />
-                        </IconButton>
+                        <IconButton onClick={() => setOpenNotifications(false)}><CloseIcon /></IconButton>
                     </Box>
                 </DialogTitle>
                 <DialogContent>
@@ -1045,20 +825,11 @@ function ParentDashboard() {
                 <DialogTitle>Подтверждение оплаты</DialogTitle>
                 <DialogContent>
                     <Box sx={{ pt: 2 }}>
-                        <Typography variant="body1" gutterBottom>
-                            Подтвердите оплату за занятие:
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 1 }}>
-                            <strong>Ребенок:</strong> {selectedLesson?.childName}
-                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}><strong>Ребенок:</strong> {selectedLesson?.childName}</Typography>
+                        <Typography variant="body2"><strong>Репетитор:</strong> {selectedLesson?.tutor?.fullName || 'Неизвестно'}</Typography>
+                        <Typography variant="body2"><strong>Дата:</strong> {selectedLesson?.lessonDate && formatDate(selectedLesson.lessonDate)}</Typography>
                         <Typography variant="body2">
-                            <strong>Репетитор:</strong> {selectedLesson?.tutor?.fullName || 'Неизвестно'}
-                        </Typography>
-                        <Typography variant="body2">
-                            <strong>Дата:</strong> {selectedLesson?.lessonDate && formatDate(selectedLesson.lessonDate)}
-                        </Typography>
-                        <Typography variant="body2">
-                            <strong>Время:</strong> {selectedLesson?.startTime?.slice(0,5)} - {selectedLesson?.endTime?.slice(0,5)}
+                            <strong>Время:</strong> {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)} - {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.endTime)}
                         </Typography>
                         <Typography variant="body2">
                             <strong>Сумма:</strong> {getStudentRateForTutor(selectedLesson?.student, selectedLesson?.tutor?.id) || 0} ₽
@@ -1080,22 +851,13 @@ function ParentDashboard() {
                 <DialogTitle>Заметки к занятию</DialogTitle>
                 <DialogContent>
                     <Box sx={{ pt: 2 }}>
-                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                            📝 Что делали на уроке:
-                        </Typography>
+                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>📝 Что делали на уроке:</Typography>
                         <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
-                            <Typography variant="body1">
-                                {selectedLessonNotes.notes}
-                            </Typography>
+                            <Typography variant="body1">{selectedLessonNotes.notes}</Typography>
                         </Paper>
-                        
-                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                            🎯 Что сделать к следующему уроку:
-                        </Typography>
+                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>🎯 Что сделать к следующему уроку:</Typography>
                         <Paper sx={{ p: 2, bgcolor: '#e3f2fd' }}>
-                            <Typography variant="body1">
-                                {selectedLessonNotes.nextLessonPlan}
-                            </Typography>
+                            <Typography variant="body1">{selectedLessonNotes.nextLessonPlan}</Typography>
                         </Paper>
                     </Box>
                 </DialogContent>

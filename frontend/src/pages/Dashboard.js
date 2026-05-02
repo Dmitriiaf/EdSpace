@@ -34,8 +34,7 @@ import { format, isSameDay, subDays, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
-import VideoCallModal from '../components/VideoCallModal';
-import WhiteboardModal from '../components/WhiteboardModal';
+import LessonRoom from '../components/LessonRoom';
 import axiosInstance from '../api/axiosConfig';
 import {
     getAllLessons,
@@ -73,13 +72,9 @@ function Dashboard() {
     const [selectedTime, setSelectedTime] = useState('');
     const [availableSlots, setAvailableSlots] = useState([]);
     const [lessonToReschedule, setLessonToReschedule] = useState(null);
-    
-    const [videoCallOpen, setVideoCallOpen] = useState(false);
-    const [selectedLessonForCall, setSelectedLessonForCall] = useState(null);
-    
-    const [whiteboardOpen, setWhiteboardOpen] = useState(false);
-    const [selectedLessonForBoard, setSelectedLessonForBoard] = useState(null);
-    
+        
+    const [lessonRoomOpen, setLessonRoomOpen] = useState(false);
+    const [selectedLessonForRoom, setSelectedLessonForRoom] = useState(null);
     const [lessonPlans, setLessonPlans] = useState([]);
     const [selectedPlanId, setSelectedPlanId] = useState('');
     
@@ -778,49 +773,25 @@ function Dashboard() {
                                 // ============================================
                             ) : (
                                 <>
-                                    {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && (
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            color="primary"
-                                            startIcon={<VideocamIcon />}
-                                            onClick={() => {
-                                                setSelectedLessonForCall(lesson);
-                                                setVideoCallOpen(true);
-                                            }}
-                                            sx={{ mb: 0.5 }}
-                                        >
-                                            Видеозвонок
-                                        </Button>
-                                    )}
-                                    
-                                    {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && (
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            color="secondary"
-                                            startIcon={<DrawIcon />}
-                                            onClick={() => {
-                                                setSelectedLessonForBoard(lesson);
-                                                setWhiteboardOpen(true);
-                                            }}
-                                            sx={{ mb: 0.5 }}
-                                        >
-                                            Онлайн-доска
-                                        </Button>
-                                    )}
-                                    
-                                    {(isScheduled || lesson.status === 'RESCHEDULED') && (
+                                    {(isScheduled || isInProgress || isRescheduledNew) && (
                                         <Button
                                             size="small"
                                             variant="contained"
                                             color="primary"
-                                            startIcon={<PlayIcon />}
-                                            onClick={() => handleStartLesson(lesson)}
+                                            startIcon={<VideocamIcon />}
+                                            onClick={async () => {
+                                                if (isScheduled || lesson.status === 'RESCHEDULED') {
+                                                    await handleStartLesson(lesson);
+                                                }
+                                                setSelectedLessonForRoom(lesson);
+                                                setLessonRoomOpen(true);
+                                            }}
+                                            sx={{ mb: 0.5 }}
                                         >
                                             Начать урок
                                         </Button>
                                     )}
+                                    
                                     
                                     {isInProgress && (
                                         <>
@@ -1354,31 +1325,20 @@ function Dashboard() {
                 </Dialog>
                 {/* ======================================== */}
 
-                <VideoCallModal 
-                    open={videoCallOpen} 
-                    onClose={() => {
-                        setVideoCallOpen(false);
-                        setSelectedLessonForCall(null);
-                    }}
-                    lessonId={selectedLessonForCall?.id}
-                    lessonInfo={selectedLessonForCall ? {
-                        studentName: selectedLessonForCall.student?.fullName,
-                        startTime: selectedLessonForCall.startTime,
-                        endTime: selectedLessonForCall.endTime
-                    } : null}
-                />
+            
 
-                <WhiteboardModal 
-                    open={whiteboardOpen} 
+                <LessonRoom 
+                    open={lessonRoomOpen} 
                     onClose={() => {
-                        setWhiteboardOpen(false);
-                        setSelectedLessonForBoard(null);
+                        setLessonRoomOpen(false);
+                        setSelectedLessonForRoom(null);
                     }}
-                    lessonId={selectedLessonForBoard?.id}
-                    lessonInfo={selectedLessonForBoard ? {
-                        studentName: selectedLessonForBoard.student?.fullName,
-                        startTime: selectedLessonForBoard.startTime,
-                        endTime: selectedLessonForBoard.endTime
+                    lessonId={selectedLessonForRoom?.id}
+                    lessonInfo={selectedLessonForRoom ? {
+                        studentName: selectedLessonForRoom.student?.fullName,
+                        tutorName: selectedLessonForRoom.tutor?.fullName,
+                        startTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.startTime),
+                        endTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.endTime)
                     } : null}
                 />
 

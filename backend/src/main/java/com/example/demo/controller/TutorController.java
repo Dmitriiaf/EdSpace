@@ -5,10 +5,11 @@ import com.example.demo.service.TutorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/tutors")
 @CrossOrigin(origins = "http://localhost:3000")
@@ -24,7 +25,8 @@ public class TutorController {
                     request.get("email"),
                     request.get("password"),
                     request.get("fullName"),
-                    request.get("phone")
+                    request.get("phone"),
+                    request.getOrDefault("timezone", "Asia/Krasnoyarsk")
             );
             return ResponseEntity.ok(tutor);
         } catch (RuntimeException e) {
@@ -87,8 +89,8 @@ public class TutorController {
         try {
             Tutor tutor = tutorService.getTutorById(id);
             String avatar = tutor.getAvatar();
-            System.out.println("Запрос аватара для tutor ID: " + id);
-            System.out.println("Avatar в БД: " + (avatar != null ? "есть" : "нет"));
+            log.debug("Запрос аватара для tutor ID: {}", id);
+            log.debug("Avatar в БД: {}", avatar != null ? "есть" : "нет");
             // ✅ Исправлено: если avatar == null, возвращаем пустую строку
             return ResponseEntity.ok(Map.of("avatar", avatar != null ? avatar : ""));
         } catch (RuntimeException e) {

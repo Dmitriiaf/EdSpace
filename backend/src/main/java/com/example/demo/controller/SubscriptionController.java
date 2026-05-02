@@ -15,7 +15,12 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/subscriptions")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {
+        "http://localhost:3000",
+        "http://ed-space.ru",
+        "https://ed-space.ru",
+        "https://www.ed-space.ru"
+}, allowCredentials = "true")
 public class SubscriptionController {
 
     @Autowired

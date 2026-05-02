@@ -46,7 +46,8 @@ export const AuthProvider = ({ children }) => {
 
     const register = async (email, password, fullName, phone) => {
         try {
-            const response = await axiosInstance.post('/auth/register', { email, password, fullName, phone });
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const response = await axiosInstance.post('/auth/register', { email, password, fullName, phone, timezone });
             const { token, id, email: userEmail, fullName: userName } = response.data;
             const userData = { id, email: userEmail, fullName: userName, role: 'tutor' };
             localStorage.setItem('token', token);

@@ -17,6 +17,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     // ✅ ВОЗВРАЩЁННЫЙ МЕТОД
     List<Student> findByParentId(Long parentId);
 
+
     @Query("SELECT DISTINCT s.email FROM Student s WHERE s.id IN :ids")
     List<String> findEmailsByIds(@Param("ids") List<Long> ids);
 
@@ -53,4 +54,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
             "JOIN s.tutors tutor " +
             "WHERE tutor.id = :tutorId AND s.archived = true")
     List<Student> findArchivedByTutorIdWithRates(@Param("tutorId") Long tutorId);
+
+    Optional<Student> findByResetToken(String resetToken);
+
 }

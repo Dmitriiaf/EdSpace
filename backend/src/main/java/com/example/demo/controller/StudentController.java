@@ -1,4 +1,3 @@
-// ========== backend/src/main/java/com/example/demo/controller/StudentController.java ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.Parent;
@@ -11,6 +10,7 @@ import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.SubscriptionRepository;
 import com.example.demo.service.EmailService;
 import com.example.demo.service.StudentService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/students")
 @CrossOrigin(origins = {
@@ -91,12 +92,17 @@ public class StudentController {
                 }
 
                 if (ratePerLesson != null) {
-                    existingStudent.setRateForTutor(tutor, ratePerLesson);
+                    existingStudent.setRateForTutor(tutor, ratePerLesson, paymentType);
                 }
 
                 studentRepository.save(existingStudent);
 
-                sendInvitationToStudent(existingStudent, tutorId);
+                // Отправляем приглашение только если ученик не зарегистрирован
+                if (existingStudent.getPasswordHash() == null) {
+                    sendInvitationToStudent(existingStudent, tutorId);
+                } else {
+                    log.info("✅ Ученик {} уже зарегистрирован — приглашение не отправляется", email);
+                }
 
                 if (parentEmail != null && !parentEmail.trim().isEmpty()) {
                     sendParentInvitation(existingStudent, tutorId, parentEmail);
@@ -114,16 +120,10 @@ public class StudentController {
                     parentEmail
             );
 
-            sendInvitationToStudent(student, tutorId);
-
-            if (parentEmail != null && !parentEmail.trim().isEmpty()) {
-                sendParentInvitation(student, tutorId, parentEmail);
-            }
-
             return ResponseEntity.ok(studentToMap(student, tutorId, null));
 
         } catch (RuntimeException e) {
-            e.printStackTrace();
+            log.error("Ошибка при создании ученика: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -199,7 +199,7 @@ public class StudentController {
                     .collect(Collectors.toList());
             return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
-            e.printStackTrace();
+            log.error("Ошибка получения архивированных учеников: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -303,11 +303,13 @@ public class StudentController {
             if (request.get("phone") != null) {
                 student.setPhone((String) request.get("phone"));
             }
-            if ("ROLE_TUTOR".equals(userRole) && request.get("email") != null) {
-                student.setEmail((String) request.get("email"));
-            }
             if ("ROLE_TUTOR".equals(userRole) && request.get("paymentType") != null) {
-                student.setPaymentType((String) request.get("paymentType"));
+                Tutor tutor = studentService.getTutorById(currentUserId);
+                String newPaymentType = (String) request.get("paymentType");
+                BigDecimal currentRate = student.getRateForTutor(currentUserId);
+                student.setRateForTutor(tutor,
+                        currentRate != null ? currentRate : BigDecimal.ZERO,
+                        newPaymentType);
             }
 
             if ("ROLE_TUTOR".equals(userRole) && request.containsKey("parentEmail")) {
@@ -421,12 +423,19 @@ public class StudentController {
             List<Student> students = studentRepository.findByEmail(email);
 
             if (students.isEmpty()) {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.ok(Map.of("exists", false));
             }
 
             Student student = students.get(0);
-            Subscription sub = subscriptionRepository.findFirstByStudentIdOrderByIdDesc(student.getId()).orElse(null);
-            return ResponseEntity.ok(studentToMap(student, currentUserId, sub));
+
+            boolean alreadyLinked = student.getTutors().stream()
+                    .anyMatch(t -> t.getId().equals(currentUserId));
+
+            Map<String, Object> result = studentToMap(student, currentUserId, null);
+            result.put("exists", true);
+            result.put("alreadyLinked", alreadyLinked);
+
+            return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -441,7 +450,11 @@ public class StudentController {
         map.put("fullName", student.getFullName());
         map.put("email", student.getEmail());
         map.put("phone", student.getPhone());
-        map.put("paymentType", student.getPaymentType());
+        if (tutorId != null) {
+            map.put("paymentType", student.getPaymentTypeForTutor(tutorId));
+        } else {
+            map.put("paymentType", student.getPaymentType());
+        }
         map.put("missedLessons", student.getMissedLessons() != null ? student.getMissedLessons() : 0);
         map.put("archived", student.getArchived() != null ? student.getArchived() : false);
 
@@ -459,10 +472,8 @@ public class StudentController {
             map.put("subscription", subMap);
         }
 
-        // ========== ИСПРАВЛЕНИЕ B3.2: Имя родителя ==========
         if (student.getParent() != null) {
             String parentFullName = student.getParent().getFullName();
-            // Если имя родителя начинается с "Родитель " — значит, он не зарегистрирован
             if (parentFullName != null && parentFullName.startsWith("Родитель ")) {
                 map.put("parent", null);
                 map.put("parentEmail", student.getParent().getEmail());
@@ -482,7 +493,6 @@ public class StudentController {
             map.put("parentEmail", null);
             map.put("parentName", null);
         }
-        // =====================================================
 
         List<Map<String, Object>> tutors = student.getTutors().stream()
                 .map(t -> {
@@ -508,7 +518,7 @@ public class StudentController {
             token.setStudentId(student.getId());
             token.setTutorId(tutorId);
             token.setRatePerLesson(student.getRateForTutor(tutorId));
-            token.setPaymentType(student.getPaymentType());
+            token.setPaymentType(student.getPaymentTypeForTutor(tutorId));
             token.setUserType("STUDENT");
             token.setExpiresAt(java.time.LocalDateTime.now().plusDays(7));
 
@@ -516,10 +526,10 @@ public class StudentController {
 
             emailService.sendStudentInvitation(token, student.getFullName(), tutor.getFullName());
 
-            System.out.println("📧 Приглашение отправлено ученику: " + student.getEmail());
+            log.info("Приглашение отправлено ученику: {}", student.getEmail());
 
         } catch (Exception e) {
-            System.err.println("❌ Ошибка отправки приглашения ученику " + student.getEmail() + ": " + e.getMessage());
+            log.error("Ошибка отправки приглашения ученику {}: {}", student.getEmail(), e.getMessage());
         }
     }
 
@@ -527,14 +537,12 @@ public class StudentController {
         try {
             Tutor tutor = studentService.getTutorById(tutorId);
 
-            // Проверяем, существует ли уже родитель с таким email
             Parent existingParent = parentRepository.findByEmail(parentEmail).orElse(null);
 
             if (existingParent != null && existingParent.getPasswordHash() != null) {
-                // Родитель уже зарегистрирован — просто привязываем ученика
                 student.setParent(existingParent);
                 studentRepository.save(student);
-                System.out.println("✅ Ученик " + student.getFullName() + " привязан к существующему родителю " + parentEmail);
+                log.info("Ученик {} привязан к существующему родителю {}", student.getFullName(), parentEmail);
                 return;
             }
 
@@ -549,10 +557,10 @@ public class StudentController {
 
             invitationTokenRepository.save(token);
             emailService.sendParentInvitation(token, student.getFullName(), tutor.getFullName());
-            System.out.println("📧 Приглашение отправлено родителю: " + parentEmail);
+            log.info("Приглашение отправлено родителю: {}", parentEmail);
 
         } catch (Exception e) {
-            System.err.println("❌ Ошибка отправки приглашения родителю " + parentEmail + ": " + e.getMessage());
+            log.error("Ошибка отправки приглашения родителю {}: {}", parentEmail, e.getMessage());
         }
     }
 }

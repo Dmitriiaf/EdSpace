@@ -28,6 +28,7 @@ const DAYS = [
 ];
 
 const TIME_SLOTS = [
+    '00:00', '01:00',
     '10:00', '11:00', '12:00', '13:00', '14:00', '15:00',
     '16:00', '17:00', '18:00', '19:00', '20:00', '21:00',
     '22:00', '23:00'
@@ -152,11 +153,19 @@ function WeeklySchedule() {
         const dateStr = format(date, 'yyyy-MM-dd');
         return lessons.find(l => {
             if (l.lessonDate !== dateStr) return false;
-            const lessonStart = l.startTime.slice(0, 5);
+            
+            // ✅ Конвертируем UTC-время урока в локальное время браузера
+            const localLessonStart = formatLessonTime(l.lessonDate, l.startTime);
+            const localLessonEnd = formatLessonTime(l.lessonDate, l.endTime);
+            
             const duration = l.duration || 60;
+            
+            // Находим индекс слота начала урока в локальном времени
             const slotIndex = TIME_SLOTS.indexOf(timeSlot);
-            const startIndex = TIME_SLOTS.indexOf(lessonStart);
+            const startIndex = TIME_SLOTS.indexOf(localLessonStart);
+            
             if (startIndex === -1) return false;
+            
             const endIndex = startIndex + (duration / 60);
             return slotIndex >= startIndex && slotIndex < endIndex;
         });
@@ -347,8 +356,7 @@ function WeeklySchedule() {
                                                         const template = getTemplate(day.id, timeSlot);
                                                         
                                                         if (lesson) {
-                                                            const isFirstSlot = lesson.startTime.slice(0, 5) === timeSlot;
-                                                            if (!isFirstSlot) return null;
+                                                            const isFirstSlot = formatLessonTime(lesson.lessonDate, lesson.startTime) === timeSlot;                                                            if (!isFirstSlot) return null;
                                                             
                                                             const statusStyle = STATUS_COLORS[lesson.status] || STATUS_COLORS.SCHEDULED;
                                                             const hasTemplate = template !== null;

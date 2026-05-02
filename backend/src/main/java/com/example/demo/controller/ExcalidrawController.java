@@ -15,7 +15,9 @@ import java.util.UUID;
 @CrossOrigin(origins = {
         "http://localhost:3000",
         "http://72.56.238.224",
-        "http://ed-space.ru"
+        "http://ed-space.ru",
+        "https://ed-space.ru",
+        "https://www.ed-space.ru"
 }, allowCredentials = "true")
 public class ExcalidrawController {
 

@@ -1,4 +1,3 @@
-// ========== backend/src/main/java/com/example/demo/service/StudentService.java ==========
 package com.example.demo.service;
 
 import com.example.demo.repository.InvitationTokenRepository;
@@ -51,9 +50,6 @@ public class StudentService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    /**
-     * Генерация временного пароля
-     */
     private String generateTempPassword() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         StringBuilder sb = new StringBuilder();
@@ -95,35 +91,37 @@ public class StudentService {
             student.setFullName(name);
             student.setEmail(email);
             student.setRole("ROLE_STUDENT");
-            student.setPaymentType(paymentType != null ? paymentType : "single");
             student.setRegistrationCompleted(false);
             student.addTutor(tutor);
             isNew = true;
         }
 
         if (ratePerLesson != null) {
-            student.setRateForTutor(tutor, ratePerLesson);
+            student.setRateForTutor(tutor, ratePerLesson, paymentType);
         }
 
         Student savedStudent = studentRepository.save(student);
 
-        // Создаём токен для приглашения ученика
-        InvitationToken studentToken = new InvitationToken();
-        studentToken.setEmail(email);
-        studentToken.setUserType("STUDENT");
-        studentToken.setStudentId(savedStudent.getId());
-        studentToken.setStudentName(name);
-        studentToken.setTutorId(tutorId);
-        studentToken.setRatePerLesson(ratePerLesson);
-        studentToken.setPaymentType(paymentType);
-        invitationTokenRepository.save(studentToken);
+        // Отправляем приглашение ТОЛЬКО если ученик ещё не зарегистрирован
+        if (savedStudent.getPasswordHash() == null) {
+            InvitationToken studentToken = new InvitationToken();
+            studentToken.setEmail(email);
+            studentToken.setUserType("STUDENT");
+            studentToken.setStudentId(savedStudent.getId());
+            studentToken.setStudentName(name);
+            studentToken.setTutorId(tutorId);
+            studentToken.setRatePerLesson(ratePerLesson);
+            studentToken.setPaymentType(paymentType);
+            invitationTokenRepository.save(studentToken);
 
-        // Отправляем приглашение ученику
-        try {
-            emailService.sendStudentInvitation(studentToken, name, tutor.getFullName());
-            log.info("📧 Приглашение отправлено ученику {}", email);
-        } catch (Exception e) {
-            log.error("Не удалось отправить email ученику: {}", e.getMessage());
+            try {
+                emailService.sendStudentInvitation(studentToken, name, tutor.getFullName());
+                log.info("📧 Приглашение отправлено ученику {}", email);
+            } catch (Exception e) {
+                log.error("Не удалось отправить email ученику: {}", e.getMessage());
+            }
+        } else {
+            log.info("✅ Ученик {} уже зарегистрирован — приглашение не отправляется", email);
         }
 
         // Если указан email родителя
@@ -165,17 +163,14 @@ public class StudentService {
         return savedStudent;
     }
 
-    // ✅ ОПТИМИЗИРОВАНО: используем findByTutorIdWithRates
     public List<Student> getStudentsByTutor(Long tutorId) {
         return studentRepository.findByTutorIdWithRates(tutorId);
     }
 
-    // ✅ ОПТИМИЗИРОВАНО: используем findByParentIdWithRates
     public List<Student> getStudentsByParent(Long parentId) {
         return studentRepository.findByParentIdWithRates(parentId);
     }
 
-    // ✅ ОПТИМИЗИРОВАНО: используем findByIdWithRates
     public Student getStudentById(Long id) {
         return studentRepository.findByIdWithRates(id)
                 .orElseThrow(() -> new NotFoundException("Ученик", "id", id));
@@ -193,7 +188,6 @@ public class StudentService {
         if (phone != null) student.setPhone(phone);
         if (parentName != null) student.setParentName(parentName);
         if (parentPhone != null) student.setParentPhone(parentPhone);
-        if (paymentType != null) student.setPaymentType(paymentType);
         if (birthday != null) student.setBirthday(birthday);
 
         if (parentEmail != null && !parentEmail.isEmpty()) {
@@ -219,55 +213,45 @@ public class StudentService {
         return studentRepository.save(student);
     }
 
-    // ✅ ИСПРАВЛЕННЫЙ МЕТОД УДАЛЕНИЯ
     @Transactional
     public void deleteStudent(Long id) {
         Student student = getStudentById(id);
 
-        // 1. Очищаем связи с курсами
         student.getCourses().clear();
         studentRepository.save(student);
 
-        // 2. Удаляем ставки
         if (student.getRates() != null) {
             student.getRates().clear();
             studentRepository.save(student);
         }
 
-        // 3. Удаляем шаблоны (weekly_template)
         List<WeeklyTemplate> templates = weeklyTemplateRepository.findByStudentId(id);
         if (!templates.isEmpty()) {
             weeklyTemplateRepository.deleteAll(templates);
         }
 
-        // 4. Удаляем уроки
         List<Lesson> lessons = lessonRepository.findByStudentIdOrderByLessonDateAscStartTimeAsc(id);
         if (!lessons.isEmpty()) {
             lessonRepository.deleteAll(lessons);
         }
 
-        // 5. Удаляем платежи
         List<Payment> payments = paymentRepository.findByStudentId(id);
         if (!payments.isEmpty()) {
             paymentRepository.deleteAll(payments);
         }
 
-        // 6. Удаляем абонементы
         List<Subscription> subscriptions = subscriptionRepository.findByStudentId(id);
         if (!subscriptions.isEmpty()) {
             subscriptionRepository.deleteAll(subscriptions);
         }
 
-        // 7. Удаляем токены приглашений
         invitationTokenRepository.deleteByStudentId(id);
 
-        // 8. Отвязываем родителя
         if (student.getParent() != null) {
             student.setParent(null);
             studentRepository.save(student);
         }
 
-        // 9. Удаляем ученика
         studentRepository.delete(student);
     }
 
@@ -311,7 +295,6 @@ public class StudentService {
         return studentRepository.count();
     }
 
-    // ✅ ОПТИМИЗИРОВАНО: используем countByTutorId
     public long getStudentsCountByTutor(Long tutorId) {
         return studentRepository.countByTutorId(tutorId);
     }

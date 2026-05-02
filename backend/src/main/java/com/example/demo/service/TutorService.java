@@ -22,7 +22,7 @@ public class TutorService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    public Tutor registerTutor(String email, String password, String fullName, String phone) {
+    public Tutor registerTutor(String email, String password, String fullName, String phone, String timezone) {
         if (tutorRepository.existsByEmail(email)) {
             throw new BusinessException("Репетитор с таким email уже существует");
         }
@@ -33,6 +33,10 @@ public class TutorService {
                 fullName,
                 phone
         );
+
+        if (timezone != null && !timezone.isEmpty()) {
+            tutor.setTimezone(timezone);
+        }
 
         return tutorRepository.save(tutor);
     }
