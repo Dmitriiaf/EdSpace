@@ -36,6 +36,11 @@ public class SecurityConfig {
     }
 
     @Bean
+    public RateLimitFilter rateLimitFilter() {
+        return new RateLimitFilter();
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         List<String> origins = Arrays.asList(allowedOrigins.split(","));
@@ -61,8 +66,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/student-auth/**").permitAll()
                         .requestMatchers("/api/parent-auth/**").permitAll()
                         .requestMatchers("/api/invitations/**").permitAll()
-                        .requestMatchers("/api/password-reset/**").permitAll()  // ✅ ДОБАВЛЕНО
+                        .requestMatchers("/api/password-reset/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/api/homework/file/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(authTokenFilter, UsernamePasswordAuthenticationFilter.class);

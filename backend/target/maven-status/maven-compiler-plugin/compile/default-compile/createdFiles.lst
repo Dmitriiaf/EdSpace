@@ -26,6 +26,7 @@ com\example\demo\controller\ParentController.class
 com\example\demo\controller\VariantController.class
 com\example\demo\entity\Variant.class
 com\example\demo\service\WeeklyTemplateService.class
+com\example\demo\entity\BoardSession.class
 com\example\demo\service\StepikService.class
 com\example\demo\entity\Subscription.class
 com\example\demo\repository\InvitationTokenRepository.class
@@ -51,6 +52,7 @@ com\example\demo\repository\PaymentRepository.class
 com\example\demo\service\NotificationScheduler.class
 com\example\demo\repository\HomeworkRepository.class
 com\example\demo\config\AuthTokenFilter.class
+com\example\demo\config\RateLimitFilter.class
 com\example\demo\entity\TaskBank.class
 com\example\demo\repository\MaterialRepository.class
 com\example\demo\service\ExcalidrawService.class
@@ -75,6 +77,7 @@ com\example\demo\service\TutorService.class
 com\example\demo\controller\NotificationController.class
 com\example\demo\service\StudentService.class
 com\example\demo\repository\VariantRepository.class
+com\example\demo\controller\BoardSessionController.class
 com\example\demo\controller\StudentAuthController.class
 com\example\demo\controller\LessonController.class
 com\example\demo\repository\SubjectRepository.class
@@ -83,12 +86,14 @@ com\example\demo\config\JwtUtils.class
 com\example\demo\entity\Homework.class
 com\example\demo\repository\TutorRepository.class
 com\example\demo\controller\GroupController.class
+com\example\demo\service\BoardSessionService.class
 com\example\demo\entity\Group.class
 com\example\demo\repository\MaterialFolderRepository.class
 com\example\demo\controller\WeeklyTemplateController.class
 com\example\demo\DemoApplication.class
 com\example\demo\controller\StepikController.class
 com\example\demo\entity\StudentRate.class
+com\example\demo\entity\BoardSession$BoardSessionBuilder.class
 com\example\demo\config\MailConfig.class
 com\example\demo\entity\StepikToken.class
 com\example\demo\service\LessonService.class
@@ -96,6 +101,7 @@ com\example\demo\service\MaterialService.class
 com\example\demo\controller\StudentController.class
 com\example\demo\repository\SubscriptionRepository.class
 com\example\demo\controller\PasswordResetController.class
+com\example\demo\repository\BoardSessionRepository.class
 com\example\demo\controller\LessonNotesController.class
 com\example\demo\repository\LessonPlanRepository.class
 com\example\demo\controller\HomeworkController.class

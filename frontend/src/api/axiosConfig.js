@@ -5,6 +5,7 @@ const axiosInstance = axios.create({
     timeout: 30000,
 });
 
+// Добавляем токен к запросам
 axiosInstance.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
@@ -13,18 +14,14 @@ axiosInstance.interceptors.request.use(
         }
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
+// Редирект при 401
 axiosInstance.interceptors.response.use(
-    (response) => {
-        return response;
-    },
+    (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            console.log('Unauthorized — logging out');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             if (!window.location.pathname.includes('/login')) {

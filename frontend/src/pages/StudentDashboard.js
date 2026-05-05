@@ -803,8 +803,7 @@ function StudentDashboard() {
                                             const homework = getHomeworkForNextLesson(lesson);
                                             const isExpanded = expandedLessonId === lesson.id;
                                             const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID' || lesson.status === 'CONFIRMED';
-                                            const isFuture = lesson.status === 'SCHEDULED' || lesson.status === 'IN_PROGRESS';
-                                            
+                                            const isFuture = lesson.status === 'SCHEDULED' || lesson.status === 'IN_PROGRESS' || lesson.status === 'RESCHEDULED';                                            
                                             return (
                                                 <Card 
                                                     key={lesson.id}
@@ -1184,11 +1183,13 @@ function StudentDashboard() {
                                                             <Typography variant="caption" color="textSecondary">
                                                                 Срок: {item.dueDate ? format(new Date(item.dueDate), 'd MMM', { locale: ru }) : '—'}
                                                             </Typography>
-                                                            {item.grade && (
+                                                            {item.grade != null && (
                                                                 <Chip 
-                                                                    label={`Оценка: ${item.grade}`}
+                                                                    label={item.gradeType === 'GRADE_100' ? `${item.score || item.grade}/100` : 
+                                                                        item.gradeType === 'GRADE_10' ? `${item.score || item.grade}/10` : 
+                                                                        `⭐ ${item.grade}/5`}
                                                                     size="small"
-                                                                    color={item.grade >= 4 ? 'success' : item.grade >= 3 ? 'warning' : 'error'}
+                                                                    color="success"
                                                                     sx={{ height: 20, fontSize: '0.65rem' }}
                                                                 />
                                                             )}
@@ -1261,7 +1262,7 @@ function StudentDashboard() {
                                                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#F59E0B' }}>
                                                     {homeworkStats.averageGrade || 0}
                                                 </Typography>
-                                                <Typography variant="caption" sx={{ color: '#6B7280' }}>Средний балл</Typography>
+                                                <Typography variant="caption" sx={{ color: '#6B7280' }}>Средний балл (из 5)</Typography>
                                             </Box>
                                         </Grid>
                                         <Grid item xs={6} sm={3}>
@@ -1558,8 +1559,7 @@ function StudentDashboard() {
                                     )}
                                     
                                     {/* ДЗ к этому уроку (если это будущий урок) */}
-                                    {selectedLesson.status === 'SCHEDULED' && (() => {
-                                        const hw = getHomeworkForNextLesson(selectedLesson);
+                                    {(selectedLesson.status === 'SCHEDULED' || selectedLesson.status === 'RESCHEDULED') && (() => {                                        const hw = getHomeworkForNextLesson(selectedLesson);
                                         if (hw) return (
                                             <Box sx={{ p: 2, bgcolor: '#EFF6FF', borderRadius: 2, borderLeft: '3px solid #3B82F6' }}>
                                                 <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>

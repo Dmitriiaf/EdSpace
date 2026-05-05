@@ -1,159 +1,162 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-    Container, Box, TextField, Button, Typography,
-    Paper, Alert, CircularProgress, InputAdornment, IconButton
+    Box, Card, CardContent, TextField, Button,
+    Typography, Tabs, Tab, Alert, CircularProgress,
+    InputAdornment, IconButton
 } from '@mui/material';
-import { Visibility, VisibilityOff, Email as EmailIcon, Lock as LockIcon } from '@mui/icons-material';
+import {
+    Visibility, VisibilityOff,
+    School as TutorIcon,
+    Person as StudentIcon,
+    ChildCare as ParentIcon
+} from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
 function Login() {
-    const [formData, setFormData] = useState({
-        email: '',
-        password: ''
-    });
-    const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const { login, user } = useAuth();
     const navigate = useNavigate();
-
-    // ✅ Если пользователь уже залогинен — сразу направляем на нужную страницу
-    useEffect(() => {
-        if (user) {
-            redirectBasedOnRole(user.role);
-        }
-    }, [user]);
-
-    const redirectBasedOnRole = (role) => {
-        if (role === 'tutor') {
-            navigate('/dashboard');
-        } else if (role === 'student') {
-            navigate('/student');
-        } else if (role === 'parent') {
-            navigate('/parent/dashboard');
-        }
-    };
-
-    const handleChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
-    };
+    const { login, studentLogin, parentLogin } = useAuth();
+    const [tab, setTab] = useState(0);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
-        setLoading(true);
+        if (!email || !password) {
+            setError('Заполните все поля');
+            return;
+        }
 
-        const result = await login(formData.email, formData.password);
-        
-        if (result.success) {
-            // ✅ Редирект по роли
-            const userRole = result.role;
-            redirectBasedOnRole(userRole);
-        } else {
-            setError(result.error);
+        setLoading(true);
+        setError('');
+
+        try {
+            let result;
+            if (tab === 0) {
+                result = await login(email, password);
+                if (result.success) navigate('/dashboard');
+            } else if (tab === 1) {
+                result = await studentLogin(email, password);
+                if (result.success) navigate('/student');
+            } else {
+                result = await parentLogin(email, password);
+                if (result.success) navigate('/parent/dashboard');
+            }
+            
+            if (!result.success) {
+                setError(result.error);
+            }
+        } catch (err) {
+            setError('Ошибка входа');
+        } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Container component="main" maxWidth="xs">
-            <Paper elevation={3} sx={{ p: 4, mt: 8, borderRadius: 4 }}>
-                <Typography component="h1" variant="h5" align="center" gutterBottom sx={{ fontWeight: 600 }}>
-                    Вход
-                </Typography>
+        <Box sx={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: '#F2EFE7',
+            p: 2
+        }}>
+            <Card sx={{ maxWidth: 440, width: '100%', borderRadius: 4, boxShadow: '0 8px 32px rgba(0,0,0,0.1)' }}>
+                <CardContent sx={{ p: 4 }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>
+                        EdSpace
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" textAlign="center" sx={{ mb: 3 }}>
+                        Вход в личный кабинет
+                    </Typography>
 
-                {error && (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                        {error}
-                    </Alert>
-                )}
-
-                <Box component="form" onSubmit={handleSubmit}>
-                    <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        label="Email"
-                        name="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        autoComplete="email"
-                        autoFocus
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <EmailIcon sx={{ color: '#9CA3AF' }} />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
-                    <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        label="Пароль"
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={formData.password}
-                        onChange={handleChange}
-                        autoComplete="current-password"
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <LockIcon sx={{ color: '#9CA3AF' }} />
-                                </InputAdornment>
-                            ),
-                            endAdornment: (
-                                <InputAdornment position="end">
-                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                                    </IconButton>
-                                </InputAdornment>
-                            )
-                        }}
-                    />
-                    
-                    <Button
-                        type="submit"
-                        fullWidth
-                        variant="contained"
-                        sx={{ mt: 3, mb: 1, py: 1.5, borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
-                        disabled={loading}
+                    <Tabs
+                        value={tab}
+                        onChange={(e, v) => { setTab(v); setError(''); }}
+                        variant="fullWidth"
+                        sx={{ mb: 3 }}
                     >
-                        {loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Войти'}
-                    </Button>
-                    
-                    <Box sx={{ textAlign: 'center', mt: 1 }}>
-                        <Button component={Link} to="/forgot-password" sx={{ textTransform: 'none', fontSize: '0.875rem' }}>
-                            Забыли пароль?
+                        <Tab icon={<TutorIcon />} label="Репетитор" />
+                        <Tab icon={<ParentIcon />} label="Ученик" />
+                        <Tab icon={<StudentIcon />} label="Родитель" />
+                    </Tabs>
+
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+                            {error}
+                        </Alert>
+                    )}
+
+                    <form onSubmit={handleSubmit}>
+                        <TextField
+                            fullWidth
+                            label="Email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            margin="normal"
+                            autoFocus
+                            autoComplete="email"
+                        />
+                        <TextField
+                            fullWidth
+                            label="Пароль"
+                            type={showPassword ? 'text' : 'password'}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            margin="normal"
+                            autoComplete="current-password"
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                                        </IconButton>
+                                    </InputAdornment>
+                                )
+                            }}
+                        />
+
+                        <Button
+                            type="submit"
+                            fullWidth
+                            variant="contained"
+                            disabled={loading}
+                            sx={{
+                                mt: 3,
+                                mb: 2,
+                                py: 1.5,
+                                borderRadius: 2,
+                                bgcolor: '#8B004A',
+                                '&:hover': { bgcolor: '#6B0038' },
+                                textTransform: 'none',
+                                fontSize: '1rem'
+                            }}
+                        >
+                            {loading ? <CircularProgress size={24} color="inherit" /> : 'Войти'}
                         </Button>
+                    </form>
+
+                    <Box sx={{ textAlign: 'center', mt: 1 }}>
+                        <Typography variant="body2" color="textSecondary">
+                            Нет аккаунта?{' '}
+                            <RouterLink to="/register" style={{ color: '#8B004A', textDecoration: 'none', fontWeight: 500 }}>
+                                Зарегистрироваться
+                            </RouterLink>
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                            <RouterLink to="/forgot-password" style={{ color: '#666', textDecoration: 'none', fontSize: '0.85rem' }}>
+                                Забыли пароль?
+                            </RouterLink>
+                        </Typography>
                     </Box>
-                    
-                    <Box sx={{ textAlign: 'center', mt: 2 }}>
-                        <Link to="/register" style={{ textDecoration: 'none' }}>
-                            <Typography variant="body2" color="primary" gutterBottom>
-                                Нет аккаунта? Зарегистрируйтесь
-                            </Typography>
-                        </Link>
-                        <Link to="/student-login" style={{ textDecoration: 'none' }}>
-                            <Typography variant="body2" color="secondary">
-                                Вход для ученика
-                            </Typography>
-                        </Link>
-                        <Link to="/parent-login" style={{ textDecoration: 'none' }}>
-                            <Typography variant="body2" color="success.main" sx={{ mt: 1 }}>
-                                Вход для родителя
-                            </Typography>
-                        </Link>
-                    </Box>
-                </Box>
-            </Paper>
-        </Container>
+                </CardContent>
+            </Card>
+        </Box>
     );
 }
 

@@ -1,9 +1,11 @@
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\AuthTokenFilter.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\JwtUtils.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\MailConfig.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\RateLimitFilter.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\SecurityConfig.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\AIGenerationController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\AuthController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardSessionController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\CourseController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ExcalidrawController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ExportController.java
@@ -40,6 +42,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\Homewo
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\LessonDTO.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\StudentDTO.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\SubscriptionDTO.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\BoardSession.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Course.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Group.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Homework.java
@@ -68,6 +71,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\GlobalExceptionHandler.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\NotFoundException.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\ValidationException.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\BoardSessionRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\CourseRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\GroupRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\HomeworkRepository.java
@@ -92,6 +96,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\WeeklyTemplateRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\scheduler\LessonGeneratorScheduler.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\AIGenerationService.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\BoardSessionService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\CourseService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\EmailService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\ExcalidrawService.java

@@ -28,10 +28,10 @@ const DAYS = [
 ];
 
 const TIME_SLOTS = [
-    '00:00', '01:00',
     '10:00', '11:00', '12:00', '13:00', '14:00', '15:00',
     '16:00', '17:00', '18:00', '19:00', '20:00', '21:00',
-    '22:00', '23:00'
+    '22:00', '23:00',
+    '00:00', '01:00', '02:00', '03:00'
 ];
 
 const STATUS_COLORS = {
@@ -147,8 +147,7 @@ function WeeklySchedule() {
         return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
     };
 
-    const getTemplate = (dayId, timeSlot) => templates.find(t => t.dayOfWeek === dayId && t.startTime === timeSlot + ':00');
-    
+    const getTemplate = (dayId, timeSlot) => templates.find(t => t.dayOfWeek === dayId && formatLessonTime('2026-01-01', t.startTime) === timeSlot);    
     const getLessonForSlot = (date, timeSlot) => {
         const dateStr = format(date, 'yyyy-MM-dd');
         return lessons.find(l => {
@@ -184,7 +183,7 @@ function WeeklySchedule() {
         setFormData({ studentId: '', courseId: '', dayOfWeek: dayId, startTime: timeSlot, endTime: (parseInt(timeSlot.split(':')[0]) + 1).toString().padStart(2, '0') + ':00' });
         setOpenDialog(true);
     };
-    const handleEditClick = (template) => { if (!template) return; setEditingTemplate(template); setFormData({ studentId: template.student?.id || '', courseId: template.course?.id || '', dayOfWeek: template.dayOfWeek, startTime: template.startTime?.slice(0,5) || '10:00', endTime: template.endTime?.slice(0,5) || '11:00' }); setOpenDialog(true); };
+    const handleEditClick = (template) => { if (!template) return; setEditingTemplate(template); setFormData({ studentId: template.student?.id || '', courseId: template.course?.id || '', dayOfWeek: template.dayOfWeek, startTime: formatLessonTime('2026-01-01', template.startTime) || '10:00', endTime: formatLessonTime('2026-01-01', template.endTime) || '11:00'}); setOpenDialog(true); };
     const handleDeleteTemplate = async (id) => { if (!window.confirm('Удалить шаблон?')) return; try { await axiosInstance.delete(`/weekly-template/${id}`); showSnackbar('Шаблон удалён', 'success'); fetchData(); } catch (err) { showSnackbar('Ошибка', 'error'); } };
     const handleDeleteLesson = async (lessonId) => { if (!window.confirm('Удалить занятие?')) return; try { await deleteLesson(lessonId); showSnackbar('Занятие удалено', 'success'); fetchData(); } catch (err) { showSnackbar('Ошибка', 'error'); } };
     const handleSave = async () => {
@@ -460,7 +459,7 @@ function WeeklySchedule() {
                                                                             </Typography>
                                                                         )}
                                                                         <Chip 
-                                                                            label="Шаблон"
+                                                                            label={`Шаблон ${formatLessonTime('2026-01-01', template.startTime)}`}
                                                                             size="small"
                                                                             variant="outlined"
                                                                             sx={{ mt: 0.5, fontSize: '0.65rem' }}

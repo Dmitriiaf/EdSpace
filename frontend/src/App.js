@@ -21,8 +21,6 @@ import ResetPassword from './pages/ResetPassword';
 import Login from './pages/Login';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Register from './pages/Register';
-import StudentLogin from './pages/StudentLogin';
-import ParentLogin from './pages/ParentLogin';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
 import Courses from './pages/Courses';
@@ -37,7 +35,9 @@ import StudentProfile from './pages/StudentProfile';
 import ParentProfile from './pages/ParentProfile';
 import StudentProgress from './pages/StudentProgress';
 import StudentMaterials from './pages/StudentMaterials';
-
+import Boards from './pages/Boards';
+import Homework from './pages/Homework';
+import Extracurricular from './pages/Extracurricular';
 // 🎨 НОВЫЕ ЦВЕТА
 const COLORS = {
     murrey: '#8B004A',
@@ -115,8 +115,6 @@ const AppContent = () => {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/student-login" element={<StudentLogin />} />
-            <Route path="/parent-login" element={<ParentLogin />} />
             <Route path="/stepik/callback" element={<StepikCallback />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
@@ -189,14 +187,15 @@ const AppContent = () => {
                         <Route path="/stepik" element={<PrivateRoute requiredRole="tutor"><StepikPageWrapper /></PrivateRoute>} />
                         <Route path="/profile" element={<PrivateRoute requiredRole="tutor"><Profile /></PrivateRoute>} />
                         <Route path="/student-progress/:id" element={<PrivateRoute requiredRole="tutor"><StudentProgress /></PrivateRoute>} />
-                        <Route path="/progress" element={<PrivateRoute requiredRole="tutor"><TutorProgress /></PrivateRoute>} />
-
+                        <Route path="/boards" element={<PrivateRoute requiredRole="tutor"><Boards /></PrivateRoute>} />
+                        <Route path="/extracurricular" element={<PrivateRoute requiredRole="tutor"><Extracurricular /></PrivateRoute>} />
                         {/* Ученик */}
                         <Route path="/student" element={<PrivateRoute requiredRole="student"><StudentDashboard /></PrivateRoute>} />
                         <Route path="/student/profile" element={<PrivateRoute requiredRole="student"><StudentProfile /></PrivateRoute>} />
                         <Route path="/student/progress" element={<PrivateRoute requiredRole="student"><StudentProgress /></PrivateRoute>} />
                         <Route path="/student/materials" element={<PrivateRoute requiredRole="student"><StudentMaterials /></PrivateRoute>} />
-
+                        <Route path="/student/boards" element={<PrivateRoute requiredRole="student"><Boards /></PrivateRoute>} />
+                        <Route path="/student/homework" element={<PrivateRoute requiredRole="student"><Homework /></PrivateRoute>} />
                         {/* Родитель */}
                         <Route path="/parent/dashboard" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/children" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />

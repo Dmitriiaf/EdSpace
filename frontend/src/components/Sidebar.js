@@ -18,6 +18,7 @@ import {
     ChevronLeft as ChevronLeftIcon,
     Logout as LogoutIcon,
     School as SchoolIcon,
+    Draw as DrawIcon,
     Person as PersonIcon,
     Payment as PaymentIcon,
     ChildCare as ChildCareIcon,
@@ -64,20 +65,23 @@ const Sidebar = ({ onHoverChange }) => {
     const tutorMenuItems = [
         { path: '/dashboard', label: 'Главная', icon: <DashboardIcon />, roles: ['tutor'] },
         { path: '/students', label: 'Ученики', icon: <PeopleIcon />, roles: ['tutor'] },
-        { path: '/progress', label: 'Успеваемость', icon: <TrendingUpIcon />, roles: ['tutor'] },
         { path: '/courses', label: 'Курсы', icon: <BookIcon />, roles: ['tutor'] },
+        { path: '/boards', label: 'Доски', icon: <DrawIcon />, roles: ['tutor'] },
         { path: '/weekly-schedule', label: 'Расписание', icon: <CalendarIcon />, roles: ['tutor'] },
         { path: '/finance', label: 'Финансы', icon: <MoneyIcon />, roles: ['tutor'] },
         { path: '/materials', label: 'Материалы', icon: <FolderIcon />, roles: ['tutor'] },
         { path: '/task-bank', label: 'Банк заданий', icon: <AssignmentIcon />, roles: ['tutor'] },
         { path: '/lessons-archive', label: 'Архив', icon: <ArchiveIcon />, roles: ['tutor'] },
         { path: '/profile', label: 'Профиль', icon: <PersonIcon />, roles: ['tutor'] },
+        { path: '/extracurricular', label: 'Внеурочная деятельность', icon: <AssignmentIcon />, roles: ['tutor'] },
     ];
 
     // Меню для ученика
     const studentMenuItems = [
         { path: '/student', label: 'Главная', icon: <DashboardIcon />, roles: ['student'] },
         { path: '/student/progress', label: 'Успеваемость', icon: <TrendingUpIcon />, roles: ['student'] },
+        { path: '/student/boards', label: 'Доски', icon: <DrawIcon />, roles: ['student'] },
+        { path: '/student/homework', label: 'Задания', icon: <AssignmentIcon />, roles: ['student'] },
         { path: '/student/materials', label: 'Материалы', icon: <FolderIcon />, roles: ['student'] },
         { path: '/student/profile', label: 'Профиль', icon: <PersonIcon />, roles: ['student'] },
     ];

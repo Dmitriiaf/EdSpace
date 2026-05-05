@@ -901,7 +901,7 @@ public class LessonController {
             Lesson lesson = lessonService.getLessonById(id);
             boolean hasTutor = lesson.getStudent().getTutors().stream().anyMatch(t -> t.getId().equals(currentUserId));
             if (!hasTutor) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-            if (!Lesson.STATUS_SCHEDULED.equals(lesson.getStatus())) {
+            if (!Lesson.STATUS_SCHEDULED.equals(lesson.getStatus()) && !"RESCHEDULED".equals(lesson.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Урок уже начат или завершён"));
             }
             lesson.setStatus(Lesson.STATUS_IN_PROGRESS);

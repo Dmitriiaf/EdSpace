@@ -54,11 +54,17 @@ public class ExcalidrawController {
                 lessonService.saveLesson(lesson);
             }
 
-            String roomUrl = "https://excalidraw.com/#room=" + boardRoomName;
-
             String displayName = "ROLE_TUTOR".equals(userRole) ?
                     lesson.getTutor().getFullName() :
                     lesson.getStudent().getFullName();
+
+            String encodedName;
+            try {
+                encodedName = java.net.URLEncoder.encode(displayName, "UTF-8");
+            } catch (java.io.UnsupportedEncodingException e) {
+                encodedName = displayName;
+            }
+            String roomUrl = "https://excalidraw.com/#room=" + boardRoomName + ",user=" + encodedName;
 
             return ResponseEntity.ok(Map.of(
                     "roomUrl", roomUrl,

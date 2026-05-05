@@ -5,7 +5,7 @@ import {
     Paper, CircularProgress, Alert, Button,
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Chip, Snackbar,
-    FormControl, InputLabel, Select, MenuItem, Divider
+    FormControl, InputLabel, Select, MenuItem, Divider, Tabs, Tab
 } from '@mui/material';
 import { formatLessonTime, formatLessonDate } from '../utils/timezone';
 import {
@@ -51,6 +51,9 @@ function Dashboard() {
     const { user } = useAuth();
     const { getStudentRateForTutor } = useStudentRate();
     
+    const [newHomeworkForLesson, setNewHomeworkForLesson] = useState({ 
+        studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5', customDueDate: '' 
+    });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [todayLessons, setTodayLessons] = useState([]);
@@ -66,7 +69,8 @@ function Dashboard() {
     const [previousLessonsMap, setPreviousLessonsMap] = useState({});
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [currentTime, setCurrentTime] = useState(new Date());
-    
+    const [upcomingLessons, setUpcomingLessons] = useState([]);
+
     const [openRescheduleDialog, setOpenRescheduleDialog] = useState(false);
     const [selectedDateForReschedule, setSelectedDateForReschedule] = useState(new Date());
     const [selectedTime, setSelectedTime] = useState('');
@@ -82,12 +86,29 @@ function Dashboard() {
     const [selectedVariantId, setSelectedVariantId] = useState('');
     const [applyType, setApplyType] = useState('none');
 
-    // ========== НОВЫЕ СОСТОЯНИЯ ДЛЯ F15 ==========
     const [openReplaceDialog, setOpenReplaceDialog] = useState(false);
     const [cancelledLesson, setCancelledLesson] = useState(null);
     const [selectedDebtorId, setSelectedDebtorId] = useState('');
     const [debtorsList, setDebtorsList] = useState([]);
-    // ============================================
+
+    // ========== БАНК ЗАДАНИЙ ==========
+    const [openBankPicker, setOpenBankPicker] = useState(false);
+    const [bankTasks, setBankTasks] = useState([]);
+    const [bankLoading, setBankLoading] = useState(false);
+    const [bankTab, setBankTab] = useState(0);
+
+    const loadBankItems = async () => {
+        setBankLoading(true);
+        try {
+            const [tasksRes, variantsRes] = await Promise.all([
+                axiosInstance.get('/integration/tasks/search'),
+                axiosInstance.get('/variants')
+            ]);
+            setBankTasks(tasksRes.data || []);
+            setVariants(variantsRes.data || []);
+        } catch (err) { console.error('Ошибка загрузки банка:', err); }
+        finally { setBankLoading(false); }
+    };
 
     const getGreeting = () => {
         const hour = currentTime.getHours();
@@ -97,23 +118,39 @@ function Dashboard() {
         return 'Доброй ночи';
     };
 
+    const handleOpenComplete = async (lesson) => {
+        setSelectedLesson(lesson);
+        setLessonNotes(lesson.notes || '');
+        setNextLessonPlan(lesson.nextLessonPlan || '');
+        setNewHomeworkForLesson({ studentId: lesson.student?.id, task: '', dueDate: '', gradeType: 'GRADE_5', customDueDate: '' });
+        setSelectedVariantId('');
+        setApplyType('none');
+        fetchLessonPlans();
+        fetchVariants();
+        try {
+            const res = await getAllLessons(user.id);
+            const data = res.data !== undefined ? res.data : res;
+            const upcoming = data.filter(l => 
+                l.student?.id === lesson.student?.id && 
+                l.id !== lesson.id &&
+                (l.status === 'SCHEDULED' || l.status === 'RESCHEDULED') &&
+                new Date(`${l.lessonDate}T${l.startTime}`) > new Date()
+            ).sort((a, b) => new Date(`${a.lessonDate}T${a.startTime}`) - new Date(`${b.lessonDate}T${b.startTime}`));
+            setUpcomingLessons(upcoming);
+        } catch (err) {}
+        setOpenCompleteDialog(true);
+    };
+
     const getTimeGradient = () => {
         const hour = currentTime.getHours();
-        if (hour >= 5 && hour < 12) {
-            return 'linear-gradient(135deg, #FFB347 0%, #FF6B6B 100%)';
-        }
-        if (hour >= 12 && hour < 17) {
-            return 'linear-gradient(135deg, #56B4E9 0%, #4A90E2 100%)';
-        }
-        if (hour >= 17 && hour < 22) {
-            return 'linear-gradient(135deg, #F39C12 0%, #E67E22 100%)';
-        }
+        if (hour >= 5 && hour < 12) return 'linear-gradient(135deg, #FFB347 0%, #FF6B6B 100%)';
+        if (hour >= 12 && hour < 17) return 'linear-gradient(135deg, #56B4E9 0%, #4A90E2 100%)';
+        if (hour >= 17 && hour < 22) return 'linear-gradient(135deg, #F39C12 0%, #E67E22 100%)';
         return 'linear-gradient(135deg, #1A2980 0%, #0C0C3C 100%)';
     };
 
     const getDecorations = () => {
         const hour = currentTime.getHours();
-        
         if (hour >= 5 && hour < 12) {
             return {
                 mainIcon: <SunIcon sx={{ fontSize: 120, color: 'rgba(255, 215, 0, 0.3)' }} />,
@@ -163,70 +200,36 @@ function Dashboard() {
     };
 
     const StarIcon = ({ sx }) => (
-        <Box sx={{ ...sx, position: 'relative' }}>
-            ★
-        </Box>
+        <Box sx={{ ...sx, position: 'relative' }}>★</Box>
     );
 
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setCurrentTime(new Date());
-        }, 60000);
-        return () => clearInterval(timer);
-    }, []);
+    useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 60000); return () => clearInterval(timer); }, []);
+    useEffect(() => { if (user) { loadAllData(); fetchDebtors(); } }, [user, selectedDate]);
 
-    useEffect(() => {
-        if (user) {
-            loadAllData();
-            fetchDebtors();
-        }
-    }, [user, selectedDate]);
-
-    // ========== ЗАГРУЗКА ДОЛЖНИКОВ ==========
     const fetchDebtors = async () => {
         try {
             const [studentsRes, subscriptionsRes] = await Promise.all([
                 axiosInstance.get(`/students/tutor/${user.id}`),
                 axiosInstance.get(`/subscriptions/tutor/${user.id}`)
             ]);
-            
             const studentsData = studentsRes.data || [];
             const subscriptionsData = subscriptionsRes.data || [];
-            
             const debtorsListData = studentsData.filter(student => {
-                const activeSub = subscriptionsData.find(
-                    sub => sub.student?.id === student.id && sub.status === 'active' && sub.debtLessons > 0
-                );
+                const activeSub = subscriptionsData.find(sub => sub.student?.id === student.id && sub.status === 'active' && sub.debtLessons > 0);
                 return !!activeSub || (student.missedLessons > 0);
             }).map(student => {
-                const activeSub = subscriptionsData.find(
-                    sub => sub.student?.id === student.id && sub.status === 'active'
-                );
-                return {
-                    ...student,
-                    debtLessons: activeSub?.debtLessons || student.missedLessons || 0
-                };
+                const activeSub = subscriptionsData.find(sub => sub.student?.id === student.id && sub.status === 'active');
+                return { ...student, debtLessons: activeSub?.debtLessons || student.missedLessons || 0 };
             });
-            
             setDebtorsList(debtorsListData);
-        } catch (err) {
-            console.error('Ошибка загрузки должников:', err);
-        }
+        } catch (err) { console.error('Ошибка загрузки должников:', err); }
     };
 
     const loadAllData = async () => {
         setLoading(true);
-        try {
-            await Promise.all([
-                fetchLessonsForDate(selectedDate),
-                fetchPreviousLessons()
-            ]);
-        } catch (err) {
-            console.error('Ошибка при загрузке:', err);
-            setError('Ошибка загрузки данных');
-        } finally {
-            setLoading(false);
-        }
+        try { await Promise.all([fetchLessonsForDate(selectedDate), fetchPreviousLessons()]); }
+        catch (err) { setError('Ошибка загрузки данных'); }
+        finally { setLoading(false); }
     };
 
     const fetchLessonsForDate = async (date) => {
@@ -234,134 +237,59 @@ function Dashboard() {
             const dateStr = format(date, 'yyyy-MM-dd');
             const response = await getAllLessons(user.id);
             const lessonsData = response.data !== undefined ? response.data : response;
-            
             const filtered = lessonsData.filter(lesson => {
                 if (lesson.lessonDate !== dateStr) return false;
-                
                 if (lesson.status === 'RESCHEDULED' && !lesson.originalLesson) {
-                    const hasRescheduledLesson = lessonsData.some(l => 
-                        l.originalLesson?.id === lesson.id
-                    );
-                    return !hasRescheduledLesson;
+                    return !lessonsData.some(l => l.originalLesson?.id === lesson.id);
                 }
-                
                 return true;
             });
-            
-            const sorted = filtered.sort((a, b) => a.startTime.localeCompare(b.startTime));
-            setTodayLessons(sorted);
-        } catch (err) {
-            console.error('Ошибка загрузки занятий:', err);
-        }
+            setTodayLessons(filtered.sort((a, b) => a.startTime.localeCompare(b.startTime)));
+        } catch (err) {}
     };
 
     const fetchPreviousLessons = async () => {
         try {
             const response = await getAllLessons(user.id);
-            
             const allLessons = response.data !== undefined ? response.data : response;
-            
             const lessonsByStudentAndCourse = {};
-            
             for (const lesson of allLessons) {
-                const studentId = lesson.student.id;
-                const courseId = lesson.course?.id || 'no-course';
-                const key = `${studentId}_${courseId}`;
-                
-                if (!lessonsByStudentAndCourse[key]) {
-                    lessonsByStudentAndCourse[key] = [];
-                }
+                const key = `${lesson.student.id}_${lesson.course?.id || 'no-course'}`;
+                if (!lessonsByStudentAndCourse[key]) lessonsByStudentAndCourse[key] = [];
                 lessonsByStudentAndCourse[key].push(lesson);
             }
-            
             const map = {};
-            
             for (const key in lessonsByStudentAndCourse) {
-                const studentLessons = lessonsByStudentAndCourse[key].sort((a, b) => 
-                    new Date(a.lessonDate) - new Date(b.lessonDate)
-                );
-                
-                let lastPlan = null;
-                let lastPlanLesson = null;
-                let planTransferred = false;
-                
+                const studentLessons = lessonsByStudentAndCourse[key].sort((a, b) => new Date(a.lessonDate) - new Date(b.lessonDate));
+                let lastPlan = null, lastPlanLesson = null, planTransferred = false;
                 for (let i = 0; i < studentLessons.length; i++) {
-                    const currentLesson = studentLessons[i];
-                    
-                    if (currentLesson.nextLessonPlan) {
-                        lastPlan = currentLesson.nextLessonPlan;
-                        lastPlanLesson = currentLesson;
-                        planTransferred = false;
-                        continue;
-                    }
-                    
-                    if (lastPlan && lastPlanLesson && !planTransferred) {
-                        if (currentLesson.status !== 'CANCELLED') {
-                            map[currentLesson.id] = {
-                                ...lastPlanLesson,
-                                nextLessonPlan: lastPlan,
-                                courseName: lastPlanLesson.course?.name || 'Без предмета'
-                            };
-                            planTransferred = true;
-                            lastPlan = null;
-                            lastPlanLesson = null;
-                        }
+                    if (studentLessons[i].nextLessonPlan) { lastPlan = studentLessons[i].nextLessonPlan; lastPlanLesson = studentLessons[i]; planTransferred = false; continue; }
+                    if (lastPlan && lastPlanLesson && !planTransferred && studentLessons[i].status !== 'CANCELLED') {
+                        map[studentLessons[i].id] = { ...lastPlanLesson, nextLessonPlan: lastPlan, courseName: lastPlanLesson.course?.name || 'Без предмета' };
+                        planTransferred = true; lastPlan = null; lastPlanLesson = null;
                     }
                 }
             }
-            
             setPreviousLessonsMap(map);
-        } catch (err) {
-            console.error('Ошибка загрузки предыдущих занятий:', err);
-        }
+        } catch (err) {}
     };
 
     const fetchLessonPlans = async () => {
-        try {
-            const response = await fetchLessonPlansAPI();
-            const plansData = response.data !== undefined ? response.data : response;
-            setLessonPlans(Array.isArray(plansData) ? plansData : []);
-        } catch (err) {
-            console.error('Ошибка загрузки планов:', err);
-            setLessonPlans([]);
-        }
+        try { const r = await fetchLessonPlansAPI(); setLessonPlans(Array.isArray(r.data !== undefined ? r.data : r) ? (r.data !== undefined ? r.data : r) : []); }
+        catch (err) { setLessonPlans([]); }
     };
 
     const fetchVariants = async () => {
-        try {
-            const response = await fetchVariantsAPI();
-            const variantsData = response.data !== undefined ? response.data : response;
-            setVariants(Array.isArray(variantsData) ? variantsData : []);
-        } catch (err) {
-            console.error('Ошибка загрузки вариантов:', err);
-            setVariants([]);
-        }
+        try { const r = await fetchVariantsAPI(); setVariants(Array.isArray(r.data !== undefined ? r.data : r) ? (r.data !== undefined ? r.data : r) : []); }
+        catch (err) { setVariants([]); }
     };
 
-    const handleRefresh = async () => {
-        setRefreshing(true);
-        await loadAllData();
-        await fetchDebtors();
-        setRefreshing(false);
-    };
-
-    const handleOpenComplete = (lesson) => {
-        setSelectedLesson(lesson);
-        setLessonNotes(lesson.notes || '');
-        setNextLessonPlan(lesson.nextLessonPlan || '');
-        setSelectedPlanId('');
-        setSelectedVariantId('');
-        setApplyType('none');
-        fetchLessonPlans();
-        fetchVariants();
-        setOpenCompleteDialog(true);
-    };
+    const handleRefresh = async () => { setRefreshing(true); await loadAllData(); await fetchDebtors(); setRefreshing(false); };
 
     const handleApplyItem = (type, id) => {
         if (type === 'plan') {
             const plan = lessonPlans.find(p => p.id === parseInt(id));
             if (!plan) return;
-            
             let notesText = '';
             if (plan.lessonStructure) notesText = plan.lessonStructure;
             if (plan.learningObjectives) notesText = `🎯 Цели:\n${plan.learningObjectives}\n\n${notesText}`;
@@ -373,224 +301,91 @@ function Dashboard() {
             if (!variant) return;
             setNextLessonPlan(`🔗 Вариант: ${variant.title}\n${variant.url}`);
         }
-        
         setApplyType(type);
-        if (type === 'plan') {
-            setSelectedPlanId(id);
-            setSelectedVariantId('');
-        } else {
-            setSelectedVariantId(id);
-            setSelectedPlanId('');
-        }
+        if (type === 'plan') { setSelectedPlanId(id); setSelectedVariantId(''); }
+        else { setSelectedVariantId(id); setSelectedPlanId(''); }
     };
 
     const handleCompleteLesson = async () => {
         if (!selectedLesson) return;
-        
         try {
             await completeLesson(selectedLesson.id, lessonNotes, nextLessonPlan);
-            setOpenCompleteDialog(false);
-            setSelectedLesson(null);
-            setLessonNotes('');
-            setNextLessonPlan('');
+            if (newHomeworkForLesson.task) {
+                const dueDate = newHomeworkForLesson.dueDate === 'custom' ? newHomeworkForLesson.customDueDate : newHomeworkForLesson.dueDate;
+                await axiosInstance.post('/homework', {
+                    tutorId: user.id,
+                    studentId: selectedLesson.student?.id,
+                    task: newHomeworkForLesson.task,
+                    dueDate: dueDate ? dueDate + (dueDate.includes('T') ? '' : 'T23:59:59') : null,
+                    status: 'ASSIGNED',
+                    gradeType: newHomeworkForLesson.gradeType || 'GRADE_5',
+                    courseId: selectedLesson.course?.id || null
+                });
+            }
+            setOpenCompleteDialog(false); setSelectedLesson(null);
+            setLessonNotes(''); setNextLessonPlan('');
+            setNewHomeworkForLesson({ studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5', customDueDate: '' });
             await loadAllData();
-            showSnackbar('✅ Занятие завершено!', 'success');
-        } catch (err) {
-            console.error('Ошибка при завершении урока:', err);
-            showSnackbar('Ошибка при завершении урока', 'error');
-        }
+            showSnackbar(newHomeworkForLesson.task ? '✅ Урок завершён и ДЗ назначено!' : '✅ Занятие завершено!', 'success');
+        } catch (err) { showSnackbar('Ошибка при завершении урока', 'error'); }
     };
 
-    const handleOpenNotes = (lesson) => {
-        setSelectedLesson(lesson);
-        setLessonNotes(lesson.notes || '');
-        setNextLessonPlan(lesson.nextLessonPlan || '');
-        setOpenNotesDialog(true);
-    };
-
+    const handleOpenNotes = (lesson) => { setSelectedLesson(lesson); setLessonNotes(lesson.notes || ''); setNextLessonPlan(lesson.nextLessonPlan || ''); setOpenNotesDialog(true); };
     const handleSaveNotes = async () => {
         if (!selectedLesson) return;
-        
-        try {
-            await addNotes(selectedLesson.id, lessonNotes, nextLessonPlan);
-            await loadAllData();
-            setOpenNotesDialog(false);
-            setSelectedLesson(null);
-            showSnackbar('Заметки сохранены', 'success');
-        } catch (err) {
-            console.error('Ошибка при сохранении заметок:', err);
-            showSnackbar('Ошибка при сохранении заметок', 'error');
-        }
+        try { await addNotes(selectedLesson.id, lessonNotes, nextLessonPlan); await loadAllData(); setOpenNotesDialog(false); setSelectedLesson(null); showSnackbar('Заметки сохранены', 'success'); }
+        catch (err) { showSnackbar('Ошибка при сохранении заметок', 'error'); }
     };
-
-    const handleCancelClick = (lesson) => {
-        setSelectedLesson(lesson);
-        setCancelReason('');
-        setOpenCancelDialog(true);
-    };
-
+    const handleCancelClick = (lesson) => { setSelectedLesson(lesson); setCancelReason(''); setOpenCancelDialog(true); };
     const handleCancelConfirm = async () => {
         if (!selectedLesson) return;
-
-        try {
-            await cancelLesson(selectedLesson.id, cancelReason);
-            setOpenCancelDialog(false);
-            setSelectedLesson(null);
-            setCancelReason('');
-            await loadAllData();
-            await fetchDebtors();
-            showSnackbar('❌ Занятие отменено', 'info');
-        } catch (err) {
-            console.error('Ошибка при отмене занятия:', err);
-            showSnackbar('Ошибка при отмене занятия', 'error');
-        }
+        try { await cancelLesson(selectedLesson.id, cancelReason); setOpenCancelDialog(false); setSelectedLesson(null); setCancelReason(''); await loadAllData(); await fetchDebtors(); showSnackbar('❌ Занятие отменено', 'info'); }
+        catch (err) { showSnackbar('Ошибка при отмене занятия', 'error'); }
     };
-
     const handleCancelReschedule = async (originalLesson) => {
-        if (!window.confirm('Отменить перенос? Оригинальное занятие восстановится, новое будет удалено.')) {
-            return;
-        }
-        
-        try {
-            await axiosInstance.post(`/lessons/${originalLesson.id}/cancel-reschedule`);
-            showSnackbar('✅ Перенос отменён', 'success');
-            await loadAllData();
-        } catch (err) {
-            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
-        }
+        if (!window.confirm('Отменить перенос?')) return;
+        try { await axiosInstance.post(`/lessons/${originalLesson.id}/cancel-reschedule`); showSnackbar('✅ Перенос отменён', 'success'); await loadAllData(); }
+        catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
-
-    const handleRescheduleClick = (lesson) => {
-        setLessonToReschedule(lesson);
-        const lessonDate = new Date(lesson.lessonDate);
-        setSelectedDateForReschedule(lessonDate);
-        
-        const currentTime = lesson.startTime.slice(0,5);
-        setSelectedTime(currentTime);
-        
-        checkAvailableSlots(lessonDate, lesson);
-        setOpenRescheduleDialog(true);
-    };
-
+    const handleRescheduleClick = (lesson) => { setLessonToReschedule(lesson); setSelectedDateForReschedule(new Date(lesson.lessonDate)); setSelectedTime(lesson.startTime.slice(0,5)); checkAvailableSlots(new Date(lesson.lessonDate), lesson); setOpenRescheduleDialog(true); };
     const checkAvailableSlots = async (date, currentLesson) => {
         try {
             const allLessonsForTutor = await getAllLessons(user.id);
             const lessonsData = allLessonsForTutor.data !== undefined ? allLessonsForTutor.data : allLessonsForTutor;
-            
             const dateStr = date.toISOString().split('T')[0];
-            
-            const takenSlots = lessonsData
-                .filter(lesson => {
-                    const lessonDate = lesson.lessonDate;
-                    return lessonDate === dateStr && 
-                        lesson.status !== 'CANCELLED' &&
-                        lesson.id !== currentLesson.id;
-                })
-                .map(lesson => lesson.startTime.slice(0, 5));
-            
-            const allTimeSlots = [
-                '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', 
-                '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', 
-                '20:00', '21:00', '22:00'
-            ];
-            
-            const available = allTimeSlots.filter(slot => !takenSlots.includes(slot));
-            
-            setAvailableSlots(available);
-            
-            if (selectedTime && !available.includes(selectedTime)) {
-                setSelectedTime('');
-            }
-            
-        } catch (err) {
-            console.error('Ошибка проверки слотов:', err);
-            setAvailableSlots([]);
-        }
+            const takenSlots = lessonsData.filter(l => l.lessonDate === dateStr && l.status !== 'CANCELLED' && l.id !== currentLesson.id).map(l => l.startTime.slice(0,5));
+            const allSlots = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
+            setAvailableSlots(allSlots.filter(s => !takenSlots.includes(s)));
+            if (selectedTime && !allSlots.filter(s => !takenSlots.includes(s)).includes(selectedTime)) setSelectedTime('');
+        } catch (err) { setAvailableSlots([]); }
     };
-
-    const handleDateChange = (date) => {
-        setSelectedDateForReschedule(date);
-        if (lessonToReschedule) {
-            checkAvailableSlots(date, lessonToReschedule);
-        }
-    };
-
+    const handleDateChange = (date) => { setSelectedDateForReschedule(date); if (lessonToReschedule) checkAvailableSlots(date, lessonToReschedule); };
     const handleRescheduleConfirm = async () => {
         if (!lessonToReschedule || !selectedTime) return;
-        
         try {
             const timeFrom = selectedTime + ':00';
             const timeTo = (parseInt(selectedTime.split(':')[0]) + 1).toString().padStart(2, '0') + ':00';
-            const newDate = selectedDateForReschedule.toISOString().split('T')[0];
-            
-            await rescheduleLesson(lessonToReschedule.id, newDate, timeFrom, timeTo);
-            
-            setOpenRescheduleDialog(false);
-            setLessonToReschedule(null);
-            setSelectedTime('');
-            await loadAllData();
+            await rescheduleLesson(lessonToReschedule.id, selectedDateForReschedule.toISOString().split('T')[0], timeFrom, timeTo);
+            setOpenRescheduleDialog(false); setLessonToReschedule(null); setSelectedTime(''); await loadAllData();
             showSnackbar('✅ Занятие успешно перенесено', 'success');
-            
-        } catch (err) {
-            console.error('Ошибка при переносе:', err);
-            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
-        }
+        } catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
-
     const handleStartLesson = async (lesson) => {
-        try {
-            await axiosInstance.post(`/lessons/${lesson.id}/start`);
-            showSnackbar('✅ Урок начат!', 'success');
-            await loadAllData();
-        } catch (err) {
-            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
-        }
+        try { await axiosInstance.post(`/lessons/${lesson.id}/start`); showSnackbar('✅ Урок начат!', 'success'); await loadAllData(); }
+        catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
-
-    const handleStudentNoShow = (lesson) => {
-        setSelectedLesson(lesson);
-        setCancelReason('Ученик не пришёл');
-        setOpenCancelDialog(true);
-    };
-
-    // ========== ОБРАБОТЧИКИ ДЛЯ F15 ==========
-    const handleReplaceClick = (lesson) => {
-        setCancelledLesson(lesson);
-        setSelectedDebtorId('');
-        setOpenReplaceDialog(true);
-    };
-
+    const handleStudentNoShow = (lesson) => { setSelectedLesson(lesson); setCancelReason('Ученик не пришёл'); setOpenCancelDialog(true); };
+    const handleReplaceClick = (lesson) => { setCancelledLesson(lesson); setSelectedDebtorId(''); setOpenReplaceDialog(true); };
     const handleConfirmReplace = async () => {
         if (!cancelledLesson || !selectedDebtorId) return;
-        
-        try {
-            await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId));
-            showSnackbar('✅ Урок заменён на отработку долга', 'success');
-            setOpenReplaceDialog(false);
-            setCancelledLesson(null);
-            await loadAllData();
-            await fetchDebtors();
-        } catch (err) {
-            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
-        }
-    };
-    // ========================================
-
-    const goToPreviousDay = () => {
-        setSelectedDate(prev => subDays(prev, 1));
+        try { await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId)); showSnackbar('✅ Урок заменён на отработку долга', 'success'); setOpenReplaceDialog(false); setCancelledLesson(null); await loadAllData(); await fetchDebtors(); }
+        catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
 
-    const goToNextDay = () => {
-        setSelectedDate(prev => addDays(prev, 1));
-    };
-
-    const goToToday = () => {
-        setSelectedDate(new Date());
-    };
-
-    const showSnackbar = (message, severity) => {
-        setSnackbar({ open: true, message, severity });
-    };
+    const goToPreviousDay = () => setSelectedDate(prev => subDays(prev, 1));
+    const goToNextDay = () => setSelectedDate(prev => addDays(prev, 1));
+    const goToToday = () => setSelectedDate(new Date());
+    const showSnackbar = (message, severity) => setSnackbar({ open: true, message, severity });
 
     const getLessonColor = (lesson) => {
         if (lesson.status === 'CANCELLED') return 'error';
@@ -614,7 +409,6 @@ function Dashboard() {
 
     const isToday = isSameDay(selectedDate, new Date());
     const isPast = selectedDate < new Date() && !isToday;
-
     const decorations = getDecorations();
 
     const LessonCard = ({ lesson }) => {
@@ -623,232 +417,76 @@ function Dashboard() {
         const courseName = lesson.course?.name || 'Занятие';
         const studentName = lesson.student?.fullName || 'Ученик';
         const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
-        
-        const isRescheduledNew = lesson.originalLesson !== null && lesson.status === 'RESCHEDULED';
+        const isRescheduledNew = !!lesson.originalLesson && lesson.status === 'RESCHEDULED';
         const isRescheduledOriginal = lesson.status === 'RESCHEDULED' && !lesson.originalLesson;
         const isScheduled = lesson.status === 'SCHEDULED';
         const isInProgress = lesson.status === 'IN_PROGRESS';
         const isCompleted = lesson.status === 'COMPLETED';
         const isPaid = lesson.status === 'PAID';
         const isCancelled = lesson.status === 'CANCELLED';
-        
-        const getRescheduledTarget = () => {
-            if (!isRescheduledOriginal) return null;
-            return todayLessons.find(l => l.originalLesson?.id === lesson.id);
-        };
-        
-        const rescheduledTarget = getRescheduledTarget();
+        const isOriginalRescheduled = lesson.status === 'RESCHEDULED' && todayLessons.some(l => l.originalLesson?.id === lesson.id);
+        const rescheduledTarget = isRescheduledOriginal ? todayLessons.find(l => l.originalLesson?.id === lesson.id) : null;
         
         return (
-            <Card 
-                sx={{ 
-                    mb: 2,
-                    borderLeft: 6,
-                    borderColor: `${getLessonColor(lesson)}.main`,
-                    bgcolor: isScheduled ? '#fff3e0' : 
-                             isInProgress ? '#e3f2fd' :
-                             isCompleted ? '#fff8e1' : 'white',
-                    transition: 'transform 0.2s',
-                    '&:hover': { transform: 'translateX(4px)' }
-                }}
-            >
+            <Card sx={{ mb: 2, borderLeft: 6, borderColor: `${getLessonColor(lesson)}.main`, bgcolor: isScheduled ? '#fff3e0' : isInProgress ? '#e3f2fd' : isCompleted ? '#fff8e1' : 'white', transition: 'transform 0.2s', '&:hover': { transform: 'translateX(4px)' } }}>
                 <CardContent>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <Box sx={{ flex: 1 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-                                <Typography variant="h6" sx={{ minWidth: 100 }}>
-                                    {startTime} - {endTime}
-                                </Typography>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                                    {studentName}
-                                </Typography>
-                                <Chip 
-                                    label={courseName} 
-                                    size="small" 
-                                    variant="outlined"
-                                    color="primary"
-                                />
-                                <Chip 
-                                    label={getStatusText(lesson)}
-                                    color={getLessonColor(lesson)}
-                                    size="small"
-                                />
-                                {studentRate && (
-                                    <Chip 
-                                        label={`${studentRate} ₽`}
-                                        size="small"
-                                        color="success"
-                                        variant="outlined"
-                                    />
-                                )}
+                                <Typography variant="h6" sx={{ minWidth: 100 }}>{startTime} - {endTime}</Typography>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{studentName}</Typography>
+                                <Chip label={courseName} size="small" variant="outlined" color="primary" />
+                                <Chip label={getStatusText(lesson)} color={getLessonColor(lesson)} size="small" />
+                                {studentRate && <Chip label={`${studentRate} ₽`} size="small" color="success" variant="outlined" />}
                             </Box>
-                            
                             {isRescheduledOriginal && rescheduledTarget && (
                                 <Paper sx={{ p: 2, bgcolor: '#e3f2fd', mb: 2 }}>
-                                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                                        🔄 ПЕРЕНЕСЕНО:
-                                    </Typography>
-                                    <Typography variant="body2">
-                                        Занятие перенесено на {formatLessonDate(rescheduledTarget.lessonDate)} в {formatLessonTime(rescheduledTarget.lessonDate, rescheduledTarget.startTime)}
-                                    </Typography>
+                                    <Typography variant="body2" color="textSecondary">🔄 ПЕРЕНЕСЕНО:</Typography>
+                                    <Typography variant="body2">Занятие перенесено на {formatLessonDate(rescheduledTarget.lessonDate)} в {formatLessonTime(rescheduledTarget.lessonDate, rescheduledTarget.startTime)}</Typography>
                                 </Paper>
                             )}
-                            
                             {previousLessonsMap[lesson.id]?.nextLessonPlan && (
                                 <Paper sx={{ p: 2, bgcolor: '#fff8e1', mb: 2, borderLeft: 4, borderColor: 'warning.main' }}>
-                                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                                        📋 ЧТО БЫЛО ЗАДАНО К ЭТОМУ УРОКУ:
-                                    </Typography>
-                                    <Typography variant="body1">
-                                        {previousLessonsMap[lesson.id].nextLessonPlan}
-                                    </Typography>
+                                    <Typography variant="body2" color="textSecondary">📋 ЧТО БЫЛО ЗАДАНО К ЭТОМУ УРОКУ:</Typography>
+                                    <Typography variant="body1">{previousLessonsMap[lesson.id].nextLessonPlan}</Typography>
                                 </Paper>
                             )}
-                            
                             {lesson.notes && (
                                 <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
-                                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                                        📝 ЧТО ДЕЛАЛИ НА УРОКЕ:
-                                    </Typography>
-                                    <Typography variant="body1">
-                                        {lesson.notes}
-                                    </Typography>
+                                    <Typography variant="body2" color="textSecondary">📝 ЧТО ДЕЛАЛИ НА УРОКЕ:</Typography>
+                                    <Typography variant="body1">{lesson.notes}</Typography>
                                 </Paper>
                             )}
-                            
                             {lesson.nextLessonPlan && (
                                 <Paper sx={{ p: 2, bgcolor: '#e3f2fd', borderLeft: 4, borderColor: 'primary.main' }}>
-                                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                                        🎯 ЧТО СДЕЛАТЬ К СЛЕДУЮЩЕМУ УРОКУ:
-                                    </Typography>
-                                    <Typography variant="body1">
-                                        {lesson.nextLessonPlan}
-                                    </Typography>
-                                </Paper>
-                            )}
-                            
-                            {isCancelled && lesson.notes?.includes('Отменено') && (
-                                <Paper sx={{ p: 2, bgcolor: '#ffebee', mb: 2 }}>
-                                    <Typography variant="body2" color="error" gutterBottom>
-                                        ❌ ПРИЧИНА ОТМЕНЫ:
-                                    </Typography>
-                                    <Typography variant="body1" color="error">
-                                        {lesson.notes.replace('❌ Отменено: ', '').replace('❌ Ученик не пришёл: ', '')}
-                                    </Typography>
+                                    <Typography variant="body2" color="textSecondary">🎯 ЧТО СДЕЛАТЬ К СЛЕДУЮЩЕМУ УРОКУ:</Typography>
+                                    <Typography variant="body1">{lesson.nextLessonPlan}</Typography>
                                 </Paper>
                             )}
                         </Box>
-                        
                         <Box sx={{ display: 'flex', gap: 1, ml: 2, flexDirection: 'column' }}>
-                            {isRescheduledOriginal ? (
+                            {isOriginalRescheduled ? (
                                 <>
-                                    {rescheduledTarget && (
-                                        <Paper sx={{ p: 1, bgcolor: '#FFF3E0', borderRadius: 2, mb: 1 }}>
-                                            <Typography variant="caption" color="textSecondary">
-                                                Перенесено на {formatLessonDate(rescheduledTarget.lessonDate)} в {formatLessonTime(rescheduledTarget.lessonDate, rescheduledTarget.startTime)}
-                                            </Typography>
-                                        </Paper>
-                                    )}
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="secondary"
-                                        onClick={() => handleCancelReschedule(lesson)}
-                                        data-testid="cancel-reschedule-btn"
-                                    >
-                                        <strong>Отменить перенос</strong>
-                                    </Button>
+                                    {rescheduledTarget && <Paper sx={{ p: 1, bgcolor: '#FFF3E0' }}><Typography variant="caption">Перенесено на {formatLessonDate(rescheduledTarget.lessonDate)} в {formatLessonTime(rescheduledTarget.lessonDate, rescheduledTarget.startTime)}</Typography></Paper>}
+                                    <Button size="small" variant="outlined" color="secondary" onClick={() => handleCancelReschedule(lesson)}><strong>Отменить перенос</strong></Button>
                                 </>
                             ) : isCancelled ? (
-                                // ========== КНОПКА ДЛЯ CANCELLED УРОКА ==========
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="success"
-                                    startIcon={<WorkIcon />}
-                                    onClick={() => handleReplaceClick(lesson)}
-                                >
-                                    🔄 Отработать долг
-                                </Button>
-                                // ============================================
+                                <Button size="small" variant="outlined" color="success" startIcon={<WorkIcon />} onClick={() => handleReplaceClick(lesson)}>🔄 Отработать долг</Button>
                             ) : (
                                 <>
-                                    {(isScheduled || isInProgress || isRescheduledNew) && (
-                                        <Button
-                                            size="small"
-                                            variant="contained"
-                                            color="primary"
-                                            startIcon={<VideocamIcon />}
-                                            onClick={async () => {
-                                                if (isScheduled || lesson.status === 'RESCHEDULED') {
-                                                    await handleStartLesson(lesson);
-                                                }
-                                                setSelectedLessonForRoom(lesson);
-                                                setLessonRoomOpen(true);
-                                            }}
-                                            sx={{ mb: 0.5 }}
-                                        >
-                                            Начать урок
-                                        </Button>
+                                    {(isScheduled || isInProgress || isRescheduledNew || lesson.status === 'RESCHEDULED') && (
+                                        <Button size="small" variant="contained" color="primary" startIcon={<VideocamIcon />}
+                                            onClick={async () => { if (isScheduled || lesson.status === 'RESCHEDULED') await handleStartLesson(lesson); setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); }} sx={{ mb: 0.5 }}>Начать урок</Button>
                                     )}
-                                    
-                                    
-                                    {isInProgress && (
-                                        <>
-                                            <Button
-                                                size="small"
-                                                variant="contained"
-                                                color="success"
-                                                startIcon={<CheckIcon />}
-                                                onClick={() => handleOpenComplete(lesson)}
-                                            >
-                                                Завершить урок
-                                            </Button>
-                                            <Button
-                                                size="small"
-                                                variant="outlined"
-                                                color="warning"
-                                                startIcon={<CancelIcon />}
-                                                onClick={() => handleStudentNoShow(lesson)}
-                                            >
-                                                Ученик не пришёл
-                                            </Button>
-                                        </>
-                                    )}
-                                    
-                                    {(isScheduled || lesson.status === 'RESCHEDULED') && (
-                                        <>
-                                            <Button
-                                                size="small"
-                                                variant="outlined"
-                                                color="warning"
-                                                startIcon={<EventIcon />}
-                                                onClick={() => handleRescheduleClick(lesson)}
-                                            >
-                                                Перенести
-                                            </Button>
-                                            <Button
-                                                size="small"
-                                                variant="outlined"
-                                                color="error"
-                                                startIcon={<CancelIcon />}
-                                                onClick={() => handleCancelClick(lesson)}
-                                            >
-                                                Отмена
-                                            </Button>
-                                        </>
-                                    )}
-                                    
-                                    {(isCompleted || isPaid) && (
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            startIcon={<EditIcon />}
-                                            onClick={() => handleOpenNotes(lesson)}
-                                        >
-                                            Заметки
-                                        </Button>
-                                    )}
+                                    {isInProgress && (<>
+                                        <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />} onClick={() => handleOpenComplete(lesson)}>Завершить урок</Button>
+                                        <Button size="small" variant="outlined" color="warning" startIcon={<CancelIcon />} onClick={() => handleStudentNoShow(lesson)}>Ученик не пришёл</Button>
+                                    </>)}
+                                    {(isScheduled || lesson.status === 'RESCHEDULED') && (<>
+                                        <Button size="small" variant="outlined" color="warning" startIcon={<EventIcon />} onClick={() => handleRescheduleClick(lesson)}>Перенести</Button>
+                                        <Button size="small" variant="outlined" color="error" startIcon={<CancelIcon />} onClick={() => handleCancelClick(lesson)}>Отмена</Button>
+                                    </>)}
+                                    {(isCompleted || isPaid) && <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={() => handleOpenNotes(lesson)}>Заметки</Button>}
                                 </>
                             )}
                         </Box>
@@ -858,208 +496,47 @@ function Dashboard() {
         );
     };
 
-    if (loading) return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
-            <CircularProgress />
-        </Box>
-    );
-
-    if (error) return (
-        <Box sx={{ p: 3 }}>
-            <Alert severity="error">{error}</Alert>
-        </Box>
-    );
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>;
+    if (error) return <Box sx={{ p: 3 }}><Alert severity="error">{error}</Alert></Box>;
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
             <Box sx={{ p: 3 }}>
-                <Paper
-                    sx={{
-                        position: 'relative',
-                        mb: 4,
-                        borderRadius: 4,
-                        background: getTimeGradient(),
-                        minHeight: 200,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        p: { xs: 3, md: 4 },
-                        overflow: 'hidden',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
-                        transition: 'background 0.5s ease'
-                    }}
-                >
-                    {decorations.floatingElements.map((el, index) => (
-                        <Box
-                            key={index}
-                            sx={{
-                                position: 'absolute',
-                                top: el.top,
-                                left: el.left,
-                                fontSize: el.size,
-                                color: 'rgba(255, 255, 255, 0.3)',
-                                animation: `float ${el.duration} infinite ease-in-out`,
-                                animationDelay: el.delay,
-                                pointerEvents: 'none',
-                                '@keyframes float': {
-                                    '0%': { transform: 'translateY(0px) rotate(0deg)' },
-                                    '50%': { transform: 'translateY(-15px) rotate(5deg)' },
-                                    '100%': { transform: 'translateY(0px) rotate(0deg)' }
-                                }
-                            }}
-                        >
-                            {el.icon}
-                        </Box>
+                <Paper sx={{ position: 'relative', mb: 4, borderRadius: 4, background: getTimeGradient(), minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: { xs: 3, md: 4 }, overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+                    {decorations.floatingElements.map((el, i) => (
+                        <Box key={i} sx={{ position: 'absolute', top: el.top, left: el.left, fontSize: el.size, color: 'rgba(255,255,255,0.3)', animation: `float ${el.duration} infinite ease-in-out`, animationDelay: el.delay, pointerEvents: 'none', '@keyframes float': { '0%': { transform: 'translateY(0px)' }, '50%': { transform: 'translateY(-15px)' }, '100%': { transform: 'translateY(0px)' } } }}>{el.icon}</Box>
                     ))}
-                    
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            right: 30,
-                            bottom: 20,
-                            opacity: 0.25,
-                            transform: 'scale(1)',
-                            pointerEvents: 'none',
-                            animation: 'pulse 4s infinite ease-in-out',
-                            '@keyframes pulse': {
-                                '0%': { transform: 'scale(1)', opacity: 0.25 },
-                                '50%': { transform: 'scale(1.05)', opacity: 0.35 },
-                                '100%': { transform: 'scale(1)', opacity: 0.25 }
-                            }
-                        }}
-                    >
-                        {decorations.mainIcon}
-                    </Box>
-                    
+                    <Box sx={{ position: 'absolute', right: 30, bottom: 20, opacity: 0.25 }}>{decorations.mainIcon}</Box>
                     <Box sx={{ position: 'relative', zIndex: 2, color: 'white' }}>
-                        <Typography 
-                            variant="h2" 
-                            sx={{ 
-                                fontWeight: 'bold', 
-                                fontSize: { xs: '2rem', md: '3.5rem' },
-                                textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
-                                letterSpacing: '2px'
-                            }}
-                        >
-                            {format(currentTime, 'HH:mm')}
-                        </Typography>
-                        <Typography 
-                            variant="h6" 
-                            sx={{ 
-                                mt: 1,
-                                textShadow: '1px 1px 2px rgba(0,0,0,0.3)',
-                                fontWeight: 500
-                            }}
-                        >
-                            {format(currentTime, 'EEEE, d MMMM yyyy', { locale: ru })}
-                        </Typography>
-                        <Typography 
-                            variant="body1" 
-                            sx={{ 
-                                mt: 1.5,
-                                opacity: 0.95,
-                                textShadow: '1px 1px 2px rgba(0,0,0,0.3)',
-                                fontSize: '1.1rem'
-                            }}
-                        >
-                            {getGreeting()}, {user?.fullName?.split(' ')[0]}! 👋
-                        </Typography>
+                        <Typography variant="h2" sx={{ fontWeight: 'bold', fontSize: { xs: '2rem', md: '3.5rem' }, textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>{format(currentTime, 'HH:mm')}</Typography>
+                        <Typography variant="h6" sx={{ mt: 1, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{format(currentTime, 'EEEE, d MMMM yyyy', { locale: ru })}</Typography>
+                        <Typography variant="body1" sx={{ mt: 1.5, opacity: 0.95, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{getGreeting()}, {user?.fullName?.split(' ')[0]}! 👋</Typography>
                     </Box>
                     <Box sx={{ position: 'relative', zIndex: 2 }}>
-                        <Button
-                            variant="contained"
-                            startIcon={<RefreshIcon />}
-                            onClick={handleRefresh}
-                            disabled={refreshing}
-                            sx={{
-                                bgcolor: 'rgba(255,255,255,0.9)',
-                                color: '#333',
-                                '&:hover': {
-                                    bgcolor: 'white',
-                                    transform: 'scale(1.02)'
-                                },
-                                transition: 'all 0.2s',
-                                backdropFilter: 'blur(4px)',
-                                boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-                            }}
-                        >
-                            {refreshing ? 'Обновление...' : 'Обновить'}
-                        </Button>
+                        <Button variant="contained" startIcon={<RefreshIcon />} onClick={handleRefresh} disabled={refreshing} sx={{ bgcolor: 'rgba(255,255,255,0.9)', color: '#333' }}>{refreshing ? 'Обновление...' : 'Обновить'}</Button>
                     </Box>
                 </Paper>
 
                 <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="h5" sx={{ fontWeight: 500 }}>
-                                📅 Расписание на {format(selectedDate, 'd MMMM yyyy', { locale: ru })}
-                            </Typography>
-                            {isPast && (
-                                <Chip 
-                                    label="Прошедший день" 
-                                    size="small" 
-                                    color="warning" 
-                                    variant="outlined"
-                                    sx={{ fontWeight: 500 }}
-                                />
-                            )}
+                            <Typography variant="h5" sx={{ fontWeight: 500 }}>📅 Расписание на {format(selectedDate, 'd MMMM yyyy', { locale: ru })}</Typography>
+                            {isPast && <Chip label="Прошедший день" size="small" color="warning" variant="outlined" />}
                         </Box>
-                        
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={goToPreviousDay}
-                                startIcon={<ArrowBackIcon />}
-                                sx={{ borderRadius: 2 }}
-                            >
-                                Предыдущий
-                            </Button>
-                            
-                            <Button
-                                size="small"
-                                variant={isToday ? "contained" : "outlined"}
-                                onClick={goToToday}
-                                startIcon={<CalendarTodayIcon />}
-                                color="primary"
-                                sx={{ borderRadius: 2 }}
-                            >
-                                Сегодня
-                            </Button>
-                            
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={goToNextDay}
-                                endIcon={<ArrowForwardIcon />}
-                                disabled={isToday}
-                                sx={{ borderRadius: 2 }}
-                            >
-                                Следующий
-                            </Button>
+                            <Button size="small" variant="outlined" onClick={goToPreviousDay} startIcon={<ArrowBackIcon />}>Предыдущий</Button>
+                            <Button size="small" variant={isToday ? "contained" : "outlined"} onClick={goToToday} startIcon={<CalendarTodayIcon />}>Сегодня</Button>
+                            <Button size="small" variant="outlined" onClick={goToNextDay} endIcon={<ArrowForwardIcon />}>Следующий</Button>
                         </Box>
                     </Box>
-                    
                     {todayLessons.length === 0 ? (
-                        <Box sx={{ textAlign: 'center', py: 8 }}>
-                            <Typography variant="h6" color="textSecondary" gutterBottom>
-                                На {format(selectedDate, 'd MMMM yyyy', { locale: ru })} занятий нет
-                            </Typography>
-                            {isPast && (
-                                <Typography variant="body2" color="textSecondary">
-                                    Вы можете вернуться к сегодняшнему дню или выбрать другую дату
-                                </Typography>
-                            )}
-                        </Box>
+                        <Box sx={{ textAlign: 'center', py: 8 }}><Typography variant="h6" color="textSecondary">На {format(selectedDate, 'd MMMM yyyy', { locale: ru })} занятий нет</Typography></Box>
                     ) : (
-                        <Box>
-                            {todayLessons.map(lesson => (
-                                <LessonCard key={lesson.id} lesson={lesson} />
-                            ))}
-                        </Box>
+                        <Box>{todayLessons.map(lesson => <LessonCard key={lesson.id} lesson={lesson} />)}</Box>
                     )}
                 </Paper>
 
+                {/* ========== ДИАЛОГ ЗАВЕРШЕНИЯ УРОКА ========== */}
                 <Dialog open={openCompleteDialog} onClose={() => setOpenCompleteDialog(false)} maxWidth="md" fullWidth>
                     <DialogTitle>Завершение урока</DialogTitle>
                     <DialogContent>
@@ -1070,287 +547,127 @@ function Dashboard() {
                             
                             <FormControl fullWidth sx={{ mt: 2, mb: 3 }}>
                                 <InputLabel>📋 Применить (опционально)</InputLabel>
-                                <Select
-                                    value={applyType === 'plan' ? `plan_${selectedPlanId}` : (applyType === 'variant' ? `variant_${selectedVariantId}` : '')}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (!val) {
-                                            setApplyType('none');
-                                            setSelectedPlanId('');
-                                            setSelectedVariantId('');
-                                            return;
-                                        }
-                                        const [type, id] = val.split('_');
-                                        handleApplyItem(type, id);
-                                    }}
-                                    label="📋 Применить (опционально)"
-                                >
-                                    <MenuItem value="">— Не применять —</MenuItem>
-                                    <Divider />
-                                    <MenuItem disabled sx={{ fontWeight: 600, opacity: '1 !important' }}>
-                                        📖 Планы уроков
-                                    </MenuItem>
-                                    {lessonPlans.map(plan => (
-                                        <MenuItem key={`plan_${plan.id}`} value={`plan_${plan.id}`}>
-                                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                                <Typography variant="body2">{plan.title}</Typography>
-                                                <Typography variant="caption" color="textSecondary">{plan.topic}</Typography>
-                                            </Box>
-                                        </MenuItem>
-                                    ))}
-                                    <Divider />
-                                    <MenuItem disabled sx={{ fontWeight: 600, opacity: '1 !important' }}>
-                                        🔗 Варианты
-                                    </MenuItem>
-                                    {variants.map(variant => (
-                                        <MenuItem key={`variant_${variant.id}`} value={`variant_${variant.id}`}>
-                                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                                <Typography variant="body2">{variant.title}</Typography>
-                                                <Typography variant="caption" color="textSecondary">{variant.subject} • {variant.examType}</Typography>
-                                            </Box>
-                                        </MenuItem>
-                                    ))}
+                                <Select value={applyType === 'plan' ? `plan_${selectedPlanId}` : (applyType === 'variant' ? `variant_${selectedVariantId}` : '')}
+                                    onChange={(e) => { const val = e.target.value; if (!val) { setApplyType('none'); setSelectedPlanId(''); setSelectedVariantId(''); return; } const [type, id] = val.split('_'); handleApplyItem(type, id); }} label="📋 Применить (опционально)">
+                                    <MenuItem value="">— Не применять —</MenuItem><Divider />
+                                    <MenuItem disabled sx={{ fontWeight: 600 }}>📖 Планы уроков</MenuItem>
+                                    {lessonPlans.map(plan => <MenuItem key={`plan_${plan.id}`} value={`plan_${plan.id}`}><Box><Typography variant="body2">{plan.title}</Typography><Typography variant="caption">{plan.topic}</Typography></Box></MenuItem>)}<Divider />
+                                    <MenuItem disabled sx={{ fontWeight: 600 }}>🔗 Варианты</MenuItem>
+                                    {variants.map(v => <MenuItem key={`variant_${v.id}`} value={`variant_${v.id}`}><Box><Typography variant="body2">{v.title}</Typography><Typography variant="caption">{v.subject} • {v.examType}</Typography></Box></MenuItem>)}
                                 </Select>
-                                <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5 }}>
-                                    При выборе плана или варианта поле "Что сделать на следующем уроке" заполнится автоматически
-                                </Typography>
                             </FormControl>
                             
-                            <TextField
-                                fullWidth
-                                label="📝 Что делали на уроке"
-                                multiline
-                                rows={6}
-                                value={lessonNotes}
-                                onChange={(e) => setLessonNotes(e.target.value)}
-                                margin="normal"
-                                placeholder="Например: Прошли Present Simple, сделали упражнения..."
-                                required
-                            />
-                            <TextField
-                                fullWidth
-                                label="🎯 Что сделать на следующем уроке"
-                                multiline
-                                rows={3}
-                                value={nextLessonPlan}
-                                onChange={(e) => setNextLessonPlan(e.target.value)}
-                                margin="normal"
-                                placeholder="Например: Разобрать Present Continuous, начать новую тему..."
-                            />
-                            <Alert severity="info" sx={{ mt: 2 }}>
-                                После завершения урока родитель получит уведомление и сможет подтвердить оплату.
-                            </Alert>
+                            <TextField fullWidth label="📝 Что делали на уроке" multiline rows={4} value={lessonNotes} onChange={(e) => setLessonNotes(e.target.value)} margin="normal" />
+                            <TextField fullWidth label="🎯 Что сделать на следующем уроке" multiline rows={3} value={nextLessonPlan} onChange={(e) => setNextLessonPlan(e.target.value)} margin="normal" />
+
+                            <Divider sx={{ my: 3 }} />
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>📋 Назначить домашнее задание (опционально)</Typography>
+                            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                                <TextField fullWidth label="Текст задания" multiline rows={3} value={newHomeworkForLesson.task}
+                                    onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, task: e.target.value })} />
+                                <Button variant="outlined" onClick={() => { setOpenBankPicker(true); loadBankItems(); }} sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>📋 Из банка</Button>
+                            </Box>
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth><InputLabel>Срок сдачи</InputLabel>
+                                        <Select value={newHomeworkForLesson.dueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, dueDate: e.target.value })} label="Срок сдачи">
+                                            <MenuItem value="">Выбрать дату</MenuItem><MenuItem value="custom">📅 Своя дата</MenuItem><Divider />
+                                            <MenuItem disabled sx={{ fontWeight: 600 }}>📅 Следующие уроки:</MenuItem>
+                                            {upcomingLessons.map(l => <MenuItem key={l.id} value={l.lessonDate + 'T23:59:59'}>{format(new Date(l.lessonDate), 'd MMM', { locale: ru })} {formatLessonTime(l.lessonDate, l.startTime)}</MenuItem>)}
+                                        </Select>
+                                    </FormControl>
+                                    {newHomeworkForLesson.dueDate === 'custom' && <TextField fullWidth type="date" label="Своя дата" value={newHomeworkForLesson.customDueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, customDueDate: e.target.value })} InputLabelProps={{ shrink: true }} sx={{ mt: 2 }} />}
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth><InputLabel>Шкала</InputLabel>
+                                        <Select value={newHomeworkForLesson.gradeType || 'GRADE_5'} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, gradeType: e.target.value })} label="Шкала">
+                                            <MenuItem value="GRADE_5">5-балльная ⭐</MenuItem><MenuItem value="GRADE_10">10-балльная</MenuItem><MenuItem value="GRADE_100">100-балльная</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                            </Grid>
                         </Box>
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={() => setOpenCompleteDialog(false)}>Отмена</Button>
-                        <Button onClick={handleCompleteLesson} variant="contained" color="success" startIcon={<CheckIcon />}>
-                            Завершить урок
-                        </Button>
+                        <Button onClick={handleCompleteLesson} variant="contained" color="success" startIcon={<CheckIcon />}>Завершить урок</Button>
                     </DialogActions>
+                </Dialog>
+
+                {/* ========== МОДАЛКА БАНКА ЗАДАНИЙ ========== */}
+                <Dialog open={openBankPicker} onClose={() => setOpenBankPicker(false)} maxWidth="sm" fullWidth>
+                    <DialogTitle>Выбрать из банка</DialogTitle>
+                    <DialogContent>
+                        <Tabs value={bankTab} onChange={(e, v) => setBankTab(v)} sx={{ mb: 2 }}><Tab label="Задания" /><Tab label="Варианты" /></Tabs>
+                        {bankLoading ? <CircularProgress /> : (
+                            <Box sx={{ maxHeight: 350, overflow: 'auto' }}>
+                                {(bankTab === 0 ? bankTasks : variants).map(item => (
+                                    <Paper key={item.id} sx={{ p: 1.5, mb: 1, bgcolor: '#F9FAFB', cursor: 'pointer', borderRadius: 2, '&:hover': { bgcolor: '#EEF2FF' } }}
+                                        onClick={() => { setNewHomeworkForLesson({ ...newHomeworkForLesson, task: item.question || item.topic || item.url || item.title }); setOpenBankPicker(false); }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{item.question || item.topic || item.title}</Typography>
+                                        <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                                            {item.subject && <Chip label={item.subject} size="small" sx={{ height: 18, fontSize: '0.6rem' }} />}
+                                            {item.examType && <Chip label={item.examType} size="small" sx={{ height: 18, fontSize: '0.6rem' }} />}
+                                        </Box>
+                                    </Paper>
+                                ))}
+                            </Box>
+                        )}
+                    </DialogContent>
+                    <DialogActions><Button onClick={() => setOpenBankPicker(false)}>Отмена</Button></DialogActions>
                 </Dialog>
 
                 <Dialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} maxWidth="sm" fullWidth>
                     <DialogTitle>Редактировать заметки</DialogTitle>
                     <DialogContent>
-                        <Box sx={{ pt: 2 }}>
-                            <TextField
-                                fullWidth
-                                label="📝 Что делали на уроке"
-                                multiline
-                                rows={4}
-                                value={lessonNotes}
-                                onChange={(e) => setLessonNotes(e.target.value)}
-                                margin="normal"
-                            />
-                            <TextField
-                                fullWidth
-                                label="🎯 Что сделать на следующем уроке"
-                                multiline
-                                rows={3}
-                                value={nextLessonPlan}
-                                onChange={(e) => setNextLessonPlan(e.target.value)}
-                                margin="normal"
-                            />
-                        </Box>
+                        <TextField fullWidth label="📝 Что делали на уроке" multiline rows={4} value={lessonNotes} onChange={(e) => setLessonNotes(e.target.value)} margin="normal" />
+                        <TextField fullWidth label="🎯 Что сделать на следующем уроке" multiline rows={3} value={nextLessonPlan} onChange={(e) => setNextLessonPlan(e.target.value)} margin="normal" />
                     </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setOpenNotesDialog(false)}>Отмена</Button>
-                        <Button onClick={handleSaveNotes} variant="contained" startIcon={<SaveIcon />}>
-                            Сохранить заметки
-                        </Button>
-                    </DialogActions>
+                    <DialogActions><Button onClick={() => setOpenNotesDialog(false)}>Отмена</Button><Button onClick={handleSaveNotes} variant="contained" startIcon={<SaveIcon />}>Сохранить</Button></DialogActions>
                 </Dialog>
 
                 <Dialog open={openCancelDialog} onClose={() => setOpenCancelDialog(false)}>
-                    <DialogTitle>
-                        {cancelReason === 'Ученик не пришёл' ? 'Ученик не пришёл' : 'Отмена занятия'}
-                    </DialogTitle>
+                    <DialogTitle>{cancelReason === 'Ученик не пришёл' ? 'Ученик не пришёл' : 'Отмена занятия'}</DialogTitle>
                     <DialogContent>
-                        <TextField
-                            autoFocus
-                            margin="dense"
-                            label={cancelReason === 'Ученик не пришёл' ? 'Примечание (необязательно)' : 'Причина отмены'}
-                            fullWidth
-                            multiline
-                            rows={3}
-                            value={cancelReason === 'Ученик не пришёл' ? '' : cancelReason}
-                            onChange={(e) => setCancelReason(e.target.value)}
-                        />
-                        {cancelReason === 'Ученик не пришёл' && (
-                            <Alert severity="info" sx={{ mt: 2 }}>
-                                Занятие будет отменено. У ученика появится задолженность на 1 занятие.
-                            </Alert>
-                        )}
+                        <TextField autoFocus margin="dense" label={cancelReason === 'Ученик не пришёл' ? 'Примечание' : 'Причина отмены'} fullWidth multiline rows={3} value={cancelReason === 'Ученик не пришёл' ? '' : cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
                     </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setOpenCancelDialog(false)}>Назад</Button>
-                        <Button onClick={handleCancelConfirm} color="error" variant="contained">
-                            {cancelReason === 'Ученик не пришёл' ? 'Подтвердить' : 'Отменить занятие'}
-                        </Button>
-                    </DialogActions>
+                    <DialogActions><Button onClick={() => setOpenCancelDialog(false)}>Назад</Button><Button onClick={handleCancelConfirm} color="error" variant="contained">{cancelReason === 'Ученик не пришёл' ? 'Подтвердить' : 'Отменить'}</Button></DialogActions>
                 </Dialog>
 
-                <Dialog 
-                    open={openRescheduleDialog} 
-                    onClose={() => setOpenRescheduleDialog(false)}
-                    maxWidth="sm"
-                    fullWidth
-                >
+                <Dialog open={openRescheduleDialog} onClose={() => setOpenRescheduleDialog(false)} maxWidth="sm" fullWidth>
                     <DialogTitle>Перенос занятия</DialogTitle>
                     <DialogContent>
-                        <Box sx={{ pt: 2 }}>
-                            <Typography variant="subtitle1" gutterBottom>
-                                Выберите новую дату и время
-                            </Typography>
-                            
-                            <DatePicker
-                                label="Дата"
-                                value={selectedDateForReschedule}
-                                onChange={handleDateChange}
-                                minDate={new Date()}
-                                slotProps={{ textField: { fullWidth: true, margin: 'normal' } }}
-                            />
-                            
-                            {availableSlots.length > 0 ? (
-                                <FormControl fullWidth sx={{ mt: 2 }}>
-                                    <InputLabel>Время</InputLabel>
-                                    <Select
-                                        value={selectedTime}
-                                        onChange={(e) => setSelectedTime(e.target.value)}
-                                        label="Время"
-                                    >
-                                        {availableSlots.map(slot => (
-                                            <MenuItem key={slot} value={slot}>
-                                                {slot} — {parseInt(slot.split(':')[0]) + 1}:00
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            ) : (
-                                <Alert severity="info" sx={{ mt: 2 }}>
-                                    На выбранную дату нет свободных слотов
-                                </Alert>
-                            )}
-                            
-                            {selectedTime && (
-                                <Alert severity="success" sx={{ mt: 2 }}>
-                                    ✅ Выбрано время: {selectedTime} — {parseInt(selectedTime.split(':')[0]) + 1}:00
-                                </Alert>
-                            )}
-                        </Box>
+                        <DatePicker label="Дата" value={selectedDateForReschedule} onChange={handleDateChange} minDate={new Date()} slotProps={{ textField: { fullWidth: true, margin: 'normal' } }} />
+                        {availableSlots.length > 0 ? (
+                            <FormControl fullWidth sx={{ mt: 2 }}><InputLabel>Время</InputLabel>
+                                <Select value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)} label="Время">
+                                    {availableSlots.map(s => <MenuItem key={s} value={s}>{s} — {parseInt(s.split(':')[0]) + 1}:00</MenuItem>)}
+                                </Select>
+                            </FormControl>
+                        ) : <Alert severity="info" sx={{ mt: 2 }}>Нет свободных слотов</Alert>}
                     </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setOpenRescheduleDialog(false)}>Отмена</Button>
-                        <Button 
-                            onClick={handleRescheduleConfirm} 
-                            variant="contained" 
-                            color="primary"
-                            disabled={!selectedTime}
-                        >
-                            Перенести
-                        </Button>
-                    </DialogActions>
+                    <DialogActions><Button onClick={() => setOpenRescheduleDialog(false)}>Отмена</Button><Button onClick={handleRescheduleConfirm} variant="contained" disabled={!selectedTime}>Перенести</Button></DialogActions>
                 </Dialog>
 
-                {/* ========== НОВЫЙ ДИАЛОГ ДЛЯ F15 ========== */}
                 <Dialog open={openReplaceDialog} onClose={() => setOpenReplaceDialog(false)} maxWidth="sm" fullWidth>
-                    <DialogTitle>🔄 Заменить отменённый урок на отработку долга</DialogTitle>
+                    <DialogTitle>Отработка долга</DialogTitle>
                     <DialogContent>
-                        <Box sx={{ pt: 2 }}>
-                            <Typography variant="body2" color="textSecondary" gutterBottom>
-                                Отменённый урок: {cancelledLesson?.lessonDate} в {formatLessonTime(cancelledLesson?.lessonDate, cancelledLesson?.startTime)}
-                            </Typography>
-                            
-                            {debtorsList.length > 0 ? (
-                                <FormControl fullWidth sx={{ mt: 2 }}>
-                                    <InputLabel>Выберите должника</InputLabel>
-                                    <Select
-                                        value={selectedDebtorId}
-                                        onChange={(e) => setSelectedDebtorId(e.target.value)}
-                                        label="Выберите должника"
-                                    >
-                                        {debtorsList.map(student => (
-                                            <MenuItem key={student.id} value={student.id}>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                                                    <Typography>{student.fullName}</Typography>
-                                                    <Chip 
-                                                        label={`Долг: ${student.debtLessons || student.missedLessons || 0}`}
-                                                        size="small"
-                                                        color="warning"
-                                                    />
-                                                </Box>
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            ) : (
-                                <Alert severity="info" sx={{ mt: 2 }}>
-                                    Нет учеников с долгами
-                                </Alert>
-                            )}
-                        </Box>
+                        {debtorsList.length > 0 ? (
+                            <FormControl fullWidth sx={{ mt: 2 }}><InputLabel>Выберите должника</InputLabel>
+                                <Select value={selectedDebtorId} onChange={(e) => setSelectedDebtorId(e.target.value)} label="Должник">
+                                    {debtorsList.map(s => <MenuItem key={s.id} value={s.id}><Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}><Typography>{s.fullName}</Typography><Chip label={`Долг: ${s.debtLessons || s.missedLessons || 0}`} size="small" color="warning" /></Box></MenuItem>)}
+                                </Select>
+                            </FormControl>
+                        ) : <Alert severity="info" sx={{ mt: 2 }}>Нет учеников с долгами</Alert>}
                     </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setOpenReplaceDialog(false)}>Отмена</Button>
-                        <Button 
-                            onClick={handleConfirmReplace} 
-                            variant="contained" 
-                            color="primary"
-                            disabled={!selectedDebtorId}
-                        >
-                            Заменить
-                        </Button>
-                    </DialogActions>
+                    <DialogActions><Button onClick={() => setOpenReplaceDialog(false)}>Отмена</Button><Button onClick={handleConfirmReplace} variant="contained" disabled={!selectedDebtorId}>Заменить</Button></DialogActions>
                 </Dialog>
-                {/* ======================================== */}
 
-            
+                <LessonRoom open={lessonRoomOpen} onClose={() => { setLessonRoomOpen(false); setSelectedLessonForRoom(null); }} lessonId={selectedLessonForRoom?.id}
+                    lessonInfo={selectedLessonForRoom ? { studentName: selectedLessonForRoom.student?.fullName, tutorName: selectedLessonForRoom.tutor?.fullName, startTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.startTime), endTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.endTime) } : null} />
 
-                <LessonRoom 
-                    open={lessonRoomOpen} 
-                    onClose={() => {
-                        setLessonRoomOpen(false);
-                        setSelectedLessonForRoom(null);
-                    }}
-                    lessonId={selectedLessonForRoom?.id}
-                    lessonInfo={selectedLessonForRoom ? {
-                        studentName: selectedLessonForRoom.student?.fullName,
-                        tutorName: selectedLessonForRoom.tutor?.fullName,
-                        startTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.startTime),
-                        endTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.endTime)
-                    } : null}
-                />
-
-                <Snackbar
-                    open={snackbar.open}
-                    autoHideDuration={4000}
-                    onClose={() => setSnackbar({ ...snackbar, open: false })}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                >
-                    <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
-                        {snackbar.message}
-                    </Alert>
+                <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+                    <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
                 </Snackbar>
             </Box>
         </LocalizationProvider>

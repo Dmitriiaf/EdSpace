@@ -45,7 +45,12 @@ public class NotificationScheduler {
     private void sendReminder(Lesson lesson) {
         String studentName = lesson.getStudent().getFullName();
         String courseName = lesson.getCourse() != null ? lesson.getCourse().getName() : "Не указан";
-        String time = lesson.getStartTime().toString().substring(0, 5);
+
+        // Время для репетитора (конвертируем из UTC в его часовой пояс)
+        String tutorTimezone = lesson.getTutor().getTimezone() != null ? lesson.getTutor().getTimezone() : "Asia/Krasnoyarsk";
+        java.time.ZonedDateTime utcTime = java.time.ZonedDateTime.of(lesson.getLessonDate(), lesson.getStartTime(), java.time.ZoneId.of("UTC"));
+        java.time.ZonedDateTime tutorTime = utcTime.withZoneSameInstant(java.time.ZoneId.of(tutorTimezone));
+        String timeForTutor = tutorTime.toLocalTime().toString().substring(0, 5);
 
         String subject = "⏰ Урок через 1 час — " + courseName;
         String body = String.format(
@@ -55,7 +60,7 @@ public class NotificationScheduler {
                         "📚 Предмет: %s\n" +
                         "👨‍🎓 Ученик: %s\n\n" +
                         "🔗 Ссылка на урок: https://ed-space.ru/dashboard",
-                lesson.getLessonDate(), time, courseName, studentName
+                lesson.getLessonDate(), timeForTutor, courseName, studentName
         );
 
         // Репетитору

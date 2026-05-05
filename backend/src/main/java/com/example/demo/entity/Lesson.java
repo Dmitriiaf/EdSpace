@@ -6,10 +6,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 
 @Entity
 @Table(name = "lesson")
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "originalLesson"})
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Lesson {
 
     public static final String STATUS_SCHEDULED = "SCHEDULED";
@@ -52,6 +54,7 @@ public class Lesson {
 
     @ManyToOne
     @JoinColumn(name = "original_lesson_id")
+    @JsonIgnore
     private Lesson originalLesson;
 
     @Column(length = 2000)

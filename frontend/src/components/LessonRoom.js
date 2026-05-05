@@ -2,13 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, IconButton,
     Box, Typography, CircularProgress, Alert,
-    Button, Chip, Tabs, Tab
+    Button
 } from '@mui/material';
 import {
     Close as CloseIcon,
-    OpenInNew as OpenInNewIcon,
     Videocam as VideocamIcon,
-    Draw as DrawIcon,
     HourglassEmpty as WaitingIcon
 } from '@mui/icons-material';
 import axiosInstance from '../api/axiosConfig';
@@ -16,30 +14,24 @@ import { useAuth } from '../context/AuthContext';
 
 function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
     const { user } = useAuth();
-    const isTutor = user?.role === 'tutor';
+    const isTutor = user?.role === 'tutor' || user?.role === 'ROLE_TUTOR';
     
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [jitsiInfo, setJitsiInfo] = useState(null);
-    const [boardInfo, setBoardInfo] = useState(null);
-    const [tabValue, setTabValue] = useState(0);
 
     useEffect(() => {
         if (open && lessonId) {
-            fetchAll();
+            fetchJitsi();
         }
     }, [open, lessonId]);
 
-    const fetchAll = async () => {
+    const fetchJitsi = async () => {
         setLoading(true);
         setError(null);
         try {
-            const [jitsiRes, boardRes] = await Promise.all([
-                axiosInstance.get(`/jitsi/room/${lessonId}`),
-                axiosInstance.get(`/excalidraw/room/${lessonId}`)
-            ]);
-            setJitsiInfo(jitsiRes.data);
-            setBoardInfo(boardRes.data);
+            const res = await axiosInstance.get(`/jitsi/room/${lessonId}`);
+            setJitsiInfo(res.data);
         } catch (err) {
             console.error('Ошибка загрузки:', err);
             setError('Ошибка при создании комнаты');
@@ -48,35 +40,17 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
         }
     };
 
-    const handleOpenJitsi = () => {
+    const handleJoinVideo = () => {
         if (jitsiInfo?.roomUrl) {
             window.open(jitsiInfo.roomUrl, '_blank', 'width=1200,height=800');
         }
-    };
-
-    const handleOpenBoard = () => {
-        if (boardInfo?.roomUrl) {
-            window.open(boardInfo.roomUrl, '_blank', 'width=1200,height=800');
-        }
-    };
-
-    const handleOpenBoth = () => {
-        if (jitsiInfo?.roomUrl) {
-            window.open(jitsiInfo.roomUrl, '_blank', 'width=1200,height=800');
-        }
-        // Небольшая задержка для второго окна (браузеры блокируют два popup подряд)
-        setTimeout(() => {
-            if (boardInfo?.roomUrl) {
-                window.open(boardInfo.roomUrl, '_blank', 'width=1200,height=800');
-            }
-        }, 1000);
     };
 
     return (
         <Dialog 
             open={open} 
             onClose={onClose}
-            maxWidth="md"
+            maxWidth="sm"
             fullWidth
             PaperProps={{ sx: { borderRadius: 4 } }}
         >
@@ -89,7 +63,7 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <VideocamIcon sx={{ color: '#6366F1' }} />
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        Урок
+                        Видеовстреча
                     </Typography>
                 </Box>
                 <IconButton onClick={onClose} size="small">
@@ -97,15 +71,15 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                 </IconButton>
             </DialogTitle>
 
-            <DialogContent sx={{ pt: 2, pb: 3 }}>
+            <DialogContent sx={{ pt: 2, pb: 3, textAlign: 'center' }}>
                 {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
                         <CircularProgress />
                     </Box>
                 ) : error ? (
-                    <Box sx={{ textAlign: 'center', py: 3 }}>
+                    <Box sx={{ py: 3 }}>
                         <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
-                        <Button variant="outlined" onClick={fetchAll}>
+                        <Button variant="outlined" onClick={fetchJitsi}>
                             Попробовать снова
                         </Button>
                     </Box>
@@ -141,7 +115,7 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                                 Занятие
                             </Typography>
                             <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                                {jitsiInfo?.courseName || boardInfo?.courseName || 'Занятие'}
+                                {jitsiInfo?.courseName || 'Занятие'}
                             </Typography>
                             {lessonInfo && (
                                 <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
@@ -150,13 +124,14 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                             )}
                         </Box>
 
-                        {/* Открыть всё в один клик */}
+                        {/* Кнопка подключения к видео */}
                         {(!jitsiInfo?.waitingRoom || isTutor) && (
-                            <Box sx={{ textAlign: 'center', mb: 3 }}>
+                            <Box sx={{ mb: 3 }}>
                                 <Button
                                     variant="contained"
                                     size="large"
-                                    onClick={handleOpenBoth}
+                                    startIcon={<VideocamIcon />}
+                                    onClick={handleJoinVideo}
                                     sx={{
                                         bgcolor: '#6366F1',
                                         '&:hover': { bgcolor: '#4F46E5' },
@@ -166,42 +141,16 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                                         fontSize: '1.1rem'
                                     }}
                                 >
-                                    🚀 Начать урок (видео + доска)
+                                    Подключиться к видеовстрече
                                 </Button>
                                 <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
-                                    Откроет видео и доску в двух новых окнах
+                                    Откроется в новом окне
                                 </Typography>
                             </Box>
                         )}
 
-                        {/* Раздельные кнопки */}
-                        {(!jitsiInfo?.waitingRoom || isTutor) && (
-                            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mb: 3 }}>
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<VideocamIcon />}
-                                    onClick={handleOpenJitsi}
-                                    sx={{ borderRadius: 3, textTransform: 'none' }}
-                                >
-                                    Только видео
-                                </Button>
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<DrawIcon />}
-                                    onClick={handleOpenBoard}
-                                    sx={{ borderRadius: 3, textTransform: 'none', color: '#8B5CF6', borderColor: '#8B5CF6' }}
-                                >
-                                    Только доска
-                                </Button>
-                            </Box>
-                        )}
-
-                        <Typography variant="caption" color="textSecondary" sx={{ 
-                            display: 'block', 
-                            textAlign: 'center', 
-                            mt: 2 
-                        }}>
-                            Видео через Jitsi Meet • Доска через Excalidraw
+                        <Typography variant="caption" color="textSecondary">
+                            Видеосвязь через Jitsi Meet
                         </Typography>
                     </Box>
                 )}

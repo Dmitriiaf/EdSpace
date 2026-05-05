@@ -65,21 +65,10 @@ public class LessonGeneratorService {
             for (WeeklyTemplate template : templates) {
                 if (template.getDayOfWeek() == dayOfWeek) {
 
-                    // ✅ КОНВЕРТАЦИЯ В UTC
-                    // Получаем часовой пояс репетитора из шаблона
-                    Tutor tutor = template.getTutor();
-                    String tutorTimezone = tutor.getTimezone() != null ? tutor.getTimezone() : "Asia/Krasnoyarsk";
-
-                    // Конвертируем локальное время шаблона в UTC
-                    ZonedDateTime tutorZonedStart = ZonedDateTime.of(currentDate, template.getStartTime(), ZoneId.of(tutorTimezone));
-                    ZonedDateTime tutorZonedEnd = ZonedDateTime.of(currentDate, template.getEndTime(), ZoneId.of(tutorTimezone));
-                    ZonedDateTime utcZonedStart = tutorZonedStart.withZoneSameInstant(ZoneId.of("UTC"));
-                    ZonedDateTime utcZonedEnd = tutorZonedEnd.withZoneSameInstant(ZoneId.of("UTC"));
-
-                    LocalTime utcStartTime = utcZonedStart.toLocalTime();
-                    LocalTime utcEndTime = utcZonedEnd.toLocalTime();
-                    // Дата может измениться при конвертации (например, 23:00 UTC+7 → 16:00 UTC)
-                    LocalDate utcLessonDate = utcZonedStart.toLocalDate();
+                    // Шаблоны уже хранятся в UTC — используем время как есть
+                    LocalTime utcStartTime = template.getStartTime();
+                    LocalTime utcEndTime = template.getEndTime();
+                    LocalDate utcLessonDate = currentDate;
 
                     boolean hasAnyLesson = lessonRepository.existsByTutorIdAndLessonDateAndStartTime(
                             template.getTutor().getId(),

@@ -4,23 +4,26 @@ import com.example.demo.entity.Homework;
 import com.example.demo.entity.Variant;
 import com.example.demo.repository.VariantRepository;
 import com.example.demo.service.HomeworkService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.web.multipart.MultipartFile;
+import java.io.File;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.nio.file.Files;
 
 @RestController
 @RequestMapping("/api/homework")
 @CrossOrigin(origins = {
         "http://localhost:3000",
+        "http://72.56.238.224",
         "http://ed-space.ru",
         "https://ed-space.ru",
         "https://www.ed-space.ru"
@@ -39,19 +42,19 @@ public class HomeworkController {
                                             @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Long tutorId = Long.parseLong(request.get("tutorId").toString());
-
-            // ✅ IDOR FIX: Проверяем, что репетитор создаёт ДЗ от своего имени
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
+            Long courseId = request.get("courseId") != null ? Long.parseLong(request.get("courseId").toString()) : null;
             Homework homework = homeworkService.createHomework(
                     tutorId,
                     Long.parseLong(request.get("studentId").toString()),
                     (String) request.get("task"),
-                    request.get("dueDate") != null ?
-                            LocalDateTime.parse(request.get("dueDate").toString()) : null,
-                    (String) request.get("status")
+                    request.get("dueDate") != null ? LocalDateTime.parse(request.get("dueDate").toString()) : null,
+                    (String) request.get("status"),
+                    request.get("gradeType") != null ? (String) request.get("gradeType") : "GRADE_5",
+                    request.get("maxScore") != null ? Integer.parseInt(request.get("maxScore").toString()) : null,
+                    courseId
             );
             return ResponseEntity.ok(homework);
         } catch (RuntimeException e) {
@@ -65,11 +68,9 @@ public class HomeworkController {
                                                   @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                   @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
-            // ✅ IDOR FIX: Проверяем права доступа
             if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             List<Homework> homework = homeworkService.getHomeworkByStudent(studentId);
             return ResponseEntity.ok(homework);
         } catch (RuntimeException e) {
@@ -83,13 +84,10 @@ public class HomeworkController {
                                                       @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                       @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
-            // ✅ IDOR FIX: Проверяем права доступа
             if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             List<Homework> homework = homeworkService.getHomeworkByStudent(studentId);
-
             List<Map<String, Object>> enrichedHomework = new ArrayList<>();
             for (Homework hw : homework) {
                 Map<String, Object> item = new HashMap<>();
@@ -101,14 +99,13 @@ public class HomeworkController {
                 item.put("score", hw.getScore());
                 item.put("maxScore", hw.getMaxScore());
                 item.put("percentage", hw.getPercentage());
+                item.put("gradeType", hw.getGradeType());
                 item.put("feedback", hw.getFeedback());
                 item.put("createdAt", hw.getCreatedAt());
                 item.put("submittedAt", hw.getSubmittedAt());
-
                 if (hw.getTask() != null && hw.getTask().startsWith("http")) {
                     item.put("type", "variant");
                     item.put("url", hw.getTask());
-
                     Optional<Variant> variantOpt = variantRepository.findByUrl(hw.getTask());
                     if (variantOpt.isPresent()) {
                         Variant variant = variantOpt.get();
@@ -120,10 +117,8 @@ public class HomeworkController {
                 } else {
                     item.put("type", "homework");
                 }
-
                 enrichedHomework.add(item);
             }
-
             return ResponseEntity.ok(enrichedHomework);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -137,11 +132,9 @@ public class HomeworkController {
                                                            @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                            @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
-            // ✅ IDOR FIX: Проверяем права доступа
             if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             List<Homework> homework = homeworkService.getHomeworkByStudentAndStatus(studentId, status);
             return ResponseEntity.ok(homework);
         } catch (RuntimeException e) {
@@ -156,8 +149,6 @@ public class HomeworkController {
                                              @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Homework homework = homeworkService.getHomeworkById(id);
-
-            // ✅ IDOR FIX: Проверяем права доступа в зависимости от роли
             if ("ROLE_TUTOR".equals(userRole)) {
                 if (!homework.getTutor().getId().equals(currentUserId)) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
@@ -172,7 +163,6 @@ public class HomeworkController {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
             }
-
             return ResponseEntity.ok(homework);
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
@@ -186,42 +176,14 @@ public class HomeworkController {
                                         @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Homework homework = homeworkService.getHomeworkById(id);
-
-            // ✅ IDOR FIX: Проверяем, что ДЗ принадлежит текущему репетитору
             if (!homework.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             Homework updatedHomework = homeworkService.updateTask(
-                    id,
-                    (String) request.get("task"),
-                    request.get("dueDate") != null ?
-                            LocalDateTime.parse(request.get("dueDate").toString()) : null
+                    id, (String) request.get("task"),
+                    request.get("dueDate") != null ? LocalDateTime.parse(request.get("dueDate").toString()) : null
             );
             return ResponseEntity.ok(updatedHomework);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    @PatchMapping("/{id}/submit")
-    @PreAuthorize("hasRole('STUDENT')")
-    public ResponseEntity<?> submitHomework(@PathVariable Long id,
-                                            @RequestBody Map<String, String> request,
-                                            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
-        try {
-            Homework homework = homeworkService.getHomeworkById(id);
-
-            // ✅ IDOR FIX: Проверяем, что ученик сдаёт СВОЁ ДЗ
-            if (!homework.getStudent().getId().equals(currentUserId)) {
-                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-            }
-
-            Homework submittedHomework = homeworkService.submitHomework(
-                    id,
-                    request.get("attachments")
-            );
-            return ResponseEntity.ok(submittedHomework);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -234,18 +196,12 @@ public class HomeworkController {
                                                     @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Homework homework = homeworkService.getHomeworkById(id);
-
-            // ✅ IDOR FIX: Проверяем, что ДЗ принадлежит текущему репетитору
             if (!homework.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
-            Integer score = request.get("score") != null ?
-                    Integer.parseInt(request.get("score").toString()) : null;
-            Integer maxScore = request.get("maxScore") != null ?
-                    Integer.parseInt(request.get("maxScore").toString()) : null;
+            Integer score = request.get("score") != null ? Integer.parseInt(request.get("score").toString()) : null;
+            Integer maxScore = request.get("maxScore") != null ? Integer.parseInt(request.get("maxScore").toString()) : null;
             String feedback = (String) request.get("feedback");
-
             Homework gradedHomework = homeworkService.gradeHomeworkWithScore(id, score, maxScore, feedback);
             return ResponseEntity.ok(gradedHomework);
         } catch (RuntimeException e) {
@@ -260,16 +216,11 @@ public class HomeworkController {
                                            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Homework homework = homeworkService.getHomeworkById(id);
-
-            // ✅ IDOR FIX: Проверяем, что ДЗ принадлежит текущему репетитору
             if (!homework.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
-            Integer grade = request.get("grade") != null ?
-                    Integer.parseInt(request.get("grade").toString()) : null;
+            Integer grade = request.get("grade") != null ? Integer.parseInt(request.get("grade").toString()) : null;
             String feedback = (String) request.get("feedback");
-
             Homework gradedHomework = homeworkService.gradeHomework(id, grade, feedback);
             return ResponseEntity.ok(gradedHomework);
         } catch (RuntimeException e) {
@@ -284,16 +235,10 @@ public class HomeworkController {
                                              @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Homework homework = homeworkService.getHomeworkById(id);
-
-            // ✅ IDOR FIX: Проверяем, что ДЗ принадлежит текущему репетитору
             if (!homework.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
-            Homework revisedHomework = homeworkService.requestRevision(
-                    id,
-                    request.get("feedback")
-            );
+            Homework revisedHomework = homeworkService.requestRevision(id, request.get("feedback"));
             return ResponseEntity.ok(revisedHomework);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -306,12 +251,9 @@ public class HomeworkController {
                                             @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Homework homework = homeworkService.getHomeworkById(id);
-
-            // ✅ IDOR FIX: Проверяем, что ДЗ принадлежит текущему репетитору
             if (!homework.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             homeworkService.deleteHomework(id);
             return ResponseEntity.ok(Map.of("message", "Домашнее задание успешно удалено"));
         } catch (RuntimeException e) {
@@ -325,11 +267,9 @@ public class HomeworkController {
                                                        @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                        @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
-            // ✅ IDOR FIX: Проверяем права доступа
             if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             Map<String, Long> stats = homeworkService.getHomeworkStatsByStudent(studentId);
             return ResponseEntity.ok(stats);
         } catch (RuntimeException e) {
@@ -341,17 +281,72 @@ public class HomeworkController {
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
     public ResponseEntity<?> getDetailedProgressStats(@PathVariable Long studentId,
                                                       @RequestAttribute(name = "userId", required = false) Long currentUserId,
-                                                      @RequestAttribute(name = "userRole", required = false) String userRole) {
+                                                      @RequestAttribute(name = "userRole", required = false) String userRole,
+                                                      HttpServletRequest request) {
         try {
-            // ✅ IDOR FIX: Проверяем права доступа
             if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
-            Map<String, Object> stats = homeworkService.getDetailedProgressStats(studentId);
+            Long courseId = null;
+            if (request.getParameter("courseId") != null) {
+                courseId = Long.parseLong(request.getParameter("courseId"));
+            }
+            Map<String, Object> stats = homeworkService.getDetailedProgressStats(studentId, courseId);
             return ResponseEntity.ok(stats);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/{id}/submit")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<?> submitHomework(@PathVariable Long id,
+                                            @RequestParam(value = "answer", required = false) String answer,
+                                            @RequestParam(value = "file", required = false) MultipartFile file,
+                                            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Homework homework = homeworkService.getHomeworkById(id);
+            if (!homework.getStudent().getId().equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+            String attachments = "";
+            if (answer != null && !answer.isEmpty()) attachments = answer;
+            if (file != null && !file.isEmpty()) {
+                String uploadDir = "/opt/EdSpace/uploads/homework/";
+                java.io.File dir = new java.io.File(uploadDir);
+                if (!dir.exists()) dir.mkdirs();
+                String fileName = "hw_" + id + "_" + System.currentTimeMillis() + "_" + file.getOriginalFilename();
+                java.io.File dest = new java.io.File(uploadDir + fileName);
+                file.transferTo(dest);
+                String fileUrl = "/uploads/homework/" + fileName;
+                attachments += (attachments.isEmpty() ? "" : "\n") + fileUrl;
+            }
+            if (attachments.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Нужен ответ или файл"));
+            }
+            homework.setAttachments(attachments);
+            homework.setStatus("SUBMITTED");
+            homework.setSubmittedAt(LocalDateTime.now());
+            homeworkService.saveHomework(homework);
+            return ResponseEntity.ok(Map.of("message", "Задание сдано"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/file/{fileName:.+}")
+    public ResponseEntity<?> getHomeworkFile(@PathVariable String fileName) {
+        try {
+            java.io.File file = new java.io.File("/opt/EdSpace/uploads/homework/" + fileName);
+            if (!file.exists()) return ResponseEntity.notFound().build();
+            byte[] content = Files.readAllBytes(file.toPath());
+            String contentType = Files.probeContentType(file.toPath());
+            return ResponseEntity.ok()
+                    .header("Content-Type", contentType != null ? contentType : "application/octet-stream")
+                    .header("Content-Disposition", "inline; filename=\"" + fileName + "\"")
+                    .body(content);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
         }
     }
 
@@ -360,11 +355,9 @@ public class HomeworkController {
     public ResponseEntity<?> getHomeworkByTutor(@PathVariable Long tutorId,
                                                 @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
-            // ✅ IDOR FIX: Проверяем, что репетитор запрашивает СВОИ ДЗ
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             List<Homework> homework = homeworkService.getHomeworkByTutor(tutorId);
             return ResponseEntity.ok(homework);
         } catch (RuntimeException e) {
@@ -379,23 +372,14 @@ public class HomeworkController {
                                        @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Homework homework = homeworkService.getHomeworkById(id);
-
-            // ✅ IDOR FIX: Проверяем права доступа
             if ("ROLE_TUTOR".equals(userRole)) {
-                if (!homework.getTutor().getId().equals(currentUserId)) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
+                if (!homework.getTutor().getId().equals(currentUserId)) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             } else if ("ROLE_STUDENT".equals(userRole)) {
-                if (!homework.getStudent().getId().equals(currentUserId)) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
+                if (!homework.getStudent().getId().equals(currentUserId)) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             } else if ("ROLE_PARENT".equals(userRole)) {
-                if (homework.getStudent().getParent() == null ||
-                        !homework.getStudent().getParent().getId().equals(currentUserId)) {
+                if (homework.getStudent().getParent() == null || !homework.getStudent().getParent().getId().equals(currentUserId))
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-                }
             }
-
             boolean overdue = homeworkService.isOverdue(id);
             return ResponseEntity.ok(Map.of("isOverdue", overdue));
         } catch (RuntimeException e) {

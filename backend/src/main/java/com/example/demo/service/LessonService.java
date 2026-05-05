@@ -147,7 +147,7 @@ public class LessonService {
                 lesson.getStudent().getPaymentTypeForTutor(lesson.getTutor().getId())
         );
 
-        if (lesson.getOriginalLesson() != null && "RESCHEDULED".equals(lesson.getStatus())) {
+        if (lesson.getOriginalLesson() != null) {
             return completeRescheduledLesson(lessonId, notes, nextLessonPlan);
         }
 
@@ -202,10 +202,6 @@ public class LessonService {
         log.info("Завершение перенесённого занятия: id={}", lessonId);
 
         Lesson rescheduledLesson = getLessonById(lessonId);
-
-        if (!"RESCHEDULED".equals(rescheduledLesson.getStatus())) {
-            throw new BusinessException("Можно завершить только перенесённое занятие");
-        }
 
         Lesson originalLesson = rescheduledLesson.getOriginalLesson();
         if (originalLesson == null) {
