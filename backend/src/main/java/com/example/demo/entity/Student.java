@@ -188,13 +188,13 @@ public class Student {
     }
 
     public String getPaymentTypeForTutor(Long tutorId) {
-        if (rates == null) return "single";
+        if (rates == null) return paymentType != null ? paymentType : "single";
         for (StudentRate rate : rates) {
             if (rate.getTutor() != null && rate.getTutor().getId().equals(tutorId)) {
-                return rate.getPaymentType() != null ? rate.getPaymentType() : "single";
+                return rate.getPaymentType() != null ? rate.getPaymentType() : (paymentType != null ? paymentType : "single");
             }
         }
-        return paymentType; // fallback на общее поле
+        return paymentType != null ? paymentType : "single";
     }
 
     @Transient

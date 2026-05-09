@@ -199,10 +199,10 @@ function LessonsArchive() {
     };
 
     const calculateStats = () => {
-        const total = filteredLessons.length;
-        const completed = filteredLessons.filter(l => l.status === 'COMPLETED').length;
-        const paid = filteredLessons.filter(l => l.status === 'PAID').length;
-        const cancelled = filteredLessons.filter(l => l.status === 'CANCELLED').length;
+        const total = lessons.length;
+        const completed = lessons.filter(l => l.status === 'COMPLETED').length;
+        const paid = lessons.filter(l => l.status === 'PAID').length;
+        const cancelled = lessons.filter(l => l.status === 'CANCELLED').length;
         
         const months = eachMonthOfInterval({
             start: subMonths(new Date(), 5),
