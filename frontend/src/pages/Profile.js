@@ -1,4 +1,4 @@
-// frontend/src/pages/Profile.js
+// ========== frontend/src/pages/Profile.js (РЕДИЗАЙН v2) ==========
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Box, Paper, Typography, TextField, Button, Avatar,
@@ -8,6 +8,7 @@ import {
     IconButton, Tooltip, Tabs, Tab, Badge
 } from '@mui/material';
 import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import {
     Save as SaveIcon,
     Edit as EditIcon,
@@ -27,13 +28,54 @@ import {
     TrendingUp as TrendingUpIcon,
     TrendingDown as TrendingDownIcon,
     CheckCircle as CheckIcon,
-    Warning as WarningIcon
+    Warning as WarningIcon,
+    Star as StarIcon
 } from '@mui/icons-material';
+import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
 import { useAuth } from '../context/AuthContext';
-// ✅ Правильный импорт
 import axiosInstance from '../api/axiosConfig';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+
+// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+
+
+const StyledPaper = styled(Paper)({
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+    border: '1px solid #F3F4F6',
+    backgroundColor: '#FFFFFF',
+});
+
+
+
+const AvatarBadge = styled(Badge)({
+    '& .MuiBadge-badge': {
+        backgroundColor: '#4F46E5',
+        color: '#FFFFFF',
+        '&:hover': { backgroundColor: '#4338CA' },
+    },
+});
+
+const GrowthCard = styled(Paper)(({ positive }) => ({
+    padding: '16px 20px',
+    marginBottom: '20px',
+    backgroundColor: positive ? '#ECFDF5' : '#FEF2F2',
+    borderRadius: '12px',
+    border: positive ? '1px solid #A7F3D0' : '1px solid #FECACA',
+    boxShadow: 'none',
+}));
+
+const ActivityBar = styled(Box)(({ height, hasActivity }) => ({
+    height: Math.max(height, 4),
+    backgroundColor: hasActivity ? '#4F46E5' : '#E5E7EB',
+    borderRadius: '4px 4px 8px 8px',
+    transition: 'all 0.2s ease',
+    cursor: 'pointer',
+    '&:hover': { backgroundColor: hasActivity ? '#4338CA' : '#D1D5DB' },
+}));
+
+// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
 const Profile = () => {
     const { user, updateUser } = useAuth();
@@ -46,202 +88,80 @@ const Profile = () => {
     const fileInputRef = useRef(null);
     
     const [stats, setStats] = useState({
-        studentsCount: 0,
-        lessonsCount: 0,
-        totalHours: 0,
-        totalIncome: 0,
-        monthlyGrowth: 0,
-        thisMonthIncome: 0,
-        lastMonthIncome: 0
+        studentsCount: 0, lessonsCount: 0, totalHours: 0,
+        totalIncome: 0, monthlyGrowth: 0, thisMonthIncome: 0, lastMonthIncome: 0
     });
     
-    const [activityData, setActivityData] = useState({
-        lastMonth: [],
-        thisMonth: []
-    });
+    const [activityData, setActivityData] = useState({ lastMonth: [], thisMonth: [] });
     
     const [profile, setProfile] = useState({
-        fullName: user?.fullName || '',
-        email: user?.email || '',
-        phone: '',
-        birthday: '',
-        about: '',
-        city: ''
+        fullName: user?.fullName || '', email: user?.email || '',
+        phone: '', birthday: '', about: '', city: ''
     });
     
     const [passwordDialog, setPasswordDialog] = useState(false);
     const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
     const [avatarTab, setAvatarTab] = useState(0);
-    const [passwordData, setPasswordData] = useState({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-    });
+    const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
     const [passwordError, setPasswordError] = useState('');
 
-    useEffect(() => {
-        if (user && user.id) {
-            fetchProfile();
-            fetchStats();
-            fetchAvatar();
-            fetchActivityData();
-        }
-    }, [user]);
+    useEffect(() => { if (user?.id) { fetchProfile(); fetchStats(); fetchAvatar(); fetchActivityData(); } }, [user]);
 
+    // ========== ВСЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ==========
     const fetchProfile = async () => {
         try {
-            // ✅ Исправлено: axiosInstance
             const response = await axiosInstance.get(`/tutors/${user.id}`);
-            
-            setProfile({
-                fullName: response.data.fullName || user?.fullName,
-                email: response.data.email || user?.email,
-                phone: response.data.phone || '',
-                birthday: response.data.birthday || '',
-                about: response.data.about || '',
-                city: response.data.city || ''
-            });
-        } catch (err) {
-            console.error('Ошибка загрузки профиля:', err);
-        }
+            setProfile({ fullName: response.data.fullName || user?.fullName, email: response.data.email || user?.email, phone: response.data.phone || '', birthday: response.data.birthday || '', about: response.data.about || '', city: response.data.city || '' });
+        } catch (err) { console.error('Ошибка загрузки профиля:', err); }
     };
 
     const fetchStats = async () => {
         try {
-            // ✅ Исправлено: axiosInstance
-            const studentsRes = await axiosInstance.get(`/students/tutor/${user.id}`);
+            const [studentsRes, lessonsRes, paymentsRes] = await Promise.all([
+                axiosInstance.get(`/students/tutor/${user.id}`),
+                axiosInstance.get(`/lessons/all?tutorId=${user.id}`),
+                axiosInstance.get(`/payments/tutor/${user.id}`)
+            ]);
             const studentsCount = studentsRes.data.length;
-            
-            const lessonsRes = await axiosInstance.get(`/lessons/all?tutorId=${user.id}`);
-            const completedLessons = lessonsRes.data.filter(l => 
-                l.status === 'COMPLETED' || l.status === 'PAID'
-            );
-            const lessonsCount = completedLessons.length;
-            
+            const completedLessons = lessonsRes.data.filter(l => l.status === 'COMPLETED' || l.status === 'PAID');
             let totalHours = 0;
-            completedLessons.forEach(lesson => {
-                const start = lesson.startTime.split(':');
-                const end = lesson.endTime.split(':');
-                const hours = parseInt(end[0]) - parseInt(start[0]);
-                totalHours += hours;
-            });
-            
-            const paymentsRes = await axiosInstance.get(`/payments/tutor/${user.id}`);
-            
-            const totalIncome = paymentsRes.data
-                .filter(p => p.status === 'paid')
-                .reduce((sum, p) => sum + p.amount, 0);
-            
-            // Расчёт роста
+            completedLessons.forEach(l => { const start = l.startTime.split(':'); const end = l.endTime.split(':'); totalHours += parseInt(end[0]) - parseInt(start[0]); });
+            const totalIncome = paymentsRes.data.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
             const now = new Date();
             const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
             const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-            
-            const thisMonthPayments = paymentsRes.data.filter(p => {
-                const paymentDate = new Date(p.paymentDate);
-                return paymentDate >= thisMonthStart && p.status === 'paid';
-            });
-            const lastMonthPayments = paymentsRes.data.filter(p => {
-                const paymentDate = new Date(p.paymentDate);
-                return paymentDate >= lastMonthStart && paymentDate <= lastMonthEnd && p.status === 'paid';
-            });
-            
-            const thisMonthIncome = thisMonthPayments.reduce((sum, p) => sum + p.amount, 0);
-            const lastMonthIncome = lastMonthPayments.reduce((sum, p) => sum + p.amount, 0);
+            const thisMonthIncome = paymentsRes.data.filter(p => { const d = new Date(p.paymentDate); return d >= thisMonthStart && p.status === 'paid'; }).reduce((s, p) => s + p.amount, 0);
+            const lastMonthIncome = paymentsRes.data.filter(p => { const d = new Date(p.paymentDate); return d >= lastMonthStart && d <= lastMonthEnd && p.status === 'paid'; }).reduce((s, p) => s + p.amount, 0);
             const monthlyGrowth = lastMonthIncome > 0 ? ((thisMonthIncome - lastMonthIncome) / lastMonthIncome) * 100 : 0;
-            
-            setStats({
-                studentsCount,
-                lessonsCount,
-                totalHours,
-                totalIncome,
-                monthlyGrowth,
-                thisMonthIncome,
-                lastMonthIncome
-            });
-        } catch (err) {
-            console.error('Ошибка загрузки статистики:', err);
-        }
+            setStats({ studentsCount, lessonsCount: completedLessons.length, totalHours, totalIncome, monthlyGrowth, thisMonthIncome, lastMonthIncome });
+        } catch (err) { console.error('Ошибка загрузки статистики:', err); }
     };
 
     const fetchActivityData = async () => {
         try {
-            // ✅ Исправлено: axiosInstance
             const response = await axiosInstance.get(`/lessons/all?tutorId=${user.id}`);
-            
-            const lessons = response.data;
-            const now = new Date();
-            
-            // Последние 7 дней активности
-            const lastWeek = [];
-            for (let i = 6; i >= 0; i--) {
-                const date = new Date(now);
-                date.setDate(now.getDate() - i);
-                const dateStr = format(date, 'yyyy-MM-dd');
-                const dayLessons = lessons.filter(l => l.lessonDate === dateStr);
-                const completed = dayLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID').length;
-                lastWeek.push({
-                    date: format(date, 'EEE', { locale: ru }),
-                    fullDate: format(date, 'd MMM', { locale: ru }),
-                    count: completed,
-                    total: dayLessons.length
-                });
-            }
-            
+            const lessons = response.data; const now = new Date(); const lastWeek = [];
+            for (let i = 6; i >= 0; i--) { const date = new Date(now); date.setDate(now.getDate() - i); const dateStr = format(date, 'yyyy-MM-dd'); const dayLessons = lessons.filter(l => l.lessonDate === dateStr); lastWeek.push({ date: format(date, 'EEE', { locale: ru }), fullDate: format(date, 'd MMM', { locale: ru }), count: dayLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID').length, total: dayLessons.length }); }
             setActivityData({ lastMonth: [], thisMonth: lastWeek });
-        } catch (err) {
-            console.error('Ошибка загрузки активности:', err);
-        }
+        } catch (err) { console.error('Ошибка загрузки активности:', err); }
     };
 
     const fetchAvatar = async () => {
-        try {
-            // ✅ Исправлено: axiosInstance
-            const response = await axiosInstance.get(`/tutors/${user.id}/avatar`);
-            if (response.data.avatar) {
-                setAvatar(response.data.avatar);
-            }
-        } catch (err) {
-            console.error('Ошибка загрузки фото:', err);
-        }
-    };
-
-    const handleAvatarClick = () => {
-        fileInputRef.current?.click();
+        try { const response = await axiosInstance.get(`/tutors/${user.id}/avatar`); if (response.data.avatar) setAvatar(response.data.avatar); }
+        catch (err) { console.error('Ошибка загрузки фото:', err); }
     };
 
     const handleFileChange = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        
-        if (file.size > 2 * 1024 * 1024) {
-            showSnackbar('Файл слишком большой. Максимум 2MB', 'error');
-            return;
-        }
-        
-        if (!file.type.startsWith('image/')) {
-            showSnackbar('Можно загружать только изображения', 'error');
-            return;
-        }
-        
+        const file = event.target.files[0]; if (!file) return;
+        if (file.size > 2 * 1024 * 1024) { showSnackbar('Файл слишком большой. Максимум 2MB', 'error'); return; }
+        if (!file.type.startsWith('image/')) { showSnackbar('Можно загружать только изображения', 'error'); return; }
         setUploading(true);
-        
         const reader = new FileReader();
         reader.onloadend = async () => {
-            try {
-                const base64 = reader.result;
-                // ✅ Исправлено: axiosInstance
-                await axiosInstance.post(`/tutors/${user.id}/avatar`, { avatar: base64 });
-                setAvatar(base64);
-                showSnackbar('Фото успешно загружено', 'success');
-                window.dispatchEvent(new CustomEvent('avatar-updated', { detail: base64 }));
-            } catch (err) {
-                console.error('Ошибка загрузки:', err);
-                showSnackbar('Ошибка при загрузке фото', 'error');
-            } finally {
-                setUploading(false);
-            }
+            try { const base64 = reader.result; await axiosInstance.post(`/tutors/${user.id}/avatar`, { avatar: base64 }); setAvatar(base64); showSnackbar('Фото успешно загружено', 'success'); window.dispatchEvent(new CustomEvent('avatar-updated', { detail: base64 })); }
+            catch (err) { showSnackbar('Ошибка при загрузке фото', 'error'); }
+            finally { setUploading(false); }
         };
         reader.readAsDataURL(file);
     };
@@ -249,655 +169,287 @@ const Profile = () => {
     const handleSaveProfile = async () => {
         setLoading(true);
         try {
-            // ✅ Исправлено: axiosInstance
-            await axiosInstance.put(`/tutors/${user.id}`, {
-                fullName: profile.fullName,
-                phone: profile.phone,
-                birthday: profile.birthday,
-                about: profile.about,
-                city: profile.city,
-            });
-            
-            if (updateUser) {
-                updateUser({ ...user, fullName: profile.fullName });
-            }
-            
-            setEditMode(false);
-            showSnackbar('Профиль успешно обновлён', 'success');
-        } catch (err) {
-            console.error('Ошибка сохранения:', err);
-            showSnackbar(err.response?.data?.error || 'Ошибка при сохранении профиля', 'error');
-        } finally {
-            setLoading(false);
-        }
+            await axiosInstance.put(`/tutors/${user.id}`, { fullName: profile.fullName, phone: profile.phone, birthday: profile.birthday, about: profile.about, city: profile.city });
+            if (updateUser) updateUser({ ...user, fullName: profile.fullName });
+            setEditMode(false); showSnackbar('Профиль успешно обновлён', 'success');
+        } catch (err) { showSnackbar(err.response?.data?.error || 'Ошибка при сохранении профиля', 'error'); }
+        finally { setLoading(false); }
     };
 
     const handleChangePassword = async () => {
-        if (passwordData.newPassword !== passwordData.confirmPassword) {
-            setPasswordError('Пароли не совпадают');
-            return;
-        }
-        
-        if (passwordData.newPassword.length < 6) {
-            setPasswordError('Пароль должен быть не менее 6 символов');
-            return;
-        }
-        
+        if (passwordData.newPassword !== passwordData.confirmPassword) { setPasswordError('Пароли не совпадают'); return; }
+        if (passwordData.newPassword.length < 6) { setPasswordError('Пароль должен быть не менее 6 символов'); return; }
         setLoading(true);
-        try {
-            // ✅ Исправлено: axiosInstance
-            await axiosInstance.post(`/tutors/${user.id}/change-password`, {
-                currentPassword: passwordData.currentPassword,
-                newPassword: passwordData.newPassword
-            });
-            
-            setPasswordDialog(false);
-            setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-            setPasswordError('');
-            showSnackbar('Пароль успешно изменён', 'success');
-        } catch (err) {
-            showSnackbar(err.response?.data?.error || 'Ошибка при смене пароля', 'error');
-        } finally {
-            setLoading(false);
-        }
+        try { await axiosInstance.post(`/tutors/${user.id}/change-password`, { currentPassword: passwordData.currentPassword, newPassword: passwordData.newPassword }); setPasswordDialog(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); setPasswordError(''); showSnackbar('Пароль успешно изменён', 'success'); }
+        catch (err) { showSnackbar(err.response?.data?.error || 'Ошибка при смене пароля', 'error'); }
+        finally { setLoading(false); }
     };
 
-    const showSnackbar = (message, severity) => {
-        setSnackbar({ open: true, message, severity });
-    };
-
+    const showSnackbar = (message, severity) => setSnackbar({ open: true, message, severity });
     const maxActivity = Math.max(...activityData.thisMonth.map(d => d.count), 1);
 
+    const statCards = [
+        { label: 'Учеников', value: stats.studentsCount, icon: SchoolIcon, color: '#3B82F6', bg: '#EFF6FF' },
+        { label: 'Занятий', value: stats.lessonsCount, icon: CalendarIcon, color: '#10B981', bg: '#ECFDF5' },
+        { label: 'Часов', value: stats.totalHours, icon: AccessTimeIcon, color: '#F59E0B', bg: '#FFFBEB' },
+        { label: 'Доход', value: `${stats.totalIncome.toLocaleString()} ₽`, icon: MoneyIcon, color: '#7C3AED', bg: '#F5F3FF' },
+    ];
+
+    const avatarPresets = [
+        { bg: '#4F46E5', icon: '👨‍🏫' }, { bg: '#10B981', icon: '👩‍🏫' }, { bg: '#3B82F6', icon: '🎓' },
+        { bg: '#F59E0B', icon: '📚' }, { bg: '#7C3AED', icon: '🧠' }, { bg: '#A78BFA', icon: '💡' },
+        { bg: '#EC4899', icon: '🌟' }, { bg: '#10B981', icon: '🚀' }, { bg: '#F59E0B', icon: '🦊' },
+        { bg: '#3B82F6', icon: '🐼' }, { bg: '#EF4444', icon: '🔥' }, { bg: '#6B7280', icon: '💎' },
+    ];
+
     return (
-        <Box sx={{ p: 3 }}>
-            <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
+        <PageContainer>
+            <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
                 Мой профиль
             </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 4 }}>
+            <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 3 }}>
                 Управление личной информацией и настройками
             </Typography>
             
-            <Grid container spacing={4}>
-                {/* Левая колонка - аватар и статистика */}
+            <Grid container spacing={3}>
+                {/* Левая колонка */}
                 <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 3, borderRadius: 4, textAlign: 'center', position: 'sticky', top: 24 }}>
-                        {/* Аватар */}
-                        <Box sx={{ position: 'relative', display: 'inline-block' }}>
-                            <Badge
-                                overlap="circular"
-                                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                                badgeContent={
-                                    <Tooltip title="Изменить аватар">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => setAvatarDialogOpen(true)}
-                                            sx={{
-                                                bgcolor: '#ff6b6b',
-                                                color: 'white',
-                                                '&:hover': { bgcolor: '#ff5252' }
-                                            }}
-                                        >
-                                            <PhotoCameraIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                }
-                            >
-                                <Avatar
-                                    src={avatar}
-                                    sx={{
-                                        width: 140,
-                                        height: 140,
-                                        mx: 'auto',
-                                        mb: 2,
-                                        bgcolor: '#ff6b6b',
-                                        fontSize: 56,
-                                        cursor: 'pointer',
-                                        '&:hover': { opacity: 0.9 }
-                                    }}
-                                    onClick={() => setAvatarDialogOpen(true)}
-                                >
-                                    {!avatar && (profile.fullName?.charAt(0) || 'U')}
-                                </Avatar>
-                            </Badge>
-                        </Box>
-                        
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            {profile.fullName}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                            Репетитор
-                        </Typography>
-                        
-                        <Divider sx={{ my: 2 }} />
-                        
-                        <Chip
-                            icon={<BadgeIcon />}
-                            label={`ID: ${user?.id}`}
-                            variant="outlined"
-                            sx={{ mb: 1 }}
-                        />
-                        
-                        <Button
-                            variant="outlined"
-                            color="warning"
-                            startIcon={<LockIcon />}
-                            fullWidth
-                            onClick={() => setPasswordDialog(true)}
-                            sx={{ mt: 2, borderRadius: 2, textTransform: 'none' }}
+                    <StyledPaper elevation={0} sx={{ p: 3, textAlign: 'center', position: 'sticky', top: 24 }}>
+                        <AvatarBadge
+                            overlap="circular"
+                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                            badgeContent={
+                                <Tooltip title="Изменить аватар">
+                                    <IconButton size="small" onClick={() => setAvatarDialogOpen(true)} sx={{ bgcolor: '#4F46E5', color: '#FFFFFF', width: 32, height: 32, '&:hover': { bgcolor: '#4338CA' } }}>
+                                        <PhotoCameraIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </Tooltip>
+                            }
                         >
+                            <Avatar src={avatar}
+                                sx={{ width: 140, height: 140, mx: 'auto', mb: 2, bgcolor: '#4F46E5', fontSize: 56, cursor: 'pointer', fontWeight: 600, '&:hover': { opacity: 0.9 } }}
+                                onClick={() => setAvatarDialogOpen(true)}>
+                                {!avatar && (profile.fullName?.charAt(0) || 'U')}
+                            </Avatar>
+                        </AvatarBadge>
+                        
+                        <Typography sx={{ fontWeight: 600, fontSize: '18px', color: '#1F2937' }}>{profile.fullName}</Typography>
+                        <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>Репетитор</Typography>
+                        
+                        <Divider sx={{ my: 2, borderColor: '#F3F4F6' }} />
+                        
+                        <Chip icon={<BadgeIcon sx={{ fontSize: 16 }} />} label={`ID: ${user?.id}`} variant="outlined"
+                            sx={{ mb: 1, borderRadius: '8px', borderColor: '#E5E7EB', color: '#6B7280' }} />
+                        
+                        <StyledButton variant="outlined" startIcon={<LockIcon sx={{ fontSize: 16 }} />} fullWidth onClick={() => setPasswordDialog(true)}
+                            sx={{ mt: 2, color: '#D97706', borderColor: '#FDE68A', '&:hover': { bgcolor: '#FFFBEB', borderColor: '#F59E0B' } }}>
                             Сменить пароль
-                        </Button>
-                    </Paper>
+                        </StyledButton>
+                    </StyledPaper>
                 </Grid>
                 
-                {/* Правая колонка - информация и статистика */}
+                {/* Правая колонка */}
                 <Grid item xs={12} md={8}>
-                    {/* Вкладки */}
-                    <Paper sx={{ borderRadius: 3, overflow: 'hidden', mb: 3 }}>
-                        <Tabs 
-                            value={tabValue} 
-                            onChange={(e, v) => setTabValue(v)}
-                            sx={{ borderBottom: 1, borderColor: 'divider' }}
-                        >
-                            <Tab label="Личная информация" sx={{ textTransform: 'none', fontWeight: 500 }} />
-                            <Tab label="Статистика и активность" sx={{ textTransform: 'none', fontWeight: 500 }} />
-                        </Tabs>
+                    <StyledPaper elevation={0} sx={{ overflow: 'hidden' }}>
+                        <Box sx={{ borderBottom: '1px solid #F3F4F6', px: 2 }}>
+                            <ViewToggle sx={{ my: 1.5 }}>
+                                <ViewToggleBtn active={tabValue === 0} onClick={() => setTabValue(0)}>Личная информация</ViewToggleBtn>
+                                <ViewToggleBtn active={tabValue === 1} onClick={() => setTabValue(1)}>Статистика</ViewToggleBtn>
+                            </ViewToggle>
+                        </Box>
                         
-                        {/* Вкладка: Личная информация */}
+                        {/* Личная информация */}
                         {tabValue === 0 && (
                             <Box sx={{ p: 3 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                        Личная информация
-                                    </Typography>
+                                    <Typography sx={{ fontWeight: 600, fontSize: '16px', color: '#1F2937' }}>Личная информация</Typography>
                                     {!editMode ? (
-                                        <Button
-                                            variant="outlined"
-                                            startIcon={<EditIcon />}
-                                            onClick={() => setEditMode(true)}
-                                            sx={{ borderRadius: 2, textTransform: 'none' }}
-                                        >
-                                            Редактировать
-                                        </Button>
+                                        <StyledButton variant="outlined" startIcon={<EditIcon sx={{ fontSize: 16 }} />} onClick={() => setEditMode(true)}
+                                            sx={{ color: '#374151', borderColor: '#D1D5DB', '&:hover': { bgcolor: '#F9FAFB' } }}>Редактировать</StyledButton>
                                     ) : (
-                                        <Box>
-                                            <Button
-                                                variant="outlined"
-                                                onClick={() => setEditMode(false)}
-                                                sx={{ mr: 1, borderRadius: 2, textTransform: 'none' }}
-                                            >
-                                                Отмена
-                                            </Button>
-                                            <Button
-                                                variant="contained"
-                                                startIcon={<SaveIcon />}
-                                                onClick={handleSaveProfile}
-                                                disabled={loading}
-                                                sx={{ borderRadius: 2, textTransform: 'none' }}
-                                            >
-                                                {loading ? <CircularProgress size={24} /> : 'Сохранить'}
-                                            </Button>
+                                        <Box sx={{ display: 'flex', gap: 1 }}>
+                                            <StyledButton variant="outlined" onClick={() => setEditMode(false)} sx={{ color: '#6B7280', borderColor: '#D1D5DB' }}>Отмена</StyledButton>
+                                            <StyledButton variant="contained" startIcon={<SaveIcon sx={{ fontSize: 16 }} />} onClick={handleSaveProfile} disabled={loading}
+                                                sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>{loading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Сохранить'}</StyledButton>
                                         </Box>
                                     )}
                                 </Box>
                                 
                                 <Grid container spacing={2}>
                                     <Grid item xs={12}>
-                                        <TextField
-                                            fullWidth
-                                            label="ФИО"
-                                            value={profile.fullName}
-                                            onChange={(e) => setProfile({...profile, fullName: e.target.value})}
-                                            disabled={!editMode}
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <PersonIcon color="action" />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                        />
+                                        <TextField fullWidth label="ФИО" value={profile.fullName} onChange={(e) => setProfile({...profile, fullName: e.target.value})} disabled={!editMode}
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                            InputProps={{ startAdornment: <InputAdornment position="start"><PersonIcon sx={{ color: '#9CA3AF' }} /></InputAdornment> }} />
                                     </Grid>
-                                    
                                     <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth
-                                            label="Email"
-                                            value={profile.email}
-                                            disabled
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <EmailIcon color="action" />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                            helperText="Email нельзя изменить"
-                                        />
+                                        <TextField fullWidth label="Email" value={profile.email} disabled helperText="Email нельзя изменить"
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                            InputProps={{ startAdornment: <InputAdornment position="start"><EmailIcon sx={{ color: '#9CA3AF' }} /></InputAdornment> }} />
                                     </Grid>
-                                    
                                     <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth
-                                            label="Телефон"
-                                            value={profile.phone}
-                                            onChange={(e) => setProfile({...profile, phone: e.target.value})}
-                                            disabled={!editMode}
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <PhoneIcon color="action" />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                        />
+                                        <TextField fullWidth label="Телефон" value={profile.phone} onChange={(e) => setProfile({...profile, phone: e.target.value})} disabled={!editMode}
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                            InputProps={{ startAdornment: <InputAdornment position="start"><PhoneIcon sx={{ color: '#9CA3AF' }} /></InputAdornment> }} />
                                     </Grid>
-                                    
                                     <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth
-                                            label="Дата рождения"
-                                            type="date"
-                                            value={profile.birthday}
-                                            onChange={(e) => setProfile({...profile, birthday: e.target.value})}
-                                            disabled={!editMode}
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <CakeIcon color="action" />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                            InputLabelProps={{ shrink: true }}
-                                        />
+                                        <TextField fullWidth label="Дата рождения" type="date" value={profile.birthday} onChange={(e) => setProfile({...profile, birthday: e.target.value})} disabled={!editMode} InputLabelProps={{ shrink: true }}
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                            InputProps={{ startAdornment: <InputAdornment position="start"><CakeIcon sx={{ color: '#9CA3AF' }} /></InputAdornment> }} />
                                     </Grid>
-                                    
                                     <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth
-                                            label="Город"
-                                            value={profile.city}
-                                            onChange={(e) => setProfile({...profile, city: e.target.value})}
-                                            disabled={!editMode}
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <LocationCityIcon color="action" />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                        />
+                                        <TextField fullWidth label="Город" value={profile.city} onChange={(e) => setProfile({...profile, city: e.target.value})} disabled={!editMode}
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                            InputProps={{ startAdornment: <InputAdornment position="start"><LocationCityIcon sx={{ color: '#9CA3AF' }} /></InputAdornment> }} />
                                     </Grid>
-                                    
                                     <Grid item xs={12}>
-                                        <TextField
-                                            fullWidth
-                                            label="О себе"
-                                            multiline
-                                            rows={4}
-                                            value={profile.about}
-                                            onChange={(e) => setProfile({...profile, about: e.target.value})}
-                                            disabled={!editMode}
-                                            placeholder="Расскажите о себе, своём опыте, образовании..."
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <InfoIcon color="action" />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                        />
+                                        <TextField fullWidth label="О себе" multiline rows={4} value={profile.about} onChange={(e) => setProfile({...profile, about: e.target.value})} disabled={!editMode} placeholder="Расскажите о себе, своём опыте, образовании..."
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                            InputProps={{ startAdornment: <InputAdornment position="start"><InfoIcon sx={{ color: '#9CA3AF' }} /></InputAdornment> }} />
                                     </Grid>
                                 </Grid>
                             </Box>
                         )}
                         
-                        {/* Вкладка: Статистика и активность */}
+                        {/* Статистика */}
                         {tabValue === 1 && (
                             <Box sx={{ p: 3 }}>
-                                {/* Карточки статистики */}
                                 <Grid container spacing={2} sx={{ mb: 3 }}>
-                                    <Grid item xs={6} sm={3}>
-                                        <Card sx={{ borderRadius: 2, bgcolor: '#f5f5f5' }}>
-                                            <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-                                                <SchoolIcon sx={{ fontSize: 28, color: '#3B82F6', mb: 0.5 }} />
-                                                <Typography variant="h5" sx={{ fontWeight: 600, color: '#3B82F6' }}>
-                                                    {stats.studentsCount}
-                                                </Typography>
-                                                <Typography variant="caption" color="textSecondary">
-                                                    Учеников
-                                                </Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <Card sx={{ borderRadius: 2, bgcolor: '#f5f5f5' }}>
-                                            <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-                                                <CalendarIcon sx={{ fontSize: 28, color: '#10B981', mb: 0.5 }} />
-                                                <Typography variant="h5" sx={{ fontWeight: 600, color: '#10B981' }}>
-                                                    {stats.lessonsCount}
-                                                </Typography>
-                                                <Typography variant="caption" color="textSecondary">
-                                                    Занятий
-                                                </Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <Card sx={{ borderRadius: 2, bgcolor: '#f5f5f5' }}>
-                                            <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-                                                <AccessTimeIcon sx={{ fontSize: 28, color: '#F59E0B', mb: 0.5 }} />
-                                                <Typography variant="h5" sx={{ fontWeight: 600, color: '#F59E0B' }}>
-                                                    {stats.totalHours}
-                                                </Typography>
-                                                <Typography variant="caption" color="textSecondary">
-                                                    Часов
-                                                </Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <Card sx={{ borderRadius: 2, bgcolor: '#f5f5f5' }}>
-                                            <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-                                                <MoneyIcon sx={{ fontSize: 28, color: '#8B5CF6', mb: 0.5 }} />
-                                                <Typography variant="h5" sx={{ fontWeight: 600, color: '#8B5CF6' }}>
-                                                    {stats.totalIncome.toLocaleString()} ₽
-                                                </Typography>
-                                                <Typography variant="caption" color="textSecondary">
-                                                    Доход
-                                                </Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                </Grid>
-                                
-                                {/* Динамика роста */}
-                                <Paper sx={{ p: 2, mb: 3, bgcolor: stats.monthlyGrowth >= 0 ? '#E8F5E9' : '#FFEBEE', borderRadius: 2 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            {stats.monthlyGrowth >= 0 ? (
-                                                <TrendingUpIcon sx={{ color: '#2E7D32' }} />
-                                            ) : (
-                                                <TrendingDownIcon sx={{ color: '#C62828' }} />
-                                            )}
-                                            <Typography variant="subtitle2">
-                                                Динамика дохода
-                                            </Typography>
-                                        </Box>
-                                        <Typography variant="h6" sx={{ fontWeight: 600, color: stats.monthlyGrowth >= 0 ? '#2E7D32' : '#C62828' }}>
-                                            {stats.monthlyGrowth >= 0 ? '+' : ''}{stats.monthlyGrowth.toFixed(1)}%
-                                        </Typography>
-                                        <Typography variant="caption" color="textSecondary">
-                                            {stats.thisMonthIncome.toLocaleString()} ₽ в этом месяце vs {stats.lastMonthIncome.toLocaleString()} ₽ в прошлом
-                                        </Typography>
-                                    </Box>
-                                </Paper>
-                                
-                                {/* Активность за неделю */}
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                                    Активность за последние 7 дней
-                                </Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, mb: 2, minHeight: 120 }}>
-                                    {activityData.thisMonth.map((day, idx) => {
-                                        const height = day.count > 0 ? (day.count / maxActivity) * 80 : 4;
+                                    {statCards.map((stat, i) => {
+                                        const Icon = stat.icon;
                                         return (
-                                            <Tooltip key={idx} title={`${day.fullDate}: ${day.count} занятий проведено`} arrow>
-                                                <Box sx={{ flex: 1, textAlign: 'center' }}>
-                                                    <Box 
-                                                        sx={{ 
-                                                            height: height,
-                                                            bgcolor: day.count > 0 ? '#ff6b6b' : '#e0e0e0',
-                                                            borderRadius: '4px 4px 8px 8px',
-                                                            transition: 'all 0.2s',
-                                                            cursor: 'pointer',
-                                                            '&:hover': { bgcolor: '#ff5252' }
-                                                        }}
-                                                    />
-                                                    <Typography variant="caption" sx={{ fontSize: '0.65rem', mt: 1, display: 'block' }}>
-                                                        {day.date}
-                                                    </Typography>
-                                                </Box>
-                                            </Tooltip>
+                                            <Grid item xs={6} sm={3} key={i}>
+                                                <StatCard>
+                                                    <CardContent sx={{ p: 2, textAlign: 'center', '&:last-child': { pb: 2 } }}>
+                                                        <Box sx={{ width: 36, height: 36, borderRadius: '8px', bgcolor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                                                            <Icon sx={{ fontSize: 18, color: stat.color }} />
+                                                        </Box>
+                                                        <Typography sx={{ fontSize: '18px', fontWeight: 700, color: '#1F2937' }}>{stat.value}</Typography>
+                                                        <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{stat.label}</Typography>
+                                                    </CardContent>
+                                                </StatCard>
+                                            </Grid>
                                         );
                                     })}
+                                </Grid>
+                                
+                                <GrowthCard elevation={0} positive={stats.monthlyGrowth >= 0}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            {stats.monthlyGrowth >= 0 ? <TrendingUpIcon sx={{ color: '#10B981' }} /> : <TrendingDownIcon sx={{ color: '#EF4444' }} />}
+                                            <Typography sx={{ fontWeight: 600, fontSize: '14px', color: stats.monthlyGrowth >= 0 ? '#065F46' : '#991B1B' }}>Динамика дохода</Typography>
+                                        </Box>
+                                        <Typography sx={{ fontWeight: 700, fontSize: '20px', color: stats.monthlyGrowth >= 0 ? '#065F46' : '#991B1B' }}>
+                                            {stats.monthlyGrowth >= 0 ? '+' : ''}{stats.monthlyGrowth.toFixed(1)}%
+                                        </Typography>
+                                    </Box>
+                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5 }}>
+                                        {stats.thisMonthIncome.toLocaleString()} ₽ в этом месяце vs {stats.lastMonthIncome.toLocaleString()} ₽ в прошлом
+                                    </Typography>
+                                </GrowthCard>
+                                
+                                <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#1F2937', mb: 2 }}>Активность за последние 7 дней</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, mb: 2, minHeight: 100 }}>
+                                    {activityData.thisMonth.map((day, idx) => (
+                                        <Tooltip key={idx} title={`${day.fullDate}: ${day.count} занятий`} arrow>
+                                            <Box sx={{ flex: 1, textAlign: 'center' }}>
+                                                <ActivityBar height={(day.count / maxActivity) * 80} hasActivity={day.count > 0} />
+                                                <Typography sx={{ fontSize: '11px', mt: 1, display: 'block', color: '#6B7280' }}>{day.date}</Typography>
+                                            </Box>
+                                        </Tooltip>
+                                    ))}
                                 </Box>
                                 
-                                <Divider sx={{ my: 2 }} />
+                                <Divider sx={{ my: 2, borderColor: '#F3F4F6' }} />
                                 
-                                {/* Достижения / Бейджи */}
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                                    Достижения
-                                </Typography>
+                                <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#1F2937', mb: 2 }}>Достижения</Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                    {stats.lessonsCount >= 10 && (
-                                        <Tooltip title="Проведено более 10 занятий">
-                                            <Chip 
-                                                icon={<CheckIcon />}
-                                                label="10+ занятий"
-                                                color="success"
-                                                variant="outlined"
-                                            />
-                                        </Tooltip>
-                                    )}
-                                    {stats.lessonsCount >= 50 && (
-                                        <Tooltip title="Проведено более 50 занятий">
-                                            <Chip 
-                                                icon={<TrendingUpIcon />}
-                                                label="50+ занятий"
-                                                color="primary"
-                                                variant="outlined"
-                                            />
-                                        </Tooltip>
-                                    )}
-                                    {stats.studentsCount >= 5 && (
-                                        <Tooltip title="Более 5 учеников">
-                                            <Chip 
-                                                icon={<SchoolIcon />}
-                                                label="5+ учеников"
-                                                color="info"
-                                                variant="outlined"
-                                            />
-                                        </Tooltip>
-                                    )}
-                                    {stats.totalHours >= 100 && (
-                                        <Tooltip title="Проведено более 100 часов">
-                                            <Chip 
-                                                icon={<AccessTimeIcon />}
-                                                label="100+ часов"
-                                                color="warning"
-                                                variant="outlined"
-                                            />
-                                        </Tooltip>
-                                    )}
-                                    {stats.totalIncome >= 100000 && (
-                                        <Tooltip title="Заработано более 100 000 ₽">
-                                            <Chip 
-                                                icon={<MoneyIcon />}
-                                                label="100k+ доход"
-                                                color="success"
-                                                variant="outlined"
-                                            />
-                                        </Tooltip>
-                                    )}
-                                    {stats.monthlyGrowth > 20 && (
-                                        <Tooltip title="Рост дохода более 20%">
-                                            <Chip 
-                                                icon={<TrendingUpIcon />}
-                                                label="Быстрый рост"
-                                                color="secondary"
-                                                variant="outlined"
-                                            />
-                                        </Tooltip>
-                                    )}
-                                    {stats.lessonsCount === 0 && (
-                                        <Chip 
-                                            icon={<WarningIcon />}
-                                            label="Начинающий"
-                                            variant="outlined"
-                                        />
-                                    )}
+                                    {[
+                                        { show: stats.lessonsCount >= 10, label: '10+ занятий', color: 'success' },
+                                        { show: stats.lessonsCount >= 50, label: '50+ занятий', color: 'primary' },
+                                        { show: stats.studentsCount >= 5, label: '5+ учеников', color: 'info' },
+                                        { show: stats.totalHours >= 100, label: '100+ часов', color: 'warning' },
+                                        { show: stats.totalIncome >= 100000, label: '100k+ доход', color: 'success' },
+                                        { show: stats.monthlyGrowth > 20, label: 'Быстрый рост', color: 'secondary' },
+                                    ].filter(a => a.show).map((a, i) => (
+                                        <Chip key={i} icon={<StarIcon sx={{ fontSize: 14 }} />} label={a.label} variant="outlined"
+                                            sx={{ borderRadius: '100px', borderColor: '#E5E7EB', fontWeight: 500, fontSize: '12px' }} />
+                                    ))}
+                                    {stats.lessonsCount === 0 && <Chip icon={<WarningIcon sx={{ fontSize: 14 }} />} label="Начинающий" variant="outlined" sx={{ borderRadius: '100px', borderColor: '#E5E7EB' }} />}
                                 </Box>
-                                
-                                {stats.lessonsCount === 0 && (
-                                    <Alert severity="info" sx={{ mt: 2 }}>
-                                        Начните проводить занятия, чтобы открывать новые достижения!
-                                    </Alert>
-                                )}
+                                {stats.lessonsCount === 0 && <Alert severity="info" sx={{ mt: 2, borderRadius: '8px', fontSize: '13px' }}>Начните проводить занятия, чтобы открывать новые достижения!</Alert>}
                             </Box>
                         )}
-                    </Paper>
+                    </StyledPaper>
                 </Grid>
             </Grid>
-                        {/* Скрытый input для загрузки фото */}
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            style={{ display: 'none' }}
-                            accept="image/*"
-                            onChange={handleFileChange}
-                        />
-                        {/* Диалог выбора аватара */}
-            <Dialog open={avatarDialogOpen} onClose={() => setAvatarDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Выберите аватар</DialogTitle>
-                <DialogContent>
-                    <Tabs value={avatarTab} onChange={(e, v) => setAvatarTab(v)} sx={{ mb: 2 }}>
-                        <Tab label="Галерея" sx={{ textTransform: 'none' }} />
-                        <Tab label="Загрузить фото" sx={{ textTransform: 'none' }} />
-                    </Tabs>
-                    
+
+            {/* Скрытый input */}
+            <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleFileChange} />
+
+            {/* Диалог аватара */}
+            <StyledDialog open={avatarDialogOpen} onClose={() => setAvatarDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>Выберите аватар</DialogTitle>
+                <DialogContent sx={{ px: 3 }}>
+                    <ViewToggle sx={{ mb: 3 }}>
+                        <ViewToggleBtn active={avatarTab === 0} onClick={() => setAvatarTab(0)}>Галерея</ViewToggleBtn>
+                        <ViewToggleBtn active={avatarTab === 1} onClick={() => setAvatarTab(1)}>Загрузить фото</ViewToggleBtn>
+                    </ViewToggle>
                     {avatarTab === 0 && (
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
-                            {[
-                                { bg: '#ff6b6b', icon: '👨‍🏫' },
-                                { bg: '#4ecdc4', icon: '👩‍🏫' },
-                                { bg: '#45b7d1', icon: '🎓' },
-                                { bg: '#f9ca24', icon: '📚' },
-                                { bg: '#6c5ce7', icon: '🧠' },
-                                { bg: '#a29bfe', icon: '💡' },
-                                { bg: '#fd79a8', icon: '🌟' },
-                                { bg: '#00b894', icon: '🚀' },
-                                { bg: '#e17055', icon: '🦊' },
-                                { bg: '#0984e3', icon: '🐼' },
-                                { bg: '#d63031', icon: '🔥' },
-                                { bg: '#636e72', icon: '💎' },
-                            ].map((preset, i) => (
-                                <Avatar
-                                    key={i}
-                                    onClick={() => {
-                                        const canvas = document.createElement('canvas');
-                                        canvas.width = 140;
-                                        canvas.height = 140;
-                                        const ctx = canvas.getContext('2d');
-                                        ctx.fillStyle = preset.bg;
-                                        ctx.fillRect(0, 0, 140, 140);
-                                        ctx.font = '64px Arial';
-                                        ctx.textAlign = 'center';
-                                        ctx.textBaseline = 'middle';
-                                        ctx.fillText(preset.icon, 70, 70);
-                                        const dataUrl = canvas.toDataURL();
-                                        setAvatar(dataUrl);
-                                        setAvatarDialogOpen(false);
-                                        // Сохраняем на сервер
-                                        axiosInstance.post(`/tutors/${user.id}/avatar`, { avatar: dataUrl })
-                                            .then(() => {
-                                                showSnackbar('Аватар обновлён', 'success');
-                                                window.dispatchEvent(new CustomEvent('avatar-updated', { detail: dataUrl }));
-                                            })
-                                            .catch(() => showSnackbar('Ошибка при сохранении', 'error'));
-                                    }}
-                                    sx={{
-                                        width: 80,
-                                        height: 80,
-                                        bgcolor: preset.bg,
-                                        fontSize: 36,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        '&:hover': { transform: 'scale(1.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }
-                                    }}
-                                >
+                            {avatarPresets.map((preset, i) => (
+                                <Avatar key={i} onClick={() => {
+                                    const canvas = document.createElement('canvas'); canvas.width = 140; canvas.height = 140;
+                                    const ctx = canvas.getContext('2d'); ctx.fillStyle = preset.bg; ctx.fillRect(0, 0, 140, 140);
+                                    ctx.font = '64px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(preset.icon, 70, 70);
+                                    const dataUrl = canvas.toDataURL(); setAvatar(dataUrl); setAvatarDialogOpen(false);
+                                    axiosInstance.post(`/tutors/${user.id}/avatar`, { avatar: dataUrl }).then(() => { showSnackbar('Аватар обновлён', 'success'); window.dispatchEvent(new CustomEvent('avatar-updated', { detail: dataUrl })); }).catch(() => showSnackbar('Ошибка при сохранении', 'error'));
+                                }} sx={{ width: 80, height: 80, bgcolor: preset.bg, fontSize: 36, cursor: 'pointer', transition: 'all 0.2s', '&:hover': { transform: 'scale(1.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' } }}>
                                     {preset.icon}
                                 </Avatar>
                             ))}
                         </Box>
                     )}
-                    
                     {avatarTab === 1 && (
                         <Box sx={{ textAlign: 'center', py: 3 }}>
-                            <Button
-                                variant="outlined"
-                                startIcon={<PhotoCameraIcon />}
-                                onClick={() => {
-                                    fileInputRef.current?.click();
-                                    setAvatarDialogOpen(false);
-                                }}
-                                sx={{ borderRadius: 2, textTransform: 'none', mb: 2 }}
-                            >
-                                Выбрать фото с устройства
-                            </Button>
-                            <Typography variant="caption" color="textSecondary" display="block">
-                                JPG, PNG до 2MB
-                            </Typography>
+                            <StyledButton variant="outlined" startIcon={<PhotoCameraIcon sx={{ fontSize: 18 }} />} onClick={() => { fileInputRef.current?.click(); setAvatarDialogOpen(false); }}
+                                sx={{ color: '#374151', borderColor: '#D1D5DB', mb: 2 }}>Выбрать фото с устройства</StyledButton>
+                            <Typography sx={{ fontSize: '12px', color: '#9CA3AF' }}>JPG, PNG до 2MB</Typography>
                         </Box>
                     )}
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setAvatarDialogOpen(false)}>Закрыть</Button>
+                <DialogActions sx={{ px: 3, pb: 3 }}>
+                    <StyledButton onClick={() => setAvatarDialogOpen(false)} sx={{ color: '#6B7280' }}>Закрыть</StyledButton>
                 </DialogActions>
-            </Dialog>
+            </StyledDialog>
             
-            {/* Диалог смены пароля */}
-            <Dialog open={passwordDialog} onClose={() => setPasswordDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Смена пароля</DialogTitle>
-                <DialogContent>
+            {/* Диалог пароля */}
+            <StyledDialog open={passwordDialog} onClose={() => setPasswordDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>Смена пароля</DialogTitle>
+                <DialogContent sx={{ px: 3 }}>
                     <Box sx={{ pt: 2 }}>
-                        <TextField
-                            fullWidth
-                            label="Текущий пароль"
-                            type="password"
-                            value={passwordData.currentPassword}
+                        <TextField fullWidth label="Текущий пароль" type="password" value={passwordData.currentPassword}
                             onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
-                            margin="normal"
-                        />
-                        <TextField
-                            fullWidth
-                            label="Новый пароль"
-                            type="password"
-                            value={passwordData.newPassword}
+                            sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        <TextField fullWidth label="Новый пароль" type="password" value={passwordData.newPassword}
                             onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
-                            margin="normal"
-                            helperText="Минимум 6 символов"
-                        />
-                        <TextField
-                            fullWidth
-                            label="Подтвердите пароль"
-                            type="password"
-                            value={passwordData.confirmPassword}
+                            helperText="Минимум 6 символов" sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                        <TextField fullWidth label="Подтвердите пароль" type="password" value={passwordData.confirmPassword}
                             onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                            margin="normal"
-                            error={!!passwordError}
-                            helperText={passwordError}
-                        />
+                            error={!!passwordError} helperText={passwordError}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                     </Box>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setPasswordDialog(false)}>Отмена</Button>
-                    <Button onClick={handleChangePassword} variant="contained" disabled={loading}>
-                        {loading ? <CircularProgress size={24} /> : 'Сменить пароль'}
-                    </Button>
+                <DialogActions sx={{ px: 3, pb: 3 }}>
+                    <StyledButton onClick={() => setPasswordDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
+                    <StyledButton onClick={handleChangePassword} variant="contained" disabled={loading}
+                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>{loading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Сменить пароль'}</StyledButton>
                 </DialogActions>
-            </Dialog>
+            </StyledDialog>
             
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={4000}
-                onClose={() => setSnackbar({ ...snackbar, open: false })}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
-                    {snackbar.message}
-                </Alert>
+            <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+                <Alert severity={snackbar.severity} sx={{ borderRadius: '8px' }}>{snackbar.message}</Alert>
             </Snackbar>
-        </Box>
+        </PageContainer>
     );
 };
 

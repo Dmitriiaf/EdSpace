@@ -23,6 +23,9 @@ public class NotificationService {
     @Autowired
     private LessonRepository lessonRepository;
 
+    @Autowired
+    private StudentRepository studentRepository;
+
     @Transactional
     public Notification createNotification(Long parentId, Long lessonId, String message) {
         Parent parent = parentRepository.findById(parentId)
@@ -93,5 +96,57 @@ public class NotificationService {
             notification.setRead(true);
             notificationRepository.save(notification);
         }
+    }
+
+    // ========== НОВЫЕ МЕТОДЫ ДЛЯ УЧЕНИКОВ И РЕПЕТИТОРОВ ==========
+
+    public List<Notification> getNotificationsByStudent(Long studentId) {
+        return notificationRepository.findByStudentId(studentId);
+    }
+
+    public long getUnreadCountByStudent(Long studentId) {
+        return notificationRepository.countUnreadByStudentId(studentId);
+    }
+
+    public List<Notification> getNotificationsByTutor(Long tutorId) {
+        return notificationRepository.findByTutorId(tutorId);
+    }
+
+    public void markAllAsReadForTutor(Long tutorId) {
+        List<Notification> notifications = notificationRepository.findByTutorIdAndIsReadFalse(tutorId);
+        notifications.forEach(n -> n.setRead(true));
+        notificationRepository.saveAll(notifications);
+    }
+
+    public void markAllAsReadForStudent(Long studentId) {
+        List<Notification> notifications = notificationRepository.findByStudentIdAndIsReadFalse(studentId);
+        notifications.forEach(n -> n.setRead(true));
+        notificationRepository.saveAll(notifications);
+    }
+
+    public long getUnreadCountByTutor(Long tutorId) {
+        return notificationRepository.countUnreadByTutorId(tutorId);
+    }
+
+    @Transactional
+    public Notification createHomeworkNotification(Long studentId, Long tutorId, String message, String notificationType) {
+        Notification notification = new Notification();
+        if (studentId != null) {
+            notification.setStudent(studentRepository.findById(studentId).orElse(null));
+        }
+        notification.setTutorId(tutorId);
+        notification.setMessage(message);
+
+        if (notificationType.equals("HOMEWORK_SUBMITTED")) {
+            notification.setRecipientType("TUTOR");
+        } else {
+            notification.setRecipientType("STUDENT");
+        }
+
+        notification.setNotificationType(notificationType);
+        notification.setRead(false);
+        notification.setCreatedAt(LocalDateTime.now());
+
+        return notificationRepository.save(notification);
     }
 }

@@ -1,14 +1,18 @@
 package com.example.demo.controller;
 
+import com.example.demo.entity.Lesson;
+import com.example.demo.entity.Payment;
 import com.example.demo.entity.Subscription;
+import com.example.demo.repository.LessonRepository;
+import com.example.demo.repository.SubscriptionRepository;
 import com.example.demo.service.SubscriptionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import com.example.demo.entity.Payment;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +30,13 @@ public class SubscriptionController {
     @Autowired
     private SubscriptionService subscriptionService;
 
+    @Autowired
+    private SubscriptionRepository subscriptionRepository;
+
+    @Autowired
+    private LessonRepository lessonRepository;
+
+    // ========== GET /tutor/{tutorId} ==========
     @GetMapping("/tutor/{tutorId}")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getSubscriptionsByTutor(@PathVariable Long tutorId) {
@@ -37,6 +48,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== GET /student/{studentId} ==========
     @GetMapping("/student/{studentId}")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
     public ResponseEntity<?> getSubscriptionsByStudent(@PathVariable Long studentId) {
@@ -48,6 +60,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== PUT /{id} ==========
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> updateSubscription(@PathVariable Long id,
@@ -56,13 +69,13 @@ public class SubscriptionController {
         try {
             Subscription sub = subscriptionService.getSubscriptionById(id);
 
-            // IDOR проверка
             if (!sub.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
-            // ✅ Разрешаем редактировать pending и active
-            if (!"pending".equalsIgnoreCase(sub.getStatus()) && !"active".equalsIgnoreCase(sub.getStatus())) {
+            if (!"pending".equalsIgnoreCase(sub.getStatus())
+                    && !"active".equalsIgnoreCase(sub.getStatus())
+                    && !"PAID".equalsIgnoreCase(sub.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Нельзя редактировать завершённый абонемент"));
             }
 
@@ -72,6 +85,9 @@ public class SubscriptionController {
             if (request.containsKey("price")) {
                 sub.setPrice(new BigDecimal(request.get("price").toString()));
             }
+            if (request.containsKey("debtLessons")) {
+                sub.setDebtLessons(Integer.parseInt(request.get("debtLessons").toString()));
+            }
 
             subscriptionService.saveSubscription(sub);
             return ResponseEntity.ok(sub);
@@ -80,6 +96,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== GET /student/{studentId}/pending ==========
     @GetMapping("/student/{studentId}/pending")
     @PreAuthorize("hasAnyRole('TUTOR', 'PARENT')")
     public ResponseEntity<?> getPendingSubscriptions(@PathVariable Long studentId) {
@@ -91,6 +108,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== GET /student/{studentId}/active ==========
     @GetMapping("/student/{studentId}/active")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
     public ResponseEntity<?> getActiveSubscription(@PathVariable Long studentId) {
@@ -102,6 +120,43 @@ public class SubscriptionController {
         }
     }
 
+    @PostMapping("/{id}/recalculate")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> recalculateSubscription(@PathVariable Long id) {
+        try {
+            Subscription subscription = subscriptionRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Абонемент не найден"));
+
+            // Даты уже LocalDate — не нужен toLocalDate()
+            LocalDate startDate = subscription.getStartDate() != null
+                    ? subscription.getStartDate()
+                    : LocalDate.now().minusMonths(1);
+            LocalDate endDate = subscription.getEndDate() != null
+                    ? subscription.getEndDate()
+                    : LocalDate.now();
+
+            List<Lesson> lessons = lessonRepository
+                    .findByStudentIdAndLessonDateBetween(
+                            subscription.getStudent().getId(), startDate, endDate);
+
+            long usedLessons = lessons.stream()
+                    .filter(l -> "COMPLETED".equals(l.getStatus()) || "PAID".equals(l.getStatus()))
+                    .count();
+
+            subscription.setLessonsUsed((int) usedLessons);
+            subscriptionRepository.save(subscription);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Абонемент пересчитан",
+                    "lessonsUsed", usedLessons,
+                    "lessonsCount", subscription.getLessonsCount()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ========== POST / ==========
     @PostMapping
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createSubscription(@RequestBody Map<String, Object> request) {
@@ -120,6 +175,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== POST /{id}/pay ==========
     @PostMapping("/{id}/pay")
     @PreAuthorize("hasAnyRole('PARENT', 'TUTOR')")
     public ResponseEntity<?> paySubscription(@PathVariable Long id,
@@ -128,7 +184,6 @@ public class SubscriptionController {
         try {
             Subscription subscription = subscriptionService.getSubscriptionById(id);
 
-            // Проверка прав
             if ("ROLE_PARENT".equals(userRole)) {
                 if (subscription.getStudent().getParent() == null ||
                         !subscription.getStudent().getParent().getId().equals(currentUserId)) {
@@ -150,6 +205,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== POST /{id}/additional-pay ==========
     @PostMapping("/{id}/additional-pay")
     @PreAuthorize("hasAnyRole('PARENT', 'TUTOR')")
     public ResponseEntity<?> makeAdditionalPayment(@PathVariable Long id,
@@ -159,7 +215,6 @@ public class SubscriptionController {
         try {
             Subscription subscription = subscriptionService.getSubscriptionById(id);
 
-            // Проверка прав
             if ("ROLE_PARENT".equals(userRole)) {
                 if (subscription.getStudent().getParent() == null ||
                         !subscription.getStudent().getParent().getId().equals(currentUserId)) {
@@ -183,6 +238,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== POST /{id}/use ==========
     @PostMapping("/{id}/use")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> useLesson(@PathVariable Long id) {
@@ -197,6 +253,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== POST /renew ==========
     @PostMapping("/renew")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> renewAllSubscriptions() {
@@ -208,6 +265,7 @@ public class SubscriptionController {
         }
     }
 
+    // ========== DELETE /{id} ==========
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> deleteSubscription(@PathVariable Long id) {

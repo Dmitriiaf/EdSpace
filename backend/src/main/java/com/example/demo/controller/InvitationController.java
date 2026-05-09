@@ -1,3 +1,4 @@
+// ========== InvitationController.java ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.InvitationToken;
@@ -8,12 +9,15 @@ import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.ParentRepository;
 import com.example.demo.repository.TutorRepository;
 import com.example.demo.service.EmailService;
+import com.example.demo.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
-
+import java.util.UUID;
+import java.time.LocalDateTime;
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.time.LocalDate;
 import java.util.Map;
 
@@ -29,6 +33,8 @@ public class InvitationController {
     private final TutorRepository tutorRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final NotificationService notificationService;
+
 
     /**
      * Проверить токен приглашения
@@ -47,7 +53,6 @@ public class InvitationController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Срок действия приглашения истёк"));
             }
 
-            // ✅ Безопасное получение имени репетитора
             String tutorName = "Репетитор";
             if (invitation.getTutorId() != null) {
                 tutorName = tutorRepository.findById(invitation.getTutorId())
@@ -55,7 +60,6 @@ public class InvitationController {
                         .orElse("Репетитор");
             }
 
-            // ✅ Безопасное получение имени ученика
             String studentName = invitation.getStudentName();
             if (studentName == null) {
                 studentName = "Ученик";
@@ -71,6 +75,26 @@ public class InvitationController {
             log.error("Ошибка валидации токена: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", "Недействительный токен"));
         }
+    }
+
+    /**
+     * Сгенерировать пригласительную ссылку (без email)
+     */
+    @PostMapping("/generate")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> generateInviteLink(@RequestAttribute("userId") Long tutorId) {
+        InvitationToken token = new InvitationToken();
+        token.setToken(UUID.randomUUID().toString());
+        token.setTutorId(tutorId);
+        token.setUserType("STUDENT");
+        token.setEmail("pending");
+        token.setCreatedAt(LocalDateTime.now());
+        token.setExpiresAt(LocalDateTime.now().plusDays(7));
+
+        tokenRepository.save(token);
+
+        String link = "https://ed-space.ru/complete-registration?token=" + token.getToken();
+        return ResponseEntity.ok(Map.of("link", link));
     }
 
     /**
@@ -98,12 +122,32 @@ public class InvitationController {
             return ResponseEntity.badRequest().body(Map.of("error", "Срок действия приглашения истёк"));
         }
 
-        // Находим ученика по email
-        Student student = studentRepository.findByEmail(invitation.getEmail())
-                .stream().findFirst()
-                .orElseThrow(() -> new RuntimeException("Ученик не найден"));
+        String email = request.get("email");
+        String fullName = request.get("fullName");
 
-        // Обновляем данные ученика
+        if (email == null || email.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email обязателен"));
+        }
+        if (fullName == null || fullName.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Имя обязательно"));
+        }
+
+        // Ищем или создаём ученика
+        final String studentEmail = email;
+        Student student = studentRepository.findByEmail(studentEmail)
+                .stream().findFirst()
+                .orElseGet(() -> {
+                    Student newStudent = new Student();
+                    newStudent.setEmail(studentEmail);
+                    newStudent.setFullName(fullName);
+                    newStudent.setRole("ROLE_STUDENT");
+                    return newStudent;
+                });
+
+        // Обновляем данные
+        if (fullName != null && !fullName.isEmpty()) {
+            student.setFullName(fullName);
+        }
         if (phone != null && !phone.isEmpty()) {
             student.setPhone(phone);
         }
@@ -115,7 +159,28 @@ public class InvitationController {
 
         studentRepository.save(student);
 
-        // Отмечаем токен как использованный
+        // Уведомление репетитору о регистрации
+        try {
+            notificationService.createTutorNotification(
+                    invitation.getTutorId(),
+                    "🎉 Ученик " + student.getFullName() + " зарегистрировался по вашей ссылке"
+            );
+        } catch (Exception e) {
+            log.warn("Не удалось создать уведомление о регистрации: {}", e.getMessage());
+        }
+
+        // Привязываем ученика к репетитору
+        if (invitation.getTutorId() != null) {
+            if (!studentRepository.existsStudentTutor(student.getId(), invitation.getTutorId())) {
+                studentRepository.linkStudentToTutor(student.getId(), invitation.getTutorId());
+                log.info("✅ Ученик {} привязан к репетитору {}", student.getEmail(), invitation.getTutorId());
+            }
+        }
+
+        // Обновляем приглашение
+        invitation.setEmail(email);
+        invitation.setStudentName(fullName);
+        invitation.setStudentId(student.getId());
         invitation.setUsed(true);
         tokenRepository.save(invitation);
 
@@ -156,7 +221,6 @@ public class InvitationController {
             return ResponseEntity.badRequest().body(Map.of("error", "Срок действия приглашения истёк"));
         }
 
-        // Находим или создаём родителя
         Parent parent = parentRepository.findByEmail(invitation.getEmail())
                 .orElseGet(() -> {
                     Parent newParent = new Parent();
@@ -174,7 +238,6 @@ public class InvitationController {
 
         Parent savedParent = parentRepository.save(parent);
 
-        // Привязываем родителя к ученику
         if (invitation.getStudentId() != null) {
             studentRepository.findById(invitation.getStudentId()).ifPresent(student -> {
                 student.setParent(savedParent);
@@ -183,7 +246,6 @@ public class InvitationController {
             });
         }
 
-        // Отмечаем токен как использованный
         invitation.setUsed(true);
         tokenRepository.save(invitation);
 

@@ -27,18 +27,19 @@ public class BoardSessionController {
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createBoard(@RequestBody Map<String, Object> request,
                                          @RequestAttribute("userId") Long tutorId) {
-        Long studentId = Long.valueOf(request.get("studentId").toString());
+        Long studentId = request.get("studentId") != null ? Long.valueOf(request.get("studentId").toString()) : null;
         Long lessonId = request.get("lessonId") != null ? Long.valueOf(request.get("lessonId").toString()) : null;
         String title = request.get("title") != null ? request.get("title").toString() : "Доска";
+        String url = request.get("url") != null ? request.get("url").toString() : "";
 
-        BoardSession session = boardSessionService.createBoard(tutorId, studentId, lessonId, title);
+        BoardSession session = boardSessionService.createBoard(tutorId, studentId, lessonId, title, url);
 
         return ResponseEntity.ok(Map.of(
                 "id", session.getId(),
                 "roomName", session.getRoomName(),
-                "roomUrl", "https://excalidraw.com/#room=" + session.getRoomName(),
+                "url", session.getUrl(),
                 "title", session.getTitle(),
-                "studentName", session.getStudent().getFullName(),
+                "studentName", session.getStudent() != null ? session.getStudent().getFullName() : "",
                 "createdAt", session.getCreatedAt().toString()
         ));
     }
@@ -50,7 +51,7 @@ public class BoardSessionController {
     }
 
     @GetMapping("/student")
-    @PreAuthorize("hasAnyRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
     public ResponseEntity<?> getStudentBoards(@RequestAttribute("userId") Long studentId) {
         return ResponseEntity.ok(boardSessionService.getStudentBoards(studentId));
     }
@@ -64,7 +65,7 @@ public class BoardSessionController {
         }
         return ResponseEntity.ok(Map.of(
                 "exists", true,
-                "roomUrl", "https://excalidraw.com/#room=" + session.getRoomName(),
+                "url", session.getUrl(),
                 "title", session.getTitle()
         ));
     }
@@ -93,4 +94,27 @@ public class BoardSessionController {
         return ResponseEntity.ok(Map.of("message", "Доска удалена"));
     }
 
+    @PutMapping("/{id}/save-canvas")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
+    public ResponseEntity<?> saveCanvas(@PathVariable Long id, @RequestBody Map<String, String> request) {
+        try {
+            BoardSession board = boardSessionService.getById(id);
+            board.setCanvasImage(request.get("image"));
+            boardSessionService.save(board);
+            return ResponseEntity.ok(Map.of("message", "Сохранено"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/canvas")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
+    public ResponseEntity<?> getCanvas(@PathVariable Long id) {
+        try {
+            BoardSession board = boardSessionService.getById(id);
+            return ResponseEntity.ok(Map.of("image", board.getCanvasImage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }

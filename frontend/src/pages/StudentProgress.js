@@ -1,58 +1,121 @@
+// ========== frontend/src/pages/StudentProgress.js (РЕДИЗАЙН v2) ==========
 import React, { useState, useEffect } from 'react';
+import { useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import {
     Box, Paper, Typography, Grid, Card, CardContent,
-    CircularProgress, Alert, Chip, Divider,
+    CircularProgress, Alert,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Dialog, DialogTitle, DialogContent, LinearProgress
+    FormControl, InputLabel, Select, MenuItem,
+    Chip
 } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import {
-    TrendingUp, TrendingDown, TrendingFlat,
-    School, CheckCircle,
-    Star, StarHalf, StarBorder
+    TrendingUp, School, CheckCircle,
+    Star, StarHalf, StarBorder,
+    CalendarToday as CalendarIcon,
+    BarChart as BarChartIcon,
+    Timeline as TimelineIcon
 } from '@mui/icons-material';
-import { getStudentProgressStats, getProgressTimeline } from '../services/api';
+import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
+import {
+    LineChart, Line, XAxis, YAxis, CartesianGrid, 
+    Tooltip, Legend, ResponsiveContainer, ReferenceLine
+} from 'recharts';
 
+// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+
+
+const ChartPaper = styled(Paper)({
+    padding: '24px',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
+    marginBottom: '20px',
+});
+
+const HistoryPaper = styled(Paper)({
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+});
+
+
+const StyledTableRow = styled(TableRow)({
+    '&:nth-of-type(odd)': { backgroundColor: '#FFFFFF' },
+    '&:nth-of-type(even)': { backgroundColor: '#F9FAFB' },
+    '&:hover': { backgroundColor: '#EEF2FF !important' },
+});
+
+// ========== УТИЛИТЫ ==========
+
+function getPercentageColor(percentage) {
+    if (percentage >= 80) return '#10B981';
+    if (percentage >= 60) return '#F59E0B';
+    return '#EF4444';
+}
+
+// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function StudentProgress() {
+    const { studentId: paramStudentId } = useParams();
+    const location = useLocation();
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [stats, setStats] = useState(null);
     const [timeline, setTimeline] = useState([]);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [selectedHomework, setSelectedHomework] = useState(null);
-    const [studentName, setStudentName] = useState(''); // ✅ Для хранения имени ученика
+    const [studentName, setStudentName] = useState('');
+    const [courses, setCourses] = useState([]);
+    const [selectedCourseId, setSelectedCourseId] = useState('all');
+
+    // ✅ Правильно определяем ID ученика
+    const pathParts = location.pathname.split('/').filter(p => p);
+    const lastPart = pathParts[pathParts.length - 1];
+    const studentId = (paramStudentId && paramStudentId !== 'progress') 
+        ? paramStudentId 
+        : (!isNaN(lastPart) ? lastPart : user?.id);
 
     useEffect(() => {
-        fetchData();
-        if (user?.role === 'tutor') {
-            fetchStudentName();
+        if (studentId && studentId !== 'undefined' && studentId !== 'progress') {
+            fetchData();
+            fetchStudentInfo();
+            if (user?.role === 'ROLE_TUTOR' || user?.role === 'tutor') {
+                fetchCourses();
+            }
         }
-    }, [user]);
+    }, [studentId, selectedCourseId]);
 
-    const fetchStudentName = async () => {
+    const fetchStudentInfo = async () => {
         try {
-            const studentId = window.location.pathname.split('/').pop();
-            const response = await axiosInstance.get(`/students/${studentId}`);
-            setStudentName(response.data.fullName);
+            const res = await axiosInstance.get(`/students/${studentId}`);
+            setStudentName(res.data.fullName || 'Ученик');
         } catch (err) {
-            console.error('Ошибка загрузки имени ученика:', err);
+            console.error('Ошибка загрузки ученика:', err);
+            setStudentName('Ученик #' + studentId);
+        }
+    };
+
+    const fetchCourses = async () => {
+        try {
+            const res = await axiosInstance.get(`/courses/tutor/${user.id}`);
+            setCourses(res.data || []);
+        } catch (err) {
+            console.error('Ошибка загрузки курсов:', err);
         }
     };
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            // Для репетитора ID ученика берётся из URL, для ученика — из user.id
-            const studentId = user?.role === 'tutor' 
-                ? window.location.pathname.split('/').pop() 
-                : user?.id;
+            const params = selectedCourseId !== 'all' ? `?courseId=${selectedCourseId}` : '';
             
             const [statsRes, timelineRes] = await Promise.all([
-                getStudentProgressStats(studentId),
-                getProgressTimeline(studentId)
+                axiosInstance.get(`/homework/progress/student/${studentId}${params}`),
+                axiosInstance.get(`/homework/progress/student/${studentId}/timeline${params}`)
             ]);
+            
             setStats(statsRes.data);
             setTimeline(timelineRes.data?.timeline || []);
             setError(null);
@@ -64,266 +127,282 @@ function StudentProgress() {
         }
     };
 
-    const getTrendIcon = (trend) => {
-        if (trend === 'up') return <TrendingUp sx={{ color: '#4CAF50' }} />;
-        if (trend === 'down') return <TrendingDown sx={{ color: '#F44336' }} />;
-        return <TrendingFlat sx={{ color: '#FFC107' }} />;
-    };
-
     const renderStars = (grade) => {
         const stars = [];
         const fullStars = Math.floor(grade);
         const hasHalfStar = grade % 1 >= 0.5;
-        
-        for (let i = 0; i < fullStars; i++) {
-            stars.push(<Star key={i} sx={{ color: '#FFD700', fontSize: 20 }} />);
-        }
-        if (hasHalfStar) {
-            stars.push(<StarHalf key="half" sx={{ color: '#FFD700', fontSize: 20 }} />);
-        }
-        for (let i = stars.length; i < 5; i++) {
-            stars.push(<StarBorder key={i} sx={{ color: '#FFD700', fontSize: 20 }} />);
-        }
+        for (let i = 0; i < fullStars; i++) stars.push(<Star key={`s${i}`} sx={{ color: '#F59E0B', fontSize: 18 }} />);
+        if (hasHalfStar) stars.push(<StarHalf key="half" sx={{ color: '#F59E0B', fontSize: 18 }} />);
+        for (let i = stars.length; i < 5; i++) stars.push(<StarBorder key={`e${i}`} sx={{ color: '#D1D5DB', fontSize: 18 }} />);
         return stars;
     };
 
+    const chartData = timeline.map((point, index) => ({
+        name: `ДЗ ${index + 1}`,
+        date: new Date(point.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }),
+        percentage: point.percentage || 0,
+        grade: point.grade || 0,
+        maxScore: point.maxScore || 100,
+        score: point.score || 0,
+        courseName: point.courseName,
+        fullDate: new Date(point.date).toLocaleDateString('ru-RU')
+    }));
+
+    const maxPercentage = Math.max(...chartData.map(d => d.percentage), 100);
+    const minPercentage = Math.min(...chartData.map(d => d.percentage), 0);
+
+    const CustomTooltip = ({ active, payload, label }) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+                <Paper sx={{ p: 2, border: '1px solid #E5E7EB', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                    <Typography sx={{ fontWeight: 600, fontSize: '13px', color: '#1F2937', mb: 1 }}>
+                        {data.fullDate}
+                    </Typography>
+                    <Typography sx={{ fontSize: '13px', color: '#374151' }}>
+                        Результат: <strong>{data.percentage}%</strong>
+                    </Typography>
+                    <Typography sx={{ fontSize: '13px', color: '#374151' }}>
+                        Баллы: <strong>{data.score}/{data.maxScore}</strong>
+                    </Typography>
+                    <Typography sx={{ fontSize: '13px', color: '#374151' }}>
+                        Оценка: <strong>{data.grade}/5</strong>
+                    </Typography>
+                    <Typography sx={{ fontSize: '12px', color: '#9CA3AF', mt: 0.5 }}>
+                        {data.courseName}
+                    </Typography>
+                </Paper>
+            );
+        }
+        return null;
+    };
+
     if (loading) return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
-            <CircularProgress />
-        </Box>
+        <PageContainer>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                <CircularProgress sx={{ color: '#4F46E5' }} />
+            </Box>
+        </PageContainer>
     );
 
     if (error) return (
-        <Box sx={{ p: 3 }}>
-            <Alert severity="error">{error}</Alert>
-        </Box>
+        <PageContainer>
+            <Alert severity="error" sx={{ borderRadius: '12px' }}>{error}</Alert>
+        </PageContainer>
     );
 
     return (
-        <Box sx={{ p: 3 }}>
-            {/* ✅ ИСПРАВЛЕННЫЙ ЗАГОЛОВОК */}
-            <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
-                {user?.role === 'tutor' 
-                    ? `Успеваемость: ${studentName || 'Ученик'}` 
-                    : 'Моя успеваемость'}
-            </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 4 }}>
-                Детальная статистика прогресса и успеваемости
-            </Typography>
+        <PageContainer>
+            {/* ========== ЗАГОЛОВОК ========== */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                <Box>
+                    <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
+                        Успеваемость: {studentName}
+                    </Typography>
+                    <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
+                        Детальная статистика прогресса и успеваемости
+                    </Typography>
+                </Box>
+                {courses.length > 0 && (
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                        <InputLabel sx={{ fontSize: '13px' }}>Предмет</InputLabel>
+                        <Select 
+                            value={selectedCourseId} 
+                            onChange={(e) => setSelectedCourseId(e.target.value)} 
+                            label="Предмет"
+                            sx={{ 
+                                borderRadius: '8px', 
+                                backgroundColor: '#FFFFFF',
+                                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' },
+                                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' },
+                            }}
+                        >
+                            <MenuItem value="all">Все предметы</MenuItem>
+                            {courses.map(c => (
+                                <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                )}
+            </Box>
 
-            {/* Карточки статистики */}
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ borderRadius: 3, textAlign: 'center', py: 2 }}>
-                        <CardContent>
-                            <School sx={{ fontSize: 40, color: '#3B82F6', mb: 1 }} />
-                            <Typography variant="h4" sx={{ fontWeight: 600, color: '#3B82F6' }}>
-                                {stats?.totalHomework || 0}
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                Всего заданий
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ borderRadius: 3, textAlign: 'center', py: 2 }}>
-                        <CardContent>
-                            <CheckCircle sx={{ fontSize: 40, color: '#4CAF50', mb: 1 }} />
-                            <Typography variant="h4" sx={{ fontWeight: 600, color: '#4CAF50' }}>
-                                {stats?.checkedHomework || 0}
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                Проверено
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ borderRadius: 3, textAlign: 'center', py: 2 }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                                {renderStars(stats?.averageGrade || 0)}
-                            </Box>
-                            <Typography variant="h4" sx={{ fontWeight: 600, color: '#FF9800' }}>
-                                {stats?.averageGrade || 0}
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                Средняя оценка
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Card sx={{ borderRadius: 3, textAlign: 'center', py: 2 }}>
-                        <CardContent>
-                            {getTrendIcon(stats?.trend || 'neutral')}
-                            <Typography variant="h4" sx={{ fontWeight: 600 }}>
-                                {stats?.averagePercentage || 0}%
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                Средний процент
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
+            {/* ========== КАРТОЧКИ СТАТИСТИКИ ========== */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+                {[
+                    { label: 'Всего заданий', value: stats?.totalHomework || 0, icon: School, color: '#3B82F6', bg: '#EFF6FF' },
+                    { label: 'Проверено', value: stats?.checkedHomework || 0, icon: CheckCircle, color: '#10B981', bg: '#ECFDF5' },
+                    { label: 'Средняя оценка', value: stats?.averageGrade || 0, icon: Star, color: '#F59E0B', bg: '#FFFBEB', isStars: true },
+                    { label: 'Средний процент', value: `${stats?.averagePercentage || 0}%`, icon: TrendingUp, color: '#7C3AED', bg: '#F5F3FF' },
+                ].map((stat, i) => {
+                    const Icon = stat.icon;
+                    return (
+                        <Grid item xs={6} md={3} key={i}>
+                            <StatCard>
+                                <CardContent sx={{ p: 2.5, textAlign: 'center', '&:last-child': { pb: 2.5 } }}>
+                                    {stat.isStars ? (
+                                        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                                            {renderStars(stat.value)}
+                                        </Box>
+                                    ) : (
+                                        <Box sx={{
+                                            width: 48, height: 48, borderRadius: '12px',
+                                            backgroundColor: stat.bg,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            margin: '0 auto 12px',
+                                        }}>
+                                            <Icon sx={{ fontSize: 24, color: stat.color }} />
+                                        </Box>
+                                    )}
+                                    <Typography sx={{ fontSize: '24px', fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>
+                                        {stat.value}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5 }}>
+                                        {stat.label}
+                                    </Typography>
+                                </CardContent>
+                            </StatCard>
+                        </Grid>
+                    );
+                })}
             </Grid>
 
-            {/* Распределение оценок */}
-            {stats?.gradeDistribution && (
-                <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                        Распределение оценок
-                    </Typography>
-                    <Grid container spacing={2}>
-                        {Object.entries(stats.gradeDistribution).map(([grade, count]) => (
-                            <Grid item xs={2.4} key={grade}>
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <Typography variant="h5" sx={{ fontWeight: 600, color: '#FFD700' }}>
-                                        {grade}
-                                    </Typography>
-                                    <Typography variant="caption" color="textSecondary">
-                                        {count} шт.
-                                    </Typography>
-                                    <LinearProgress 
-                                        variant="determinate" 
-                                        value={Math.min(100, (count / (stats.checkedHomework || 1)) * 100)} 
-                                        sx={{ mt: 1, borderRadius: 4, height: 8 }}
-                                    />
-                                </Box>
-                            </Grid>
-                        ))}
-                    </Grid>
-                </Paper>
+            {/* ========== ГРАФИК ========== */}
+            {timeline.length > 0 ? (
+                <ChartPaper elevation={0}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                        <TimelineIcon sx={{ color: '#4F46E5', fontSize: 20 }} />
+                        <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937' }}>
+                            Динамика успеваемости
+                        </Typography>
+                    </Box>
+                    <ResponsiveContainer width="100%" height={400}>
+                        <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} />
+                            <YAxis 
+                                domain={[Math.max(0, minPercentage - 10), Math.min(100, maxPercentage + 10)]}
+                                tick={{ fontSize: 12, fill: '#6B7280' }}
+                                label={{ value: 'Процент (%)', angle: -90, position: 'insideLeft', fill: '#6B7280', fontSize: 12 }}
+                            />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend wrapperStyle={{ fontSize: '13px' }} />
+                            <ReferenceLine 
+                                y={80} 
+                                stroke="#10B981" 
+                                strokeDasharray="5 5" 
+                                label={{ value: 'Цель: 80%', position: 'right', fill: '#10B981', fontSize: 12 }} 
+                            />
+                            <Line 
+                                type="monotone" 
+                                dataKey="percentage" 
+                                stroke="#4F46E5" 
+                                strokeWidth={3} 
+                                name="Результат (%)"
+                                dot={{ r: 6, fill: '#4F46E5', stroke: '#FFFFFF', strokeWidth: 2 }}
+                                activeDot={{ r: 8, fill: '#4F46E5', stroke: '#FFFFFF', strokeWidth: 3 }} 
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </ChartPaper>
+            ) : (
+                <ChartPaper elevation={0}>
+                    <EmptyStateContainer>
+                        <EmptyStateIcon>
+                            <BarChartIcon sx={{ fontSize: 36, color: '#9CA3AF' }} />
+                        </EmptyStateIcon>
+                        <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>
+                            Нет данных для отображения графика
+                        </Typography>
+                        <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
+                            Проверенные домашние задания появятся здесь
+                        </Typography>
+                    </EmptyStateContainer>
+                </ChartPaper>
             )}
 
-            {/* Таймлайн прогресса */}
-            <Paper sx={{ p: 3, borderRadius: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                    Динамика успеваемости
-                </Typography>
-                
-                {timeline.length === 0 ? (
-                    <Alert severity="info">Нет данных для отображения графика</Alert>
-                ) : (
-                    <Box sx={{ height: 300, position: 'relative', mb: 3 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: '100%' }}>
-                            {timeline.slice(-12).map((point, idx) => {
-                                const height = (point.score / 100) * 250;
-                                return (
-                                    <Box key={idx} sx={{ flex: 1, textAlign: 'center' }}>
-                                        <Box 
-                                            sx={{ 
-                                                height: height,
-                                                bgcolor: point.score >= 80 ? '#4CAF50' : 
-                                                         point.score >= 60 ? '#FFC107' : '#F44336',
-                                                borderRadius: '8px 8px 4px 4px',
-                                                transition: 'all 0.2s',
-                                                cursor: 'pointer'
-                                            }}
-                                        />
-                                        <Typography variant="caption" sx={{ fontSize: '0.6rem', mt: 1, display: 'block' }}>
-                                            {new Date(point.date).toLocaleDateString()}
-                                        </Typography>
-                                    </Box>
-                                );
-                            })}
-                        </Box>
-                    </Box>
-                )}
-
-                {/* Детали домашних заданий */}
-                {timeline.length > 0 && (
-                    <>
-                        <Divider sx={{ my: 2 }} />
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+            {/* ========== ТАБЛИЦА ИСТОРИИ ========== */}
+            {timeline.length > 0 && (
+                <HistoryPaper elevation={0}>
+                    <Box sx={{ p: 3, pb: 0 }}>
+                        <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 2 }}>
                             История домашних заданий
                         </Typography>
-                        <TableContainer component={Paper} variant="outlined">
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow sx={{ bgcolor: '#f8f9fa' }}>
-                                        <TableCell>Дата</TableCell>
-                                        <TableCell>Задание</TableCell>
-                                        <TableCell align="center">Баллы</TableCell>
-                                        <TableCell align="center">Оценка</TableCell>
-                                        <TableCell>Статус</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {timeline.slice().reverse().map((item, idx) => (
-                                        <TableRow key={idx}>
-                                            <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                                            <TableCell sx={{ maxWidth: 300 }}>
-                                                <Typography variant="body2" noWrap>
-                                                    {item.topic || 'Домашнее задание'}
+                    </Box>
+                    <TableContainer>
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                                        Дата
+                                    </TableCell>
+                                    <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                                        Предмет
+                                    </TableCell>
+                                    <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                                        Баллы
+                                    </TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                                        %
+                                    </TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                                        Оценка
+                                    </TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {timeline.slice().reverse().map((item, idx) => {
+                                    const pct = item.percentage || 0;
+                                    const pctColor = getPercentageColor(pct);
+                                    
+                                    return (
+                                        <StyledTableRow key={idx}>
+                                            <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <CalendarIcon sx={{ fontSize: 14, color: '#9CA3AF' }} />
+                                                    <Typography sx={{ fontSize: '14px', color: '#1F2937' }}>
+                                                        {new Date(item.date).toLocaleDateString('ru-RU')}
+                                                    </Typography>
+                                                </Box>
+                                            </TableCell>
+                                            <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                <Typography sx={{ fontSize: '14px', color: '#374151' }}>
+                                                    {item.courseName || '—'}
                                                 </Typography>
                                             </TableCell>
-                                            <TableCell align="center">
-                                                {item.score || 0} / {item.maxScore || 100}
+                                            <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                <Typography sx={{ fontSize: '14px', color: '#1F2937', fontWeight: 500 }}>
+                                                    {item.score || 0}/{item.maxScore || 100}
+                                                </Typography>
                                             </TableCell>
-                                            <TableCell align="center">
-                                                <Chip 
-                                                    label={item.grade || '—'}
+                                            <TableCell align="center" sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                <Chip
+                                                    label={`${pct}%`}
                                                     size="small"
-                                                    sx={{ 
-                                                        bgcolor: item.grade >= 4 ? '#4CAF5020' : 
-                                                                 item.grade >= 3 ? '#FFC10720' : '#F4433620',
-                                                        color: item.grade >= 4 ? '#2E7D32' : 
-                                                               item.grade >= 3 ? '#ED6C02' : '#C62828',
-                                                        fontWeight: 500
+                                                    sx={{
+                                                        backgroundColor: pct >= 80 ? '#ECFDF5' : pct >= 60 ? '#FFFBEB' : '#FEF2F2',
+                                                        color: pctColor,
+                                                        fontWeight: 600,
+                                                        fontSize: '12px',
+                                                        borderRadius: '100px',
+                                                        minWidth: 50,
                                                     }}
                                                 />
                                             </TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    label={item.status === 'checked' ? 'Проверено' : 
-                                                           item.status === 'submitted' ? 'На проверке' : 'Назначено'}
-                                                    size="small"
-                                                    color={item.status === 'checked' ? 'success' : 
-                                                           item.status === 'submitted' ? 'warning' : 'default'}
-                                                />
+                                            <TableCell align="center" sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                                                    {renderStars(item.grade || 0)}
+                                                </Box>
                                             </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </>
-                )}
-            </Paper>
-
-            <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-                <DialogTitle>Детали задания</DialogTitle>
-                <DialogContent>
-                    {selectedHomework && (
-                        <Box sx={{ pt: 2 }}>
-                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                                Задание:
-                            </Typography>
-                            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
-                                <Typography variant="body1">
-                                    {selectedHomework.task}
-                                </Typography>
-                            </Paper>
-                            
-                            {selectedHomework.feedback && (
-                                <>
-                                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                                        Обратная связь:
-                                    </Typography>
-                                    <Paper sx={{ p: 2, bgcolor: '#e3f2fd' }}>
-                                        <Typography variant="body1">
-                                            {selectedHomework.feedback}
-                                        </Typography>
-                                    </Paper>
-                                </>
-                            )}
-                        </Box>
-                    )}
-                </DialogContent>
-            </Dialog>
-        </Box>
+                                        </StyledTableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </HistoryPaper>
+            )}
+        </PageContainer>
     );
 }
 

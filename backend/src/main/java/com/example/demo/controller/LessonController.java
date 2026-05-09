@@ -15,6 +15,7 @@ import com.example.demo.repository.SubscriptionRepository;
 import com.example.demo.repository.LessonRepository;
 import com.example.demo.repository.TutorRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,7 +27,9 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
-
+import java.util.List;
+import java.util.Map;
+import org.springframework.web.bind.annotation.PatchMapping;
 @Slf4j
 @RestController
 @RequestMapping("/api/lessons")
@@ -108,6 +111,36 @@ public class LessonController {
             lessonRepository.delete(newLesson);
 
             return ResponseEntity.ok(Map.of("message", "Перенос отменён"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/tutor/{tutorId}/date/{date}")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getLessonsByTutorAndDate(
+            @PathVariable Long tutorId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        try {
+            List<Lesson> lessons = lessonService.getLessonsByTutorAndDate(tutorId, date);
+            return ResponseEntity.ok(lessons);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+
+    @GetMapping("/tutor/{tutorId}/range")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getLessonsByTutorAndDateRange(
+            @PathVariable Long tutorId,
+            @RequestParam String start,
+            @RequestParam String end) {
+        try {
+            LocalDate startDate = LocalDate.parse(start);
+            LocalDate endDate = LocalDate.parse(end);
+            List<Lesson> lessons = lessonService.getLessonsByTutorAndDateRange(tutorId, startDate, endDate);
+            return ResponseEntity.ok(lessons);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -891,6 +924,32 @@ public class LessonController {
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<?> updateLessonStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String newStatus = body.get("status");
+        if (newStatus == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Статус не указан"));
+        }
+
+        // Разрешённые статусы для ручного изменения
+        if (!List.of("PAID", "COMPLETED", "CANCELLED").contains(newStatus)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Недопустимый статус"));
+        }
+
+        Lesson lesson = lessonRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Занятие не найдено"));
+
+        // Можно менять статус только у COMPLETED → PAID
+        if ("PAID".equals(newStatus) && !"COMPLETED".equals(lesson.getStatus())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Оплатить можно только проведённое занятие"));
+        }
+
+        lesson.setStatus(newStatus);
+        lessonRepository.save(lesson);
+
+        return ResponseEntity.ok(Map.of("message", "Статус обновлён", "status", newStatus));
     }
 
     @PostMapping("/{id}/start")

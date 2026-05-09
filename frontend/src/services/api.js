@@ -103,6 +103,10 @@ export const exportFinancialReport = (startDate, endDate) =>
         params: { startDate, endDate }
     });
 
+export const getLessonsByDate = (tutorId, date) => {
+    return axiosInstance.get(`/lessons/tutor/${tutorId}/date/${date}`);
+};
+
 export const exportCourseReport = (courseId, startDate, endDate) => 
     axiosInstance.get(`/export/course`, {
         params: { courseId, startDate, endDate }

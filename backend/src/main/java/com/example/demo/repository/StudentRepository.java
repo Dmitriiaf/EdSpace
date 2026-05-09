@@ -1,10 +1,13 @@
+// ========== StudentRepository.java ==========
 package com.example.demo.repository;
 
 import com.example.demo.entity.Student;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,9 +17,10 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
 
     List<Student> findByEmail(String email);
 
-    // ✅ ВОЗВРАЩЁННЫЙ МЕТОД
     List<Student> findByParentId(Long parentId);
 
+    @Query("SELECT s FROM Student s JOIN s.tutors t WHERE t.id = :tutorId")
+    List<Student> findByTutorId(@Param("tutorId") Long tutorId);
 
     @Query("SELECT DISTINCT s.email FROM Student s WHERE s.id IN :ids")
     List<String> findEmailsByIds(@Param("ids") List<Long> ids);
@@ -57,4 +61,13 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
 
     Optional<Student> findByResetToken(String resetToken);
 
+    // Проверить, привязан ли ученик к репетитору
+    @Query("SELECT COUNT(s) > 0 FROM Student s JOIN s.tutors t WHERE s.id = :studentId AND t.id = :tutorId")
+    boolean existsStudentTutor(@Param("studentId") Long studentId, @Param("tutorId") Long tutorId);
+
+    // Привязать ученика к репетитору
+    @Modifying
+    @Transactional
+    @Query(value = "INSERT INTO student_tutor (student_id, tutor_id) VALUES (:studentId, :tutorId)", nativeQuery = true)
+    void linkStudentToTutor(@Param("studentId") Long studentId, @Param("tutorId") Long tutorId);
 }

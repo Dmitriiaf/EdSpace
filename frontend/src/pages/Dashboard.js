@@ -1,30 +1,27 @@
-// ========== frontend/src/pages/Dashboard.js ==========
+// ========== frontend/src/pages/Dashboard.js (ФИНАЛ — БЕЗ ДОЛЖНИКОВ) ==========
 import React, { useState, useEffect } from 'react';
 import {
     Box, Grid, Card, CardContent, Typography,
     Paper, CircularProgress, Alert, Button,
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Chip, Snackbar,
-    FormControl, InputLabel, Select, MenuItem, Divider, Tabs, Tab
+    FormControl, InputLabel, Select, MenuItem, Divider, Tabs, Tab,
+    IconButton
 } from '@mui/material';
-import { formatLessonTime, formatLessonDate } from '../utils/timezone';
+import { PageContainer, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon } from '../styles/shared';
+import { styled } from '@mui/material/styles';
+import { formatLessonTime, formatLessonDate, utcToLocalTime, getLocalHoursMinutes } from '../utils/timezone';
 import {
     Refresh as RefreshIcon,
     Edit as EditIcon,
     Save as SaveIcon,
-    PlayArrow as PlayIcon,
     CheckCircle as CheckIcon,
     Cancel as CancelIcon,
     Event as EventIcon,
-    ArrowBack as ArrowBackIcon,
-    ArrowForward as ArrowForwardIcon,
     CalendarToday as CalendarTodayIcon,
-    WbSunny as SunIcon,
-    Brightness3 as NightIcon,
-    Cloud as CloudIcon,
     Videocam as VideocamIcon,
-    Draw as DrawIcon,
-    Work as WorkIcon
+    Work as WorkIcon,
+    AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -37,6 +34,7 @@ import { useStudentRate } from '../hooks/useStudentRate';
 import LessonRoom from '../components/LessonRoom';
 import axiosInstance from '../api/axiosConfig';
 import {
+    getLessonsByDate,
     getAllLessons,
     completeLesson,
     cancelLesson,
@@ -46,6 +44,47 @@ import {
     getVariants as fetchVariantsAPI,
     replaceCancelledWithResurrect
 } from '../services/api';
+
+// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+
+
+
+const HeaderPaper = styled(Paper)({
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#FFFFFF',
+    border: '1px solid #F3F4F6',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    padding: '24px',
+});
+
+
+const LessonCard = styled(Card)({
+    marginBottom: '12px',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    border: '1px solid #F3F4F6',
+    transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+    '&:hover': {
+        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+        transform: 'translateY(-2px)',
+    },
+});
+
+const TimeDivider = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    margin: '20px 0 12px',
+    '&::after': {
+        content: '""',
+        flex: 1,
+        height: '1px',
+        backgroundColor: '#E5E7EB',
+    },
+});
+
+
 
 function Dashboard() {
     const { user } = useAuth();
@@ -141,70 +180,8 @@ function Dashboard() {
         setOpenCompleteDialog(true);
     };
 
-    const getTimeGradient = () => {
-        const hour = currentTime.getHours();
-        if (hour >= 5 && hour < 12) return 'linear-gradient(135deg, #FFB347 0%, #FF6B6B 100%)';
-        if (hour >= 12 && hour < 17) return 'linear-gradient(135deg, #56B4E9 0%, #4A90E2 100%)';
-        if (hour >= 17 && hour < 22) return 'linear-gradient(135deg, #F39C12 0%, #E67E22 100%)';
-        return 'linear-gradient(135deg, #1A2980 0%, #0C0C3C 100%)';
-    };
-
-    const getDecorations = () => {
-        const hour = currentTime.getHours();
-        if (hour >= 5 && hour < 12) {
-            return {
-                mainIcon: <SunIcon sx={{ fontSize: 120, color: 'rgba(255, 215, 0, 0.3)' }} />,
-                floatingElements: [
-                    { icon: <CloudIcon />, size: 60, top: '10%', left: '5%', delay: '0s', duration: '20s' },
-                    { icon: <CloudIcon />, size: 80, top: '60%', left: '15%', delay: '2s', duration: '25s' },
-                    { icon: <CloudIcon />, size: 50, top: '20%', left: '70%', delay: '1s', duration: '18s' },
-                    { icon: <SunIcon />, size: 40, top: '15%', left: '85%', delay: '0s', duration: '15s' }
-                ]
-            };
-        }
-        if (hour >= 12 && hour < 17) {
-            return {
-                mainIcon: <SunIcon sx={{ fontSize: 150, color: 'rgba(255, 215, 0, 0.4)' }} />,
-                floatingElements: [
-                    { icon: <CloudIcon />, size: 70, top: '15%', left: '10%', delay: '0s', duration: '22s' },
-                    { icon: <CloudIcon />, size: 90, top: '50%', left: '20%', delay: '1.5s', duration: '28s' },
-                    { icon: <CloudIcon />, size: 60, top: '70%', left: '75%', delay: '0.8s', duration: '19s' }
-                ]
-            };
-        }
-        if (hour >= 17 && hour < 22) {
-            return {
-                mainIcon: <NightIcon sx={{ fontSize: 100, color: 'rgba(255, 255, 200, 0.4)' }} />,
-                floatingElements: [
-                    { icon: <StarIcon />, size: 20, top: '15%', left: '20%', delay: '0s', duration: '3s' },
-                    { icon: <StarIcon />, size: 25, top: '25%', left: '80%', delay: '1s', duration: '4s' },
-                    { icon: <StarIcon />, size: 18, top: '45%', left: '50%', delay: '0.5s', duration: '3.5s' },
-                    { icon: <StarIcon />, size: 22, top: '70%', left: '30%', delay: '1.2s', duration: '4.2s' },
-                    { icon: <StarIcon />, size: 15, top: '85%', left: '85%', delay: '0.3s', duration: '2.8s' },
-                    { icon: <NightIcon />, size: 60, top: '10%', left: '85%', delay: '0s', duration: '20s' }
-                ]
-            };
-        }
-        return {
-            mainIcon: <NightIcon sx={{ fontSize: 100, color: 'rgba(200, 220, 255, 0.5)' }} />,
-            floatingElements: [
-                { icon: <StarIcon />, size: 25, top: '10%', left: '15%', delay: '0s', duration: '4s' },
-                { icon: <StarIcon />, size: 30, top: '20%', left: '70%', delay: '1s', duration: '5s' },
-                { icon: <StarIcon />, size: 20, top: '35%', left: '40%', delay: '0.5s', duration: '3.5s' },
-                { icon: <StarIcon />, size: 22, top: '55%', left: '85%', delay: '1.2s', duration: '4.2s' },
-                { icon: <StarIcon />, size: 18, top: '75%', left: '25%', delay: '0.8s', duration: '3s' },
-                { icon: <StarIcon />, size: 28, top: '85%', left: '60%', delay: '1.5s', duration: '4.5s' },
-                { icon: <NightIcon />, size: 70, top: '5%', left: '80%', delay: '0s', duration: '25s' }
-            ]
-        };
-    };
-
-    const StarIcon = ({ sx }) => (
-        <Box sx={{ ...sx, position: 'relative' }}>★</Box>
-    );
-
     useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 60000); return () => clearInterval(timer); }, []);
-    useEffect(() => { if (user) { loadAllData(); fetchDebtors(); } }, [user, selectedDate]);
+    useEffect(() => { if (user) { loadAllData(); } }, [user, selectedDate]);
 
     const fetchDebtors = async () => {
         try {
@@ -227,9 +204,24 @@ function Dashboard() {
 
     const loadAllData = async () => {
         setLoading(true);
-        try { await Promise.all([fetchLessonsForDate(selectedDate), fetchPreviousLessons()]); }
-        catch (err) { setError('Ошибка загрузки данных'); }
-        finally { setLoading(false); }
+        try {
+            const dateStr = format(selectedDate, 'yyyy-MM-dd');
+            
+            // ОДИН лёгкий запрос вместо двух тяжёлых
+            const lessonsRes = await getLessonsByDate(user.id, dateStr);
+            const todayLessonsData = lessonsRes.data || [];
+            setTodayLessons(todayLessonsData.sort((a, b) => a.startTime.localeCompare(b.startTime)));
+            
+            // previousLessonsMap тоже строим из этих данных (или отдельным лёгким запросом)
+            fetchPreviousLessons().catch(() => {});
+            fetchDebtors().catch(() => {});
+            
+            setError(null);
+        } catch (err) {
+            setError('Ошибка загрузки данных');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const fetchLessonsForDate = async (date) => {
@@ -250,8 +242,14 @@ function Dashboard() {
 
     const fetchPreviousLessons = async () => {
         try {
-            const response = await getAllLessons(user.id);
-            const allLessons = response.data !== undefined ? response.data : response;
+            const today = new Date();
+            const thirtyDaysAgo = format(subDays(today, 30), 'yyyy-MM-dd');
+            const todayStr = format(today, 'yyyy-MM-dd');
+            const response = await axiosInstance.get(
+                `/lessons/tutor/${user.id}/range?start=${thirtyDaysAgo}&end=${todayStr}`
+            );
+            const allLessons = response.data || [];
+            
             const lessonsByStudentAndCourse = {};
             for (const lesson of allLessons) {
                 const key = `${lesson.student.id}_${lesson.course?.id || 'no-course'}`;
@@ -260,18 +258,32 @@ function Dashboard() {
             }
             const map = {};
             for (const key in lessonsByStudentAndCourse) {
-                const studentLessons = lessonsByStudentAndCourse[key].sort((a, b) => new Date(a.lessonDate) - new Date(b.lessonDate));
+                const studentLessons = lessonsByStudentAndCourse[key]
+                    .sort((a, b) => new Date(a.lessonDate) - new Date(b.lessonDate));
                 let lastPlan = null, lastPlanLesson = null, planTransferred = false;
                 for (let i = 0; i < studentLessons.length; i++) {
-                    if (studentLessons[i].nextLessonPlan) { lastPlan = studentLessons[i].nextLessonPlan; lastPlanLesson = studentLessons[i]; planTransferred = false; continue; }
+                    if (studentLessons[i].nextLessonPlan) { 
+                        lastPlan = studentLessons[i].nextLessonPlan; 
+                        lastPlanLesson = studentLessons[i]; 
+                        planTransferred = false; 
+                        continue; 
+                    }
                     if (lastPlan && lastPlanLesson && !planTransferred && studentLessons[i].status !== 'CANCELLED') {
-                        map[studentLessons[i].id] = { ...lastPlanLesson, nextLessonPlan: lastPlan, courseName: lastPlanLesson.course?.name || 'Без предмета' };
-                        planTransferred = true; lastPlan = null; lastPlanLesson = null;
+                        map[studentLessons[i].id] = { 
+                            ...lastPlanLesson, 
+                            nextLessonPlan: lastPlan, 
+                            courseName: lastPlanLesson.course?.name || 'Без предмета' 
+                        };
+                        planTransferred = true; 
+                        lastPlan = null; 
+                        lastPlanLesson = null;
                     }
                 }
             }
             setPreviousLessonsMap(map);
-        } catch (err) {}
+        } catch (err) {
+            console.warn('Ошибка загрузки предыдущих уроков:', err);
+        }
     };
 
     const fetchLessonPlans = async () => {
@@ -284,7 +296,7 @@ function Dashboard() {
         catch (err) { setVariants([]); }
     };
 
-    const handleRefresh = async () => { setRefreshing(true); await loadAllData(); await fetchDebtors(); setRefreshing(false); };
+    const handleRefresh = async () => { setRefreshing(true); await loadAllData(); setRefreshing(false); };
 
     const handleApplyItem = (type, id) => {
         if (type === 'plan') {
@@ -331,6 +343,16 @@ function Dashboard() {
     };
 
     const handleOpenNotes = (lesson) => { setSelectedLesson(lesson); setLessonNotes(lesson.notes || ''); setNextLessonPlan(lesson.nextLessonPlan || ''); setOpenNotesDialog(true); };
+    const handleManualPayment = async (lesson) => {
+        if (!window.confirm('Подтвердить оплату вручную?')) return;
+        try {
+            await axiosInstance.patch(`/lessons/${lesson.id}/status`, { status: 'PAID' });
+            showSnackbar('✅ Оплата подтверждена', 'success');
+            await loadAllData();
+        } catch (err) {
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        }
+    };
     const handleSaveNotes = async () => {
         if (!selectedLesson) return;
         try { await addNotes(selectedLesson.id, lessonNotes, nextLessonPlan); await loadAllData(); setOpenNotesDialog(false); setSelectedLesson(null); showSnackbar('Заметки сохранены', 'success'); }
@@ -339,13 +361,8 @@ function Dashboard() {
     const handleCancelClick = (lesson) => { setSelectedLesson(lesson); setCancelReason(''); setOpenCancelDialog(true); };
     const handleCancelConfirm = async () => {
         if (!selectedLesson) return;
-        try { await cancelLesson(selectedLesson.id, cancelReason); setOpenCancelDialog(false); setSelectedLesson(null); setCancelReason(''); await loadAllData(); await fetchDebtors(); showSnackbar('❌ Занятие отменено', 'info'); }
+        try { await cancelLesson(selectedLesson.id, cancelReason); setOpenCancelDialog(false); setSelectedLesson(null); setCancelReason(''); await loadAllData(); showSnackbar('❌ Занятие отменено', 'info'); }
         catch (err) { showSnackbar('Ошибка при отмене занятия', 'error'); }
-    };
-    const handleCancelReschedule = async (originalLesson) => {
-        if (!window.confirm('Отменить перенос?')) return;
-        try { await axiosInstance.post(`/lessons/${originalLesson.id}/cancel-reschedule`); showSnackbar('✅ Перенос отменён', 'success'); await loadAllData(); }
-        catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
     const handleRescheduleClick = (lesson) => { setLessonToReschedule(lesson); setSelectedDateForReschedule(new Date(lesson.lessonDate)); setSelectedTime(lesson.startTime.slice(0,5)); checkAvailableSlots(new Date(lesson.lessonDate), lesson); setOpenRescheduleDialog(true); };
     const checkAvailableSlots = async (date, currentLesson) => {
@@ -353,10 +370,15 @@ function Dashboard() {
             const allLessonsForTutor = await getAllLessons(user.id);
             const lessonsData = allLessonsForTutor.data !== undefined ? allLessonsForTutor.data : allLessonsForTutor;
             const dateStr = date.toISOString().split('T')[0];
-            const takenSlots = lessonsData.filter(l => l.lessonDate === dateStr && l.status !== 'CANCELLED' && l.id !== currentLesson.id).map(l => l.startTime.slice(0,5));
+            const dayLessons = lessonsData.filter(l => l.lessonDate === dateStr && l.status !== 'CANCELLED' && l.id !== currentLesson.id);
+            const occupiedLocalTimes = dayLessons.map(l => {
+                const local = getLocalHoursMinutes(l.lessonDate, l.startTime);
+                return String(local.hours).padStart(2, '0') + ':' + String(local.minutes).padStart(2, '0');
+            });
             const allSlots = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
-            setAvailableSlots(allSlots.filter(s => !takenSlots.includes(s)));
-            if (selectedTime && !allSlots.filter(s => !takenSlots.includes(s)).includes(selectedTime)) setSelectedTime('');
+            const freeSlots = allSlots.filter(slot => !occupiedLocalTimes.includes(slot));
+            setAvailableSlots(freeSlots);
+            if (selectedTime && !freeSlots.includes(selectedTime)) setSelectedTime('');
         } catch (err) { setAvailableSlots([]); }
     };
     const handleDateChange = (date) => { setSelectedDateForReschedule(date); if (lessonToReschedule) checkAvailableSlots(date, lessonToReschedule); };
@@ -378,7 +400,7 @@ function Dashboard() {
     const handleReplaceClick = (lesson) => { setCancelledLesson(lesson); setSelectedDebtorId(''); setOpenReplaceDialog(true); };
     const handleConfirmReplace = async () => {
         if (!cancelledLesson || !selectedDebtorId) return;
-        try { await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId)); showSnackbar('✅ Урок заменён на отработку долга', 'success'); setOpenReplaceDialog(false); setCancelledLesson(null); await loadAllData(); await fetchDebtors(); }
+        try { await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId)); showSnackbar('✅ Урок заменён на отработку долга', 'success'); setOpenReplaceDialog(false); setCancelledLesson(null); await loadAllData(); }
         catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
 
@@ -387,200 +409,405 @@ function Dashboard() {
     const goToToday = () => setSelectedDate(new Date());
     const showSnackbar = (message, severity) => setSnackbar({ open: true, message, severity });
 
-    const getLessonColor = (lesson) => {
-        if (lesson.status === 'CANCELLED') return 'error';
-        if (lesson.status === 'CONFIRMED') return 'success';
-        if (lesson.status === 'PAID') return 'warning';
-        if (lesson.status === 'COMPLETED') return 'warning';
-        if (lesson.status === 'IN_PROGRESS') return 'info';
-        if (lesson.status === 'RESCHEDULED') return 'secondary';
-        return 'info';
+    const getStatusConfig = (status) => {
+        const configs = {
+            'SCHEDULED': { bg: '#EFF6FF', color: '#1E40AF', dot: '#3B82F6', label: 'Запланировано' },
+            'IN_PROGRESS': { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'В процессе' },
+            'COMPLETED': { bg: '#FFFBEB', color: '#92400E', dot: '#F59E0B', label: 'Проведено' },
+            'PAID': { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'Оплачено' },
+            'CONFIRMED': { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'Подтверждено' },
+            'CANCELLED': { bg: '#FEF2F2', color: '#991B1B', dot: '#EF4444', label: 'Отменено' },
+            'RESCHEDULED': { bg: '#F5F3FF', color: '#5B21B6', dot: '#8B5CF6', label: 'Перенесено' },
+        };
+        return configs[status] || { bg: '#F3F4F6', color: '#374151', dot: '#9CA3AF', label: status };
     };
 
-    const getStatusText = (lesson) => {
-        if (lesson.status === 'CANCELLED') return 'Отменено';
-        if (lesson.status === 'CONFIRMED') return '✅ Подтверждено';
-        if (lesson.status === 'PAID') return '⏳ Оплачено (ждёт проверки)';
-        if (lesson.status === 'COMPLETED') return 'Проведено (ждёт оплаты)';
-        if (lesson.status === 'IN_PROGRESS') return 'В процессе';
-        if (lesson.status === 'RESCHEDULED') return 'Перенесено';
-        return 'Запланировано';
+    const getTimeOfDay = (lesson) => {
+        if (!lesson) return '';
+        const { hours } = getLocalHoursMinutes(lesson.lessonDate, lesson.startTime);
+        if (hours >= 5 && hours < 12) return 'Утро';
+        if (hours >= 12 && hours < 17) return 'День';
+        if (hours >= 17 && hours < 23) return 'Вечер';
+        return 'Ночь';
     };
 
-    const isToday = isSameDay(selectedDate, new Date());
-    const isPast = selectedDate < new Date() && !isToday;
-    const decorations = getDecorations();
-
-    const LessonCard = ({ lesson }) => {
+    const renderLessonCard = (lesson) => {
         const startTime = formatLessonTime(lesson.lessonDate, lesson.startTime);
         const endTime = formatLessonTime(lesson.lessonDate, lesson.endTime);
         const courseName = lesson.course?.name || 'Занятие';
         const studentName = lesson.student?.fullName || 'Ученик';
         const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
-        const isRescheduledNew = !!lesson.originalLesson && lesson.status === 'RESCHEDULED';
-        const isRescheduledOriginal = lesson.status === 'RESCHEDULED' && !lesson.originalLesson;
-        const isScheduled = lesson.status === 'SCHEDULED';
+        const statusConfig = getStatusConfig(lesson.status);
+        const isScheduled = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
         const isInProgress = lesson.status === 'IN_PROGRESS';
-        const isCompleted = lesson.status === 'COMPLETED';
-        const isPaid = lesson.status === 'PAID';
+        const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID' || lesson.status === 'CONFIRMED';
         const isCancelled = lesson.status === 'CANCELLED';
-        const isOriginalRescheduled = lesson.status === 'RESCHEDULED' && todayLessons.some(l => l.originalLesson?.id === lesson.id);
-        const rescheduledTarget = isRescheduledOriginal ? todayLessons.find(l => l.originalLesson?.id === lesson.id) : null;
         
         return (
-            <Card sx={{ mb: 2, borderLeft: 6, borderColor: `${getLessonColor(lesson)}.main`, bgcolor: isScheduled ? '#fff3e0' : isInProgress ? '#e3f2fd' : isCompleted ? '#fff8e1' : 'white', transition: 'transform 0.2s', '&:hover': { transform: 'translateX(4px)' } }}>
-                <CardContent>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <LessonCard key={lesson.id}>
+                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                        <Box sx={{ 
+                            width: 4, minHeight: 70, borderRadius: 2,
+                            bgcolor: statusConfig.dot, flexShrink: 0, mt: 0.5
+                        }} />
+                        
                         <Box sx={{ flex: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-                                <Typography variant="h6" sx={{ minWidth: 100 }}>{startTime} - {endTime}</Typography>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{studentName}</Typography>
-                                <Chip label={courseName} size="small" variant="outlined" color="primary" />
-                                <Chip label={getStatusText(lesson)} color={getLessonColor(lesson)} size="small" />
-                                {studentRate && <Chip label={`${studentRate} ₽`} size="small" color="success" variant="outlined" />}
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '16px' }}>
+                                        {startTime} – {endTime}
+                                    </Typography>
+                                    {isInProgress && (
+                                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#10B981', animation: 'pulse 2s infinite' }} />
+                                    )}
+                                </Box>
+                                <Chip 
+                                    label={statusConfig.label} size="small"
+                                    sx={{ 
+                                        bgcolor: statusConfig.bg, color: statusConfig.color,
+                                        fontWeight: 500, fontSize: '11px', height: 24,
+                                        borderRadius: '100px', '& .MuiChip-label': { px: 1.5 }
+                                    }}
+                                />
                             </Box>
-                            {isRescheduledOriginal && rescheduledTarget && (
-                                <Paper sx={{ p: 2, bgcolor: '#e3f2fd', mb: 2 }}>
-                                    <Typography variant="body2" color="textSecondary">🔄 ПЕРЕНЕСЕНО:</Typography>
-                                    <Typography variant="body2">Занятие перенесено на {formatLessonDate(rescheduledTarget.lessonDate)} в {formatLessonTime(rescheduledTarget.lessonDate, rescheduledTarget.startTime)}</Typography>
-                                </Paper>
-                            )}
-                            {previousLessonsMap[lesson.id]?.nextLessonPlan && (
-                                <Paper sx={{ p: 2, bgcolor: '#fff8e1', mb: 2, borderLeft: 4, borderColor: 'warning.main' }}>
-                                    <Typography variant="body2" color="textSecondary">📋 ЧТО БЫЛО ЗАДАНО К ЭТОМУ УРОКУ:</Typography>
-                                    <Typography variant="body1">{previousLessonsMap[lesson.id].nextLessonPlan}</Typography>
-                                </Paper>
-                            )}
+                            
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                                <Box sx={{ 
+                                    width: 36, height: 36, borderRadius: '50%', 
+                                    bgcolor: lesson.course?.color || '#4F46E5',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: '#fff', fontSize: 14, fontWeight: 600, flexShrink: 0
+                                }}>
+                                    {studentName.charAt(0)}
+                                </Box>
+                                <Box>
+                                    <Typography sx={{ fontWeight: 500, color: '#1F2937', fontSize: '15px' }}>
+                                        {studentName}
+                                    </Typography>
+                                    <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>
+                                        {courseName}
+                                    </Typography>
+                                </Box>
+                                {studentRate && (
+                                    <Typography sx={{ ml: 'auto', fontWeight: 600, color: '#10B981', fontSize: '16px' }}>
+                                        {studentRate} ₽
+                                    </Typography>
+                                )}
+                            </Box>
+
+                            {/* Заметки урока */}
                             {lesson.notes && (
-                                <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
-                                    <Typography variant="body2" color="textSecondary">📝 ЧТО ДЕЛАЛИ НА УРОКЕ:</Typography>
-                                    <Typography variant="body1">{lesson.notes}</Typography>
+                                <Paper sx={{ p: 1.5, bgcolor: '#F9FAFB', borderRadius: '8px', mb: 1 }}>
+                                    <Typography sx={{ color: '#9CA3AF', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '11px', textTransform: 'uppercase' }}>
+                                        Что делали
+                                    </Typography>
+                                    <Typography sx={{ color: '#374151', fontSize: '14px' }}>
+                                        {lesson.notes.length > 80 ? lesson.notes.substring(0, 80) + '...' : lesson.notes}
+                                    </Typography>
                                 </Paper>
                             )}
+                            
                             {lesson.nextLessonPlan && (
-                                <Paper sx={{ p: 2, bgcolor: '#e3f2fd', borderLeft: 4, borderColor: 'primary.main' }}>
-                                    <Typography variant="body2" color="textSecondary">🎯 ЧТО СДЕЛАТЬ К СЛЕДУЮЩЕМУ УРОКУ:</Typography>
-                                    <Typography variant="body1">{lesson.nextLessonPlan}</Typography>
+                                <Paper sx={{ p: 1.5, bgcolor: '#EEF2FF', borderRadius: '8px', mb: 1 }}>
+                                    <Typography sx={{ color: '#9CA3AF', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '11px', textTransform: 'uppercase' }}>
+                                        К следующему уроку
+                                    </Typography>
+                                    <Typography sx={{ color: '#374151', fontSize: '14px' }}>
+                                        {lesson.nextLessonPlan.length > 80 ? lesson.nextLessonPlan.substring(0, 80) + '...' : lesson.nextLessonPlan}
+                                    </Typography>
+                                </Paper>
+                            )}
+
+                            {/* Заметки с прошлого урока */}
+                            {!lesson.notes && !lesson.nextLessonPlan && previousLessonsMap[lesson.id] && (
+                                <Paper sx={{ p: 1.5, bgcolor: '#FEF3C7', borderRadius: '8px', mb: 1, border: '1px solid #FDE68A' }}>
+                                    <Typography sx={{ color: '#92400E', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '11px', textTransform: 'uppercase' }}>
+                                        📋 С прошлого урока ({previousLessonsMap[lesson.id].courseName})
+                                    </Typography>
+                                    <Typography sx={{ color: '#78350F', fontSize: '13px', fontStyle: 'italic' }}>
+                                        {previousLessonsMap[lesson.id].nextLessonPlan?.length > 100 
+                                            ? previousLessonsMap[lesson.id].nextLessonPlan.substring(0, 100) + '...' 
+                                            : previousLessonsMap[lesson.id].nextLessonPlan}
+                                    </Typography>
                                 </Paper>
                             )}
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 1, ml: 2, flexDirection: 'column' }}>
-                            {isOriginalRescheduled ? (
+                        
+                        {/* Кнопки действий */}
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flexShrink: 0 }}>
+                            {isScheduled && (
                                 <>
-                                    {rescheduledTarget && <Paper sx={{ p: 1, bgcolor: '#FFF3E0' }}><Typography variant="caption">Перенесено на {formatLessonDate(rescheduledTarget.lessonDate)} в {formatLessonTime(rescheduledTarget.lessonDate, rescheduledTarget.startTime)}</Typography></Paper>}
-                                    <Button size="small" variant="outlined" color="secondary" onClick={() => handleCancelReschedule(lesson)}><strong>Отменить перенос</strong></Button>
+                                    <StyledButton variant="contained" startIcon={<VideocamIcon sx={{ fontSize: 16 }} />}
+                                        onClick={async () => { await handleStartLesson(lesson); setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); }}
+                                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' }, color: '#fff' }}>
+                                        Начать
+                                    </StyledButton>
+                                    <StyledButton variant="outlined" startIcon={<EventIcon sx={{ fontSize: 16 }} />}
+                                        onClick={() => handleRescheduleClick(lesson)}
+                                        sx={{ color: '#374151', borderColor: '#D1D5DB', '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' } }}>
+                                        Перенести
+                                    </StyledButton>
+                                    <StyledButton variant="outlined" color="error" startIcon={<CancelIcon sx={{ fontSize: 16 }} />}
+                                        onClick={() => handleCancelClick(lesson)}
+                                        sx={{ borderColor: '#FECACA', color: '#DC2626', '&:hover': { bgcolor: '#FEF2F2', borderColor: '#EF4444' } }}>
+                                        Отмена
+                                    </StyledButton>
                                 </>
-                            ) : isCancelled ? (
-                                <Button size="small" variant="outlined" color="success" startIcon={<WorkIcon />} onClick={() => handleReplaceClick(lesson)}>🔄 Отработать долг</Button>
-                            ) : (
+                            )}
+                            {isInProgress && (
                                 <>
-                                    {(isScheduled || isInProgress || isRescheduledNew || lesson.status === 'RESCHEDULED') && (
-                                        <Button size="small" variant="contained" color="primary" startIcon={<VideocamIcon />}
-                                            onClick={async () => { if (isScheduled || lesson.status === 'RESCHEDULED') await handleStartLesson(lesson); setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); }} sx={{ mb: 0.5 }}>Начать урок</Button>
+                                    <StyledButton variant="contained" color="success" startIcon={<CheckIcon sx={{ fontSize: 16 }} />}
+                                        onClick={() => handleOpenComplete(lesson)}
+                                        sx={{ bgcolor: '#10B981', '&:hover': { bgcolor: '#059669' } }}>
+                                        Завершить
+                                    </StyledButton>
+                                    <StyledButton variant="outlined" color="warning"
+                                        onClick={() => handleStudentNoShow(lesson)}
+                                        sx={{ borderColor: '#FDE68A', color: '#D97706', '&:hover': { bgcolor: '#FFFBEB' } }}>
+                                        Не пришёл
+                                    </StyledButton>
+                                </>
+                            )}
+                            {isCompleted && (
+                                <>
+                                    <StyledButton variant="outlined" startIcon={<EditIcon sx={{ fontSize: 16 }} />}
+                                        onClick={() => handleOpenNotes(lesson)}
+                                        sx={{ color: '#374151', borderColor: '#D1D5DB', '&:hover': { bgcolor: '#F9FAFB' } }}>
+                                        Заметки
+                                    </StyledButton>
+                                    {lesson.status !== 'PAID' && lesson.status !== 'CONFIRMED' && (
+                                        <StyledButton variant="outlined" color="success" startIcon={<CheckIcon sx={{ fontSize: 16 }} />}
+                                            onClick={() => handleManualPayment(lesson)}
+                                            sx={{ borderColor: '#A7F3D0', color: '#059669', '&:hover': { bgcolor: '#ECFDF5' } }}>
+                                            Оплатить
+                                        </StyledButton>
                                     )}
-                                    {isInProgress && (<>
-                                        <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />} onClick={() => handleOpenComplete(lesson)}>Завершить урок</Button>
-                                        <Button size="small" variant="outlined" color="warning" startIcon={<CancelIcon />} onClick={() => handleStudentNoShow(lesson)}>Ученик не пришёл</Button>
-                                    </>)}
-                                    {(isScheduled || lesson.status === 'RESCHEDULED') && (<>
-                                        <Button size="small" variant="outlined" color="warning" startIcon={<EventIcon />} onClick={() => handleRescheduleClick(lesson)}>Перенести</Button>
-                                        <Button size="small" variant="outlined" color="error" startIcon={<CancelIcon />} onClick={() => handleCancelClick(lesson)}>Отмена</Button>
-                                    </>)}
-                                    {(isCompleted || isPaid) && <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={() => handleOpenNotes(lesson)}>Заметки</Button>}
                                 </>
+                            )}
+                            {isCancelled && (
+                                <StyledButton variant="outlined" color="success" startIcon={<WorkIcon sx={{ fontSize: 16 }} />}
+                                    onClick={() => handleReplaceClick(lesson)}
+                                    sx={{ borderColor: '#A7F3D0', color: '#059669', '&:hover': { bgcolor: '#ECFDF5' } }}>
+                                    Отработать
+                                </StyledButton>
                             )}
                         </Box>
                     </Box>
                 </CardContent>
-            </Card>
+            </LessonCard>
         );
     };
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}><CircularProgress /></Box>;
-    if (error) return <Box sx={{ p: 3 }}><Alert severity="error">{error}</Alert></Box>;
+    if (loading) return (
+        <PageContainer>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                <CircularProgress sx={{ color: '#4F46E5' }} />
+            </Box>
+        </PageContainer>
+    );
+    
+    if (error) return (
+        <PageContainer>
+            <Alert severity="error" sx={{ borderRadius: '12px' }}>{error}</Alert>
+        </PageContainer>
+    );
+    
+    const isToday = isSameDay(selectedDate, new Date());
+
+    const timeGroups = {};
+    todayLessons.forEach(lesson => {
+        const timeOfDay = getTimeOfDay(lesson);
+        if (!timeGroups[timeOfDay]) timeGroups[timeOfDay] = [];
+        timeGroups[timeOfDay].push(lesson);
+    });
+    const orderOfDay = ['Утро', 'День', 'Вечер', 'Ночь'];
+    const showDividers = todayLessons.length > 4;
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
-            <Box sx={{ p: 3 }}>
-                <Paper sx={{ position: 'relative', mb: 4, borderRadius: 4, background: getTimeGradient(), minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: { xs: 3, md: 4 }, overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
-                    {decorations.floatingElements.map((el, i) => (
-                        <Box key={i} sx={{ position: 'absolute', top: el.top, left: el.left, fontSize: el.size, color: 'rgba(255,255,255,0.3)', animation: `float ${el.duration} infinite ease-in-out`, animationDelay: el.delay, pointerEvents: 'none', '@keyframes float': { '0%': { transform: 'translateY(0px)' }, '50%': { transform: 'translateY(-15px)' }, '100%': { transform: 'translateY(0px)' } } }}>{el.icon}</Box>
-                    ))}
-                    <Box sx={{ position: 'absolute', right: 30, bottom: 20, opacity: 0.25 }}>{decorations.mainIcon}</Box>
-                    <Box sx={{ position: 'relative', zIndex: 2, color: 'white' }}>
-                        <Typography variant="h2" sx={{ fontWeight: 'bold', fontSize: { xs: '2rem', md: '3.5rem' }, textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>{format(currentTime, 'HH:mm')}</Typography>
-                        <Typography variant="h6" sx={{ mt: 1, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{format(currentTime, 'EEEE, d MMMM yyyy', { locale: ru })}</Typography>
-                        <Typography variant="body1" sx={{ mt: 1.5, opacity: 0.95, textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{getGreeting()}, {user?.fullName?.split(' ')[0]}! 👋</Typography>
+            <PageContainer>
+                {/* ========== ШАПКА ========== */}
+                <HeaderPaper elevation={0}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                        <Box>
+                            <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937' }}>
+                                {getGreeting()}, {user?.fullName?.split(' ')[0]}!
+                            </Typography>
+                            <Typography sx={{ color: '#6B7280', mt: 0.5, fontSize: '14px' }}>
+                                {format(currentTime, 'EEEE, d MMMM yyyy', { locale: ru })}
+                            </Typography>
+                        </Box>
+                        <StyledButton 
+                            variant="contained" 
+                            startIcon={<RefreshIcon sx={{ fontSize: 16 }} />} 
+                            onClick={handleRefresh} 
+                            disabled={refreshing}
+                            sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}
+                        >
+                            {refreshing ? 'Обновление...' : 'Обновить'}
+                        </StyledButton>
                     </Box>
-                    <Box sx={{ position: 'relative', zIndex: 2 }}>
-                        <Button variant="contained" startIcon={<RefreshIcon />} onClick={handleRefresh} disabled={refreshing} sx={{ bgcolor: 'rgba(255,255,255,0.9)', color: '#333' }}>{refreshing ? 'Обновление...' : 'Обновить'}</Button>
-                    </Box>
-                </Paper>
+                </HeaderPaper>
 
-                <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="h5" sx={{ fontWeight: 500 }}>📅 Расписание на {format(selectedDate, 'd MMMM yyyy', { locale: ru })}</Typography>
-                            {isPast && <Chip label="Прошедший день" size="small" color="warning" variant="outlined" />}
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Button size="small" variant="outlined" onClick={goToPreviousDay} startIcon={<ArrowBackIcon />}>Предыдущий</Button>
-                            <Button size="small" variant={isToday ? "contained" : "outlined"} onClick={goToToday} startIcon={<CalendarTodayIcon />}>Сегодня</Button>
-                            <Button size="small" variant="outlined" onClick={goToNextDay} endIcon={<ArrowForwardIcon />}>Следующий</Button>
-                        </Box>
+                {/* ========== НАВИГАЦИЯ ПО ДНЯМ ========== */}
+                <Box sx={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                    mb: 2.5, flexWrap: 'wrap', gap: 1.5 
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Typography sx={{ fontSize: '20px', fontWeight: 600, color: '#1F2937' }}>
+                            {format(selectedDate, 'd MMMM yyyy', { locale: ru })}
+                        </Typography>
+                        <Chip 
+                            label={`${todayLessons.length} занятий`} 
+                            size="small" 
+                            sx={{ 
+                                bgcolor: '#EEF2FF', color: '#4F46E5', 
+                                fontWeight: 500, borderRadius: '100px', fontSize: '12px',
+                            }} 
+                        />
                     </Box>
-                    {todayLessons.length === 0 ? (
-                        <Box sx={{ textAlign: 'center', py: 8 }}><Typography variant="h6" color="textSecondary">На {format(selectedDate, 'd MMMM yyyy', { locale: ru })} занятий нет</Typography></Box>
-                    ) : (
-                        <Box>{todayLessons.map(lesson => <LessonCard key={lesson.id} lesson={lesson} />)}</Box>
-                    )}
-                </Paper>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <IconButton onClick={goToPreviousDay} size="small" 
+                            sx={{ color: '#374151', '&:hover': { bgcolor: '#F3F4F6' } }}>
+                            ←
+                        </IconButton>
+                        <StyledButton 
+                            variant={isToday ? "contained" : "outlined"} 
+                            onClick={goToToday}
+                            sx={{ 
+                                bgcolor: isToday ? '#4F46E5' : 'transparent', 
+                                color: isToday ? '#fff' : '#374151', 
+                                borderColor: '#D1D5DB',
+                                '&:hover': { 
+                                    bgcolor: isToday ? '#4338CA' : '#F9FAFB',
+                                    borderColor: '#9CA3AF',
+                                },
+                                minWidth: 'auto', px: 2,
+                            }}
+                        >
+                            Сегодня
+                        </StyledButton>
+                        <IconButton onClick={goToNextDay} size="small"
+                            sx={{ color: '#374151', '&:hover': { bgcolor: '#F3F4F6' } }}>
+                            →
+                        </IconButton>
+                    </Box>
+                </Box>
+
+                {/* ========== СПИСОК УРОКОВ ========== */}
+                {todayLessons.length === 0 ? (
+                    <Paper sx={{ borderRadius: '12px', bgcolor: '#FFFFFF', border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <EmptyStateContainer>
+                            <EmptyStateIcon>
+                                <CalendarTodayIcon sx={{ fontSize: 40, color: '#9CA3AF' }} />
+                            </EmptyStateIcon>
+                            <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>
+                                Нет занятий
+                            </Typography>
+                            <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
+                                На этот день ничего не запланировано
+                            </Typography>
+                        </EmptyStateContainer>
+                    </Paper>
+                ) : showDividers ? (
+                    <Box>
+                        {orderOfDay.map(timeOfDay => {
+                            const lessons = timeGroups[timeOfDay];
+                            if (!lessons || lessons.length === 0) return null;
+                            return (
+                                <Box key={timeOfDay}>
+                                    <TimeDivider>
+                                        <AccessTimeIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                                        <Typography sx={{ color: '#9CA3AF', fontWeight: 500, fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                            {timeOfDay}
+                                        </Typography>
+                                    </TimeDivider>
+                                    {lessons.map(lesson => renderLessonCard(lesson))}
+                                </Box>
+                            );
+                        })}
+                    </Box>
+                ) : (
+                    <Box>{todayLessons.map(lesson => renderLessonCard(lesson))}</Box>
+                )}
 
                 {/* ========== ДИАЛОГ ЗАВЕРШЕНИЯ УРОКА ========== */}
-                <Dialog open={openCompleteDialog} onClose={() => setOpenCompleteDialog(false)} maxWidth="md" fullWidth>
-                    <DialogTitle>Завершение урока</DialogTitle>
-                    <DialogContent>
+                <StyledDialog open={openCompleteDialog} onClose={() => setOpenCompleteDialog(false)} maxWidth="md" fullWidth>
+                    <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
+                        Завершение урока
+                    </DialogTitle>
+                    <DialogContent sx={{ px: 3 }}>
                         <Box sx={{ pt: 2 }}>
-                            <Typography variant="subtitle1" gutterBottom>
+                            <Typography sx={{ fontSize: '15px', fontWeight: 500, color: '#374151' }}>
                                 {selectedLesson?.student?.fullName} | {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)} - {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.endTime)}
                             </Typography>
-                            
                             <FormControl fullWidth sx={{ mt: 2, mb: 3 }}>
-                                <InputLabel>📋 Применить (опционально)</InputLabel>
-                                <Select value={applyType === 'plan' ? `plan_${selectedPlanId}` : (applyType === 'variant' ? `variant_${selectedVariantId}` : '')}
-                                    onChange={(e) => { const val = e.target.value; if (!val) { setApplyType('none'); setSelectedPlanId(''); setSelectedVariantId(''); return; } const [type, id] = val.split('_'); handleApplyItem(type, id); }} label="📋 Применить (опционально)">
-                                    <MenuItem value="">— Не применять —</MenuItem><Divider />
+                                <InputLabel sx={{ fontSize: '13px', color: '#6B7280' }}>📋 Применить (опционально)</InputLabel>
+                                <Select 
+                                    value={applyType === 'plan' ? `plan_${selectedPlanId}` : (applyType === 'variant' ? `variant_${selectedVariantId}` : '')}
+                                    onChange={(e) => { 
+                                        const val = e.target.value; 
+                                        if (!val) { setApplyType('none'); setSelectedPlanId(''); setSelectedVariantId(''); return; } 
+                                        const [type, id] = val.split('_'); 
+                                        handleApplyItem(type, id); 
+                                    }} 
+                                    label="📋 Применить (опционально)"
+                                    sx={{
+                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5', boxShadow: '0 0 0 3px rgba(79,70,229,0.1)' },
+                                    }}
+                                >
+                                    <MenuItem value="">— Не применять —</MenuItem>
+                                    <Divider />
                                     <MenuItem disabled sx={{ fontWeight: 600 }}>📖 Планы уроков</MenuItem>
-                                    {lessonPlans.map(plan => <MenuItem key={`plan_${plan.id}`} value={`plan_${plan.id}`}><Box><Typography variant="body2">{plan.title}</Typography><Typography variant="caption">{plan.topic}</Typography></Box></MenuItem>)}<Divider />
+                                    {lessonPlans.map(plan => (
+                                        <MenuItem key={`plan_${plan.id}`} value={`plan_${plan.id}`}>
+                                            <Box><Typography variant="body2">{plan.title}</Typography><Typography variant="caption" sx={{ color: '#6B7280' }}>{plan.topic}</Typography></Box>
+                                        </MenuItem>
+                                    ))}
+                                    <Divider />
                                     <MenuItem disabled sx={{ fontWeight: 600 }}>🔗 Варианты</MenuItem>
-                                    {variants.map(v => <MenuItem key={`variant_${v.id}`} value={`variant_${v.id}`}><Box><Typography variant="body2">{v.title}</Typography><Typography variant="caption">{v.subject} • {v.examType}</Typography></Box></MenuItem>)}
+                                    {variants.map(v => (
+                                        <MenuItem key={`variant_${v.id}`} value={`variant_${v.id}`}>
+                                            <Box><Typography variant="body2">{v.title}</Typography><Typography variant="caption" sx={{ color: '#6B7280' }}>{v.subject} • {v.examType}</Typography></Box>
+                                        </MenuItem>
+                                    ))}
                                 </Select>
                             </FormControl>
-                            
-                            <TextField fullWidth label="📝 Что делали на уроке" multiline rows={4} value={lessonNotes} onChange={(e) => setLessonNotes(e.target.value)} margin="normal" />
-                            <TextField fullWidth label="🎯 Что сделать на следующем уроке" multiline rows={3} value={nextLessonPlan} onChange={(e) => setNextLessonPlan(e.target.value)} margin="normal" />
-
-                            <Divider sx={{ my: 3 }} />
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>📋 Назначить домашнее задание (опционально)</Typography>
-                            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                            <TextField fullWidth label="📝 Что делали на уроке" multiline rows={4} value={lessonNotes} onChange={(e) => setLessonNotes(e.target.value)}
+                                sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />
+                            <TextField fullWidth label="🎯 Что сделать на следующем уроке" multiline rows={3} value={nextLessonPlan} onChange={(e) => setNextLessonPlan(e.target.value)}
+                                sx={{ mb: 3, '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />
+                            <Divider sx={{ my: 3, borderColor: '#F3F4F6' }} />
+                            <Typography sx={{ fontSize: '16px', fontWeight: 600, color: '#1F2937', mb: 2 }}>📋 Назначить домашнее задание (опционально)</Typography>
+                            <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
                                 <TextField fullWidth label="Текст задания" multiline rows={3} value={newHomeworkForLesson.task}
-                                    onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, task: e.target.value })} />
-                                <Button variant="outlined" onClick={() => { setOpenBankPicker(true); loadBankItems(); }} sx={{ minWidth: 140, whiteSpace: 'nowrap' }}>📋 Из банка</Button>
+                                    onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, task: e.target.value })}
+                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />
+                                <StyledButton variant="outlined" onClick={() => { setOpenBankPicker(true); loadBankItems(); }}
+                                    sx={{ minWidth: 140, whiteSpace: 'nowrap', borderColor: '#D1D5DB', color: '#374151', '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' } }}>
+                                    📋 Из банка
+                                </StyledButton>
                             </Box>
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
-                                    <FormControl fullWidth><InputLabel>Срок сдачи</InputLabel>
-                                        <Select value={newHomeworkForLesson.dueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, dueDate: e.target.value })} label="Срок сдачи">
+                                    <FormControl fullWidth><InputLabel sx={{ fontSize: '13px' }}>Срок сдачи</InputLabel>
+                                        <Select value={newHomeworkForLesson.dueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, dueDate: e.target.value })} label="Срок сдачи"
+                                            sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' } }}>
                                             <MenuItem value="">Выбрать дату</MenuItem><MenuItem value="custom">📅 Своя дата</MenuItem><Divider />
                                             <MenuItem disabled sx={{ fontWeight: 600 }}>📅 Следующие уроки:</MenuItem>
                                             {upcomingLessons.map(l => <MenuItem key={l.id} value={l.lessonDate + 'T23:59:59'}>{format(new Date(l.lessonDate), 'd MMM', { locale: ru })} {formatLessonTime(l.lessonDate, l.startTime)}</MenuItem>)}
                                         </Select>
                                     </FormControl>
-                                    {newHomeworkForLesson.dueDate === 'custom' && <TextField fullWidth type="date" label="Своя дата" value={newHomeworkForLesson.customDueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, customDueDate: e.target.value })} InputLabelProps={{ shrink: true }} sx={{ mt: 2 }} />}
+                                    {newHomeworkForLesson.dueDate === 'custom' && <TextField fullWidth type="date" label="Своя дата" value={newHomeworkForLesson.customDueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, customDueDate: e.target.value })} InputLabelProps={{ shrink: true }} sx={{ mt: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />}
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
-                                    <FormControl fullWidth><InputLabel>Шкала</InputLabel>
-                                        <Select value={newHomeworkForLesson.gradeType || 'GRADE_5'} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, gradeType: e.target.value })} label="Шкала">
+                                    <FormControl fullWidth><InputLabel sx={{ fontSize: '13px' }}>Шкала</InputLabel>
+                                        <Select value={newHomeworkForLesson.gradeType || 'GRADE_5'} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, gradeType: e.target.value })} label="Шкала"
+                                            sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' } }}>
                                             <MenuItem value="GRADE_5">5-балльная ⭐</MenuItem><MenuItem value="GRADE_10">10-балльная</MenuItem><MenuItem value="GRADE_100">100-балльная</MenuItem>
                                         </Select>
                                     </FormControl>
@@ -588,13 +815,14 @@ function Dashboard() {
                             </Grid>
                         </Box>
                     </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setOpenCompleteDialog(false)}>Отмена</Button>
-                        <Button onClick={handleCompleteLesson} variant="contained" color="success" startIcon={<CheckIcon />}>Завершить урок</Button>
+                    <DialogActions sx={{ px: 3, pb: 3 }}>
+                        <StyledButton onClick={() => setOpenCompleteDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
+                        <StyledButton onClick={handleCompleteLesson} variant="contained" startIcon={<CheckIcon />}
+                            sx={{ bgcolor: '#10B981', '&:hover': { bgcolor: '#059669' } }}>Завершить урок</StyledButton>
                     </DialogActions>
-                </Dialog>
+                </StyledDialog>
 
-                {/* ========== МОДАЛКА БАНКА ЗАДАНИЙ ========== */}
+                {/* Остальные диалоги (БАНК, ЗАМЕТКИ, ОТМЕНА, ПЕРЕНОС, ЗАМЕНА) */}
                 <Dialog open={openBankPicker} onClose={() => setOpenBankPicker(false)} maxWidth="sm" fullWidth>
                     <DialogTitle>Выбрать из банка</DialogTitle>
                     <DialogContent>
@@ -667,9 +895,9 @@ function Dashboard() {
                     lessonInfo={selectedLessonForRoom ? { studentName: selectedLessonForRoom.student?.fullName, tutorName: selectedLessonForRoom.tutor?.fullName, startTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.startTime), endTime: formatLessonTime(selectedLessonForRoom.lessonDate, selectedLessonForRoom.endTime) } : null} />
 
                 <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-                    <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
+                    <Alert severity={snackbar.severity} sx={{ borderRadius: '8px' }}>{snackbar.message}</Alert>
                 </Snackbar>
-            </Box>
+            </PageContainer>
         </LocalizationProvider>
     );
 }

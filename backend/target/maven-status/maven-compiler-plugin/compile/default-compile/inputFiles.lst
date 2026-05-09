@@ -3,9 +3,12 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\Jwt
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\MailConfig.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\RateLimitFilter.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\SecurityConfig.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\WebSocketConfig.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\AIGenerationController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\AuthController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardSessionController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardWebSocketController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\CourseController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ExcalidrawController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ExportController.java
@@ -58,6 +61,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Pay
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\ProgressRecord.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\StepikToken.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Student.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\StudentBoard.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\StudentRate.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\StudentStepikCourse.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Subject.java
@@ -86,6 +90,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\PaymentRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\ProgressRecordRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\StepikTokenRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\StudentBoardRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\StudentRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\StudentStepikCourseRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\SubjectRepository.java

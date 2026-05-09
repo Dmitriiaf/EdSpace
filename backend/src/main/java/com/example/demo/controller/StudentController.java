@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import com.example.demo.repository.ParentRepository;
-
+import com.example.demo.service.NotificationService;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +38,9 @@ public class StudentController {
 
     @Autowired
     private StudentService studentService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Autowired
     private StudentRepository studentRepository;
@@ -97,7 +100,14 @@ public class StudentController {
 
                 studentRepository.save(existingStudent);
 
-                // Отправляем приглашение только если ученик не зарегистрирован
+                // Уведомление репетитору о привязанном ученике
+                try {
+                    notificationService.createTutorNotification(tutorId,
+                            "🎓 Ученик " + existingStudent.getFullName() + " привязан к вашему профилю");
+                } catch (Exception e) {
+                    log.warn("Не удалось создать уведомление: {}", e.getMessage());
+                }
+
                 if (existingStudent.getPasswordHash() == null) {
                     sendInvitationToStudent(existingStudent, tutorId);
                 } else {
@@ -119,6 +129,14 @@ public class StudentController {
                     tutorId,
                     parentEmail
             );
+
+            // Уведомление репетитору о новом ученике
+            try {
+                notificationService.createTutorNotification(tutorId,
+                        "🎓 Новый ученик " + student.getFullName() + " добавлен");
+            } catch (Exception e) {
+                log.warn("Не удалось создать уведомление: {}", e.getMessage());
+            }
 
             return ResponseEntity.ok(studentToMap(student, tutorId, null));
 

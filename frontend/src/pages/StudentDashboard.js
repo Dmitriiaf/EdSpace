@@ -1,5 +1,6 @@
-// ========== frontend/src/pages/StudentDashboard.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/pages/StudentDashboard.js (ПОЛНАЯ ВЕРСИЯ С ДОСКОЙ + РЕСАЙЗ + БД) ==========
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import axiosInstance from '../api/axiosConfig';
 import {
     Box, Grid, Card, CardContent, Typography,
@@ -9,7 +10,8 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Badge, Avatar, Divider, LinearProgress, Tooltip,
     Fade, FormControl, InputLabel, Select, MenuItem,
-    Breadcrumbs, Link as MuiLink, Stack, Collapse
+    Breadcrumbs, Link as MuiLink, Stack, Collapse,
+    TextField
 } from '@mui/material';
 import { formatLessonTime, formatLessonDate } from '../utils/timezone';
 import { Payment as PaymentIcon } from '@mui/icons-material';
@@ -41,9 +43,11 @@ import {
     Refresh as RefreshIcon,
     Link as LinkIcon,
     Info as InfoIcon,
-    Videocam as VideocamIcon
+    Videocam as VideocamIcon,
+    Edit as EditIcon,
+    Save as SaveIcon,
+    Delete as DeleteIcon
 } from '@mui/icons-material';
-import { Draw as DrawIcon } from '@mui/icons-material';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { PickersDay } from '@mui/x-date-pickers/PickersDay';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -82,8 +86,9 @@ const LessonStatusBadge = ({ status }) => {
         'CANCELLED': { label: 'Отменено', color: '#EF4444', bg: '#FEF2F2', icon: CancelIcon },
         'RESCHEDULED': { label: 'Перенесено', color: '#8B5CF6', bg: '#F5F3FF', icon: ScheduleIcon }
     };
-    const { label, color, bg, icon: Icon } = config[status] || { label: status, color: '#6B7280', bg: '#F3F4F6', icon: InfoIcon };
-    
+    const cfg = config[status] || { label: status, color: '#6B7280', bg: '#F3F4F6', icon: InfoIcon };
+    const { label, color, bg } = cfg;
+    const Icon = cfg.icon;    
     return (
         <Chip 
             icon={<Icon sx={{ fontSize: 14, color: color }} />}
@@ -108,6 +113,24 @@ function StudentDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [mainTabValue, setMainTabValue] = useState(0);
+    const [urlSearch, setUrlSearch] = useState(window.location.search);
+
+    useEffect(() => {
+        const params = new URLSearchParams(urlSearch);
+        if (params.get('tab') === 'homework') setMainTabValue(1);
+        else if (params.get('tab') === 'progress') setMainTabValue(2);
+        else setMainTabValue(0);
+    }, [urlSearch]);
+
+    // Обновляем urlSearch при переходе
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (window.location.search !== urlSearch) {
+                setUrlSearch(window.location.search);
+            }
+        }, 200);
+        return () => clearInterval(interval);
+    }, [urlSearch]);
     const [allLessons, setAllLessons] = useState([]);
     const [homeworkStats, setHomeworkStats] = useState(null);
     const [progressTimeline, setProgressTimeline] = useState([]);
@@ -129,7 +152,10 @@ function StudentDashboard() {
     
     const [homeworkList, setHomeworkList] = useState([]);
     const [homeworkLoading, setHomeworkLoading] = useState(false);
+    
+    const [boardTutorId, setBoardTutorId] = useState(null);
 
+    
 
     const getAgeText = (age) => {
         if (age % 10 === 1 && age % 100 !== 11) return 'год';
@@ -147,8 +173,6 @@ function StudentDashboard() {
         };
     };
 
-
-
     const birthdayInfo = checkBirthday();
 
     const tutors = useMemo(() => {
@@ -160,6 +184,95 @@ function StudentDashboard() {
         });
         return Array.from(tutorsMap.values());
     }, [allLessons]);
+
+    // ========== ДОСКА-СТИКЕР (из БД) ==========
+    const [stickyNotes, setStickyNotes] = useState([]);
+    const [editingNote, setEditingNote] = useState(null);
+    const [editText, setEditText] = useState('');
+
+    const handleEditNote = (note) => {
+        setEditingNote(note.id);
+        setEditText(note.text);
+    };
+
+    const handleSaveNote = () => {
+        const updated = stickyNotes.map(n => n.id === editingNote ? { ...n, text: editText } : n);
+        setStickyNotes(updated);
+        saveBoard(updated);
+        setEditingNote(null);
+    };
+
+    const handleAddNote = () => {
+        const newNote = { id: Date.now(), text: 'Новая заметка...', color: '#FFE0B2', width: 280, height: 180 };
+        const updated = [...stickyNotes, newNote];
+        setStickyNotes(updated);
+        saveBoard(updated);
+    };
+
+    const handleDeleteNote = (id) => {
+        const updated = stickyNotes.filter(n => n.id !== id);
+        setStickyNotes(updated);
+        saveBoard(updated);
+    };
+
+    // Ресайз
+    const handleResizeStart = (e, noteId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const note = stickyNotes.find(n => n.id === noteId);
+        const startWidth = note.width || 280;
+        const startHeight = note.height || 180;
+
+        const onMouseMove = (e) => {
+            const newWidth = Math.max(200, startWidth + e.clientX - startX);
+            const newHeight = Math.max(120, startHeight + e.clientY - startY);
+            setStickyNotes(prev => prev.map(n => n.id === noteId ? { ...n, width: newWidth, height: newHeight } : n));
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            setStickyNotes(prev => {
+                saveBoard(prev);
+                return prev;
+            });
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
+
+    useEffect(() => {
+        if (tutors.length > 0 && selectedTutorId !== 'all') {
+            fetchBoard(parseInt(selectedTutorId));
+            setBoardTutorId(parseInt(selectedTutorId));
+        } else if (tutors.length > 0) {
+            fetchBoard(tutors[0].id);
+            setBoardTutorId(tutors[0].id);
+        }
+    }, [selectedTutorId, tutors]);
+
+    const fetchBoard = async (tutorId) => {
+        try {
+            const studentId = user?.allIds?.[0] || user?.id;
+            const res = await axiosInstance.get(`/board/${studentId}/${tutorId}`);
+            const notes = JSON.parse(res.data.notes || '[]');
+            setStickyNotes(notes);
+        } catch (err) {
+            setStickyNotes([]);
+        }
+    };
+
+    const saveBoard = async (notes) => {
+        try {
+            const studentId = user?.allIds?.[0] || user?.id;
+            await axiosInstance.put(`/board/${studentId}/${boardTutorId}`, {
+                notes: JSON.stringify(notes)
+            });
+        } catch (err) {}
+    };
 
     const filteredLessons = useMemo(() => {
         if (selectedTutorId === 'all') return allLessons;
@@ -203,12 +316,6 @@ function StudentDashboard() {
             .sort((a, b) => a.startTime?.localeCompare(b.startTime));
     }, [filteredLessons, selectedDate]);
 
-    // ==================== НОВАЯ ЛОГИКА ДЗ ====================
-    
-    /**
-     * Найти ДЗ к ЭТОМУ уроку (из предыдущего проведённого)
-     * Показывается ТОЛЬКО для первого будущего урока после проведённого
-     */
     const getHomeworkForNextLesson = (lesson) => {
         if (!lesson || !filteredLessons.length) return null;
         
@@ -216,7 +323,6 @@ function StudentDashboard() {
         const courseId = lesson.course?.id;
         const lessonDateTime = new Date(`${lesson.lessonDate}T${lesson.startTime}`);
         
-        // Ищем последний завершённый урок перед этим
         const previousCompleted = filteredLessons
             .filter(l => {
                 if (l.id === lesson.id) return false;
@@ -229,14 +335,13 @@ function StudentDashboard() {
             .sort((a, b) => {
                 const aDate = new Date(`${a.lessonDate}T${a.startTime}`);
                 const bDate = new Date(`${b.lessonDate}T${b.startTime}`);
-                return bDate - aDate; // самый поздний первый
+                return bDate - aDate;
             });
         
         if (previousCompleted.length === 0) return null;
         
         const lastCompleted = previousCompleted[0];
         
-        // Проверяем, что между последним завершённым и этим уроком нет других будущих уроков
         const futureBetween = filteredLessons.filter(l => {
             if (l.id === lesson.id || l.id === lastCompleted.id) return false;
             const sameStudent = l.student?.id === studentId;
@@ -246,7 +351,7 @@ function StudentDashboard() {
             return sameStudent && sameCourse && lDateTime > lastDateTime && lDateTime < lessonDateTime && l.status === 'SCHEDULED';
         });
         
-        if (futureBetween.length > 0) return null; // Есть другие будущие уроки между — не показываем
+        if (futureBetween.length > 0) return null;
         
         if (lastCompleted.nextLessonPlan) {
             return {
@@ -577,6 +682,11 @@ function StudentDashboard() {
                     </FormControl>
                 </Box>
 
+                {/* ========== ОСНОВНОЙ GRID: ЛЕВАЯ ЧАСТЬ + ПРАВАЯ ДОСКА ========== */}
+                <Grid container spacing={3}>
+                    {/* ЛЕВАЯ ЧАСТЬ */}
+                    <Grid item xs={12} md={8}>
+                        
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     {[
                         { label: 'Всего занятий', value: stats.total, icon: CalendarIcon, color: '#6366F1', bg: '#EEF2FF' },
@@ -674,7 +784,6 @@ function StudentDashboard() {
                                     Подробнее
                                 </Button>
                             </Box>
-                            {/* ДЗ к ближайшему занятию */}
                             {(() => {
                                 const hw = getHomeworkForNextLesson(stats.nextLesson);
                                 if (hw) return (
@@ -843,7 +952,6 @@ function StudentDashboard() {
                                                                     {lesson.tutor?.fullName}
                                                                 </Typography>
                                                                 
-                                                                {/* Кнопки действий */}
                                                                 {isFuture && lesson.status !== 'CANCELLED' && (
                                                                     <Button size="small" variant="contained" color="primary"
                                                                         startIcon={<VideocamIcon />}
@@ -861,7 +969,6 @@ function StudentDashboard() {
                                                                     </Button>
                                                                 )}
                                                                 
-                                                                {/* ДЗ для будущего урока */}
                                                                 {homework && isFuture && (
                                                                     <Box sx={{ mt: 1.5 }}>
                                                                         <Button size="small"
@@ -884,7 +991,6 @@ function StudentDashboard() {
                                                                     </Box>
                                                                 )}
                                                                 
-                                                                {/* Для проведённого урока — показать заметки */}
                                                                 {isCompleted && lesson.notes && (
                                                                     <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#ECFDF5', borderRadius: 2, borderLeft: '3px solid #10B981' }}>
                                                                         <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
@@ -1492,7 +1598,6 @@ function StudentDashboard() {
                     </TabPanel>
                 </Paper>
 
-                {/* ==================== МОДАЛЬНОЕ ОКНО ==================== */}
                 <Dialog 
                     open={!!selectedLesson} 
                     onClose={() => setSelectedLesson(null)}
@@ -1534,7 +1639,6 @@ function StudentDashboard() {
                                         <LessonStatusBadge status={selectedLesson.status} />
                                     </Box>
                                     
-                                    {/* Пройдено на уроке (notes) */}
                                     {selectedLesson.notes && (
                                         <Box sx={{ p: 2, bgcolor: '#ECFDF5', borderRadius: 2, borderLeft: '3px solid #10B981' }}>
                                             <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
@@ -1546,7 +1650,6 @@ function StudentDashboard() {
                                         </Box>
                                     )}
                                     
-                                    {/* Задано к следующему (nextLessonPlan) */}
                                     {selectedLesson.nextLessonPlan && (
                                         <Box sx={{ p: 2, bgcolor: '#FFFBEB', borderRadius: 2, borderLeft: '3px solid #F59E0B' }}>
                                             <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
@@ -1558,8 +1661,8 @@ function StudentDashboard() {
                                         </Box>
                                     )}
                                     
-                                    {/* ДЗ к этому уроку (если это будущий урок) */}
-                                    {(selectedLesson.status === 'SCHEDULED' || selectedLesson.status === 'RESCHEDULED') && (() => {                                        const hw = getHomeworkForNextLesson(selectedLesson);
+                                    {(selectedLesson.status === 'SCHEDULED' || selectedLesson.status === 'RESCHEDULED') && (() => {
+                                        const hw = getHomeworkForNextLesson(selectedLesson);
                                         if (hw) return (
                                             <Box sx={{ p: 2, bgcolor: '#EFF6FF', borderRadius: 2, borderLeft: '3px solid #3B82F6' }}>
                                                 <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 500 }}>
@@ -1583,6 +1686,118 @@ function StudentDashboard() {
                         </>
                     )}
                 </Dialog>
+
+                    </Grid>
+                    {/* КОНЕЦ ЛЕВОЙ ЧАСТИ */}
+                    
+                    {/* ========== ПРАВАЯ ЧАСТЬ — ДОСКА-СТИКЕР ========== */}
+                    <Grid item xs={12} md={4}>
+                        <Paper sx={{ 
+                            p: 2, 
+                            borderRadius: 4, 
+                            border: '1px solid #F3F4F6',
+                            bgcolor: '#FFFEF5',
+                            position: 'sticky',
+                            top: 20,
+                            maxHeight: 'calc(100vh - 40px)',
+                            overflow: 'auto'
+                        }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <Typography variant="h6" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    📌 Моя доска
+                                </Typography>
+                                <Button 
+                                    size="small" 
+                                    startIcon={<EditIcon />}
+                                    onClick={handleAddNote}
+                                    sx={{ textTransform: 'none' }}
+                                >
+                                    + Заметка
+                                </Button>
+                            </Box>
+                            
+                            <Stack spacing={2}>
+                                {stickyNotes.map(note => (
+                                    <Paper 
+                                        key={note.id}
+                                        sx={{ 
+                                            p: 2, 
+                                            bgcolor: note.color,
+                                            borderRadius: 2,
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                                            position: 'relative',
+                                            width: note.width || 280,
+                                            minHeight: note.height || 150,
+                                            overflow: 'auto',
+                                            '&:hover': { boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }
+                                        }}
+                                    >
+                                        {editingNote === note.id ? (
+                                            <Box>
+                                                <TextField
+                                                    fullWidth
+                                                    multiline
+                                                    minRows={3}
+                                                    value={editText}
+                                                    onChange={(e) => setEditText(e.target.value)}
+                                                    variant="standard"
+                                                    autoFocus
+                                                    sx={{ mb: 1 }}
+                                                />
+                                                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                                                    <Button size="small" onClick={() => setEditingNote(null)}>Отмена</Button>
+                                                    <Button size="small" variant="contained" onClick={handleSaveNote} startIcon={<SaveIcon />}>
+                                                        Сохранить
+                                                    </Button>
+                                                </Box>
+                                            </Box>
+                                        ) : (
+                                            <Box>
+                                                <Typography 
+                                                    variant="body2" 
+                                                    sx={{ 
+                                                        whiteSpace: 'pre-wrap', 
+                                                        color: '#374151',
+                                                        fontSize: '0.9rem',
+                                                        lineHeight: 1.6
+                                                    }}
+                                                >
+                                                    {note.text}
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end', mt: 1 }}>
+                                                    <IconButton size="small" onClick={() => handleEditNote(note)}>
+                                                        <EditIcon sx={{ fontSize: 16 }} />
+                                                    </IconButton>
+                                                    <IconButton size="small" onClick={() => handleDeleteNote(note.id)}>
+                                                        <DeleteIcon sx={{ fontSize: 16 }} />
+                                                    </IconButton>
+                                                </Box>
+                                            </Box>
+                                        )}
+                                        {/* Уголок для ресайза */}
+                                        <Box
+                                            onMouseDown={(e) => handleResizeStart(e, note.id)}
+                                            sx={{
+                                                position: 'absolute',
+                                                bottom: 4,
+                                                right: 4,
+                                                width: 16,
+                                                height: 16,
+                                                cursor: 'nwse-resize',
+                                                borderRight: '2px solid #94A3B8',
+                                                borderBottom: '2px solid #94A3B8',
+                                                opacity: 0.5,
+                                                '&:hover': { opacity: 1 }
+                                            }}
+                                        />
+                                    </Paper>
+                                ))}
+                            </Stack>
+                        </Paper>
+                    </Grid>
+                    {/* КОНЕЦ ПРАВОЙ ЧАСТИ */}
+                </Grid>
+                {/* КОНЕЦ ОСНОВНОГО GRID */}
 
                 <LessonRoom 
                     open={lessonRoomOpen} 

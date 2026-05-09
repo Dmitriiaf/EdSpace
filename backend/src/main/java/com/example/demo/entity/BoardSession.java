@@ -31,6 +31,9 @@ public class BoardSession {
     @Column(nullable = false)
     private String title;
 
+    @Column(length = 2000)
+    private String url;
+
     @Column(nullable = false)
     @Builder.Default
     private String status = "ACTIVE"; // ACTIVE, ARCHIVED
@@ -40,4 +43,32 @@ public class BoardSession {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     private LocalDateTime archivedAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String canvasImage;
+
+    public String getCanvasImage() { return canvasImage; }
+    public void setCanvasImage(String canvasImage) { this.canvasImage = canvasImage; }
+
+    public String getUrl() { return url; }
+    public void setUrl(String url) { this.url = url; }
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getRoomName() { return roomName; }
+    public void setRoomName(String roomName) { this.roomName = roomName; }
+    public Tutor getTutor() { return tutor; }
+    public void setTutor(Tutor tutor) { this.tutor = tutor; }
+    public Student getStudent() { return student; }
+    public void setStudent(Student student) { this.student = student; }
+    public Lesson getLesson() { return lesson; }
+    public void setLesson(Lesson lesson) { this.lesson = lesson; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getArchivedAt() { return archivedAt; }
+    public void setArchivedAt(LocalDateTime archivedAt) { this.archivedAt = archivedAt; }
 }

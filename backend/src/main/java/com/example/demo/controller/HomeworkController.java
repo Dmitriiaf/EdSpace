@@ -324,11 +324,9 @@ public class HomeworkController {
             if (attachments.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Нужен ответ или файл"));
             }
-            homework.setAttachments(attachments);
-            homework.setStatus("SUBMITTED");
-            homework.setSubmittedAt(LocalDateTime.now());
-            homeworkService.saveHomework(homework);
-            return ResponseEntity.ok(Map.of("message", "Задание сдано"));
+            // ✅ Вызываем сервис, который создаст уведомление
+            Homework submitted = homeworkService.submitHomework(id, attachments);
+            return ResponseEntity.ok(Map.of("message", "Задание сдано", "homework", submitted));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -382,6 +380,41 @@ public class HomeworkController {
             }
             boolean overdue = homeworkService.isOverdue(id);
             return ResponseEntity.ok(Map.of("isOverdue", overdue));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/progress/tutor/{tutorId}")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getTutorStudentsProgress(
+            @PathVariable Long tutorId,
+            @RequestParam(required = false) Long courseId,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            if (!tutorId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            List<Map<String, Object>> result = homeworkService.getTutorStudentsProgress(tutorId, courseId);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+    @GetMapping("/progress/student/{studentId}/timeline")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
+    public ResponseEntity<?> getStudentProgressTimeline(
+            @PathVariable Long studentId,
+            @RequestParam(required = false) Long courseId,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId,
+            @RequestAttribute(name = "userRole", required = false) String userRole) {
+        try {
+            if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+            List<Map<String, Object>> timeline = homeworkService.getStudentProgressTimeline(studentId, courseId);
+            return ResponseEntity.ok(Map.of("timeline", timeline));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

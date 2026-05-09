@@ -38,21 +38,26 @@ import StudentMaterials from './pages/StudentMaterials';
 import Boards from './pages/Boards';
 import Homework from './pages/Homework';
 import Extracurricular from './pages/Extracurricular';
-// 🎨 НОВЫЕ ЦВЕТА
-const COLORS = {
-    murrey: '#8B004A',
-    alabaster: '#F2EFE7',
-};
 
-// 🎨 Контекст темы
+// Контекст темы
 const ThemeContext = createContext();
-
 export const useThemeContext = () => useContext(ThemeContext);
 
 const StepikPageWrapper = () => {
     const location = useLocation();
     return <StepikPage key={location.pathname + Date.now()} />;
 };
+
+// Фон с акцентными пятнами (как на лендинге, но приглушённый)
+const BG_IMAGE = `
+    linear-gradient(180deg, rgba(79, 70, 229, 0.04) 0%, transparent 300px),
+    radial-gradient(circle at 15% 20%, rgba(79, 70, 229, 0.12) 0%, transparent 50%),
+    radial-gradient(circle at 85% 75%, rgba(124, 58, 237, 0.10) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(79, 70, 229, 0.06) 0%, transparent 60%),
+    radial-gradient(circle at 90% 10%, rgba(16, 185, 129, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 10% 90%, rgba(245, 158, 11, 0.06) 0%, transparent 40%),
+    radial-gradient(circle at 70% 30%, rgba(79, 70, 229, 0.08) 0%, transparent 50%)
+`;
 
 const AppContent = () => {
     const { user } = useAuth();
@@ -73,15 +78,15 @@ const AppContent = () => {
     const theme = useMemo(() => createTheme({
         palette: {
             mode: darkMode ? 'dark' : 'light',
-            primary: { main: COLORS.murrey },
-            secondary: { main: '#4ecdc4' },
+            primary: { main: '#4F46E5' },
+            secondary: { main: '#10B981' },
             background: {
-                default: darkMode ? '#121212' : COLORS.alabaster,
-                paper: darkMode ? '#1e1e1e' : '#ffffff',
+                default: darkMode ? '#121212' : '#F3F4F6',
+                paper: darkMode ? '#1e1e1e' : '#FFFFFF',
             },
             text: {
-                primary: darkMode ? '#ffffff' : '#333333',
-                secondary: darkMode ? '#aaaaaa' : '#666666',
+                primary: darkMode ? '#ffffff' : '#1F2937',
+                secondary: darkMode ? '#aaaaaa' : '#6B7280',
             },
         },
         shape: { borderRadius: 12 },
@@ -90,7 +95,7 @@ const AppContent = () => {
                 styleOverrides: {
                     root: {
                         backgroundColor: darkMode ? '#1e1e1e' : '#ffffff',
-                        borderColor: darkMode ? '#333' : '#e0e0e0',
+                        borderColor: darkMode ? '#333' : '#E5E7EB',
                     },
                 },
             },
@@ -148,10 +153,10 @@ const AppContent = () => {
                             bottom: 20,
                             right: 20,
                             zIndex: 9999,
-                            bgcolor: darkMode ? '#333' : COLORS.murrey,
+                            bgcolor: darkMode ? '#333' : '#4F46E5',
                             color: 'white',
                             '&:hover': {
-                                bgcolor: darkMode ? '#555' : '#6B0038',
+                                bgcolor: darkMode ? '#555' : '#4338CA',
                             },
                             width: 48,
                             height: 48,
@@ -169,7 +174,8 @@ const AppContent = () => {
                         ml: `${sidebarWidth}px`,
                         minHeight: '100vh',
                         transition: 'margin-left 0.2s ease-in-out',
-                        bgcolor: darkMode ? '#121212' : COLORS.alabaster,
+                        bgcolor: darkMode ? '#121212' : '#F3F4F6',
+                        backgroundImage: darkMode ? 'none' : BG_IMAGE,
                         width: `calc(100% - ${sidebarWidth}px)`,
                     }}
                 >

@@ -1,102 +1,176 @@
+/* ========== ДИЗАЙН-СИСТЕМА EDSPACE v2 ========== */
+
+/* Подключение шрифта Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Нейтральные */
+  --color-bg: #F3F4F6;
+  --color-surface: #FFFFFF;
+  --color-text-primary: #1F2937;
+  --color-text-secondary: #6B7280;
+  --color-text-label: #9CA3AF;
+  --color-border: #E5E7EB;
+  --color-hover: #F9FAFB;
+
+  /* Акцентные */
+  --color-accent: #4F46E5;
+  --color-accent-hover: #4338CA;
+  --color-accent-light: #EEF2FF;
+
+  /* Семантические */
+  --color-success: #10B981;
+  --color-success-bg: #ECFDF5;
+  --color-success-text: #065F46;
+  --color-warning: #3B82F6;
+  --color-warning-bg: #EFF6FF;
+  --color-warning-text: #1E40AF;
+  --color-danger: #EF4444;
+  --color-danger-bg: #FEF2F2;
+  --color-danger-text: #991B1B;
+  --color-neutral-bg: #F3F4F6;
+  --color-neutral-text: #374151;
+
+  /* Скругления */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 100px;
+  --radius-circle: 50%;
+
+  /* Тени */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.08);
+
+  /* Типографика */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Глобальный сброс */
+*, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
 body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color: var(--color-text-primary);
+
+  /* ========== ФОН С АКЦЕНТНЫМИ ПЯТНАМИ (КАК НА ЛЕНДИНГЕ, НО ПРИГЛУШЁННЫЕ) ========== */
+  background-color: #F3F4F6;
+  background-image: 
+    radial-gradient(circle at 15% 20%, rgba(79, 70, 229, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 85% 75%, rgba(124, 58, 237, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(79, 70, 229, 0.03) 0%, transparent 60%),
+    radial-gradient(circle at 90% 10%, rgba(16, 185, 129, 0.04) 0%, transparent 45%),
+    radial-gradient(circle at 10% 90%, rgba(245, 158, 11, 0.03) 0%, transparent 40%);
+  background-attachment: fixed;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Кастомный скроллбар */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-
-
-/* Добавьте в конец файла frontend/src/index.css */
-
-@keyframes confettiFullscreen {
-    0% {
-        transform: translateY(0) rotate(0deg);
-        opacity: 1;
-    }
-    100% {
-        transform: translateY(100vh) rotate(360deg);
-        opacity: 0;
-    }
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-@keyframes twinkle {
-    0%, 100% {
-        opacity: 0;
-        transform: scale(0.5);
-    }
-    50% {
-        opacity: 1;
-        transform: scale(1.5);
-    }
+::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
 }
 
-@keyframes confetti {
-    0% {
-        transform: translateY(0) rotate(0deg);
-        opacity: 1;
-    }
-    100% {
-        transform: translateY(500px) rotate(360deg);
-        opacity: 0;
-    }
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
 }
 
-@keyframes bounce {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-15px);
-    }
+/* Анимации */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes wiggle {
-    0%, 100% {
-        transform: rotate(0deg);
-    }
-    25% {
-        transform: rotate(10deg);
-    }
-    75% {
-        transform: rotate(-10deg);
-    }
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
-@keyframes flicker {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.6;
-        transform: scale(1.1);
-    }
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-@keyframes floatUp {
-    0% {
-        transform: translateY(0) scale(1);
-        opacity: 0.6;
-    }
-    100% {
-        transform: translateY(-100vh) scale(0.3);
-        opacity: 0;
-    }
+.animate-fade-in {
+  animation: fadeIn 0.2s ease forwards;
 }
 
-@keyframes glow {
-    0%, 100% {
-        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
-    }
-    50% {
-        box-shadow: 0 0 50px rgba(102, 126, 234, 0.7);
-    }
+/* ========== СТАТУСНЫЕ БЕЙДЖИ ========== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.badge-success { background: var(--color-success-bg); color: var(--color-success-text); }
+.badge-success::before { background: var(--color-success); }
+
+.badge-info { background: var(--color-warning-bg); color: var(--color-warning-text); }
+.badge-info::before { background: var(--color-warning); }
+
+.badge-danger { background: var(--color-danger-bg); color: var(--color-danger-text); }
+.badge-danger::before { background: var(--color-danger); }
+
+.badge-neutral { background: var(--color-neutral-bg); color: var(--color-neutral-text); }
+.badge-neutral::before { background: #9CA3AF; }
+
+/* Мягкий hover с сиреневым оттенком для карточек */
+.MuiCard-root:hover {
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Ускорение для Chrome */
+* {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.MuiCard-root, .MuiPaper-root {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+  transition: none !important;
+}
+
+/* Плавность для Chromium */
+.MuiCard-root,
+.MuiPaper-root,
+.MuiButton-root,
+.MuiIconButton-root,
+.MuiListItemButton-root {
+  will-change: transform;
+}
+
+/* Аппаратное ускорение для сайдбара */
+.sidebar *,
+[class*="Sidebar"] * {
+  transform: translateZ(0);
+  -webkit-font-smoothing: subpixel-antialiased;
 }

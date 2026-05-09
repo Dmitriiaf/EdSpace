@@ -1,17 +1,18 @@
-// ========== frontend/src/pages/LessonsArchive.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/pages/LessonsArchive.js (РЕДИЗАЙН v2) ==========
 import React, { useState, useEffect } from 'react';
-// ✅ Заменяем axios на axiosInstance
 import axiosInstance, { getArchivedLessons } from '../services/api';
 import {
     Box, Paper, Typography, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Chip,
     Alert, CircularProgress, FormControl, InputLabel,
     Select, MenuItem, Grid, Button, Dialog,
-    DialogTitle, DialogContent, DialogActions,
+    DialogTitle, Snackbar, DialogContent, DialogActions,
     Card, CardContent, IconButton, Tooltip,
     Tabs, Tab, TableSortLabel, InputAdornment,
     TextField, Pagination, Avatar, Divider
 } from '@mui/material';
+import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
+import { styled } from '@mui/material/styles';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -28,19 +29,79 @@ import {
     CheckCircle as CheckIcon,
     Cancel as CancelIcon,
     Schedule as ScheduleIcon,
-    TrendingUp as TrendingUpIcon,
-    TrendingDown as TrendingDownIcon,
     Visibility as VisibilityIcon,
     Clear as ClearIcon,
     Timeline as TimelineIcon,
     Warning as WarningIcon,
-    EmojiPeople as AbsentIcon
+    EmojiPeople as AbsentIcon,
+    Archive as ArchiveIcon,
+    KeyboardArrowDown as ChevronDownIcon,
+    KeyboardArrowRight as ChevronRightIcon
 } from '@mui/icons-material';
+
+// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+
+
+
+const FilterPaper = styled(Paper)({
+    padding: '20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
+});
+
+const StyledTableContainer = styled(TableContainer)({
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    overflow: 'hidden',
+});
+
+const StyledTableRow = styled(TableRow)({
+    '&:nth-of-type(odd)': {
+        backgroundColor: '#FFFFFF',
+    },
+    '&:nth-of-type(even)': {
+        backgroundColor: '#F9FAFB',
+    },
+    '&:hover': {
+        backgroundColor: '#EEF2FF !important',
+        cursor: 'pointer',
+    },
+    '&:last-child td': {
+        borderBottom: 0,
+    },
+});
+
+
+// ========== УТИЛИТЫ ==========
+
+function getAvatarColor(name) {
+    const avatarColors = [
+        '#4F46E5', '#7C3AED', '#EC4899', '#EF4444', '#F59E0B',
+        '#10B981', '#059669', '#3B82F6', '#2563EB', '#6366F1'
+    ];
+    let hash = 0;
+    const str = name || '?';
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return avatarColors[Math.abs(hash) % avatarColors.length];
+}
+
+function getInitials(name) {
+    if (!name) return '?';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.substring(0, 2).toUpperCase();
+}
+
+// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
 function LessonsArchive() {
     const { user } = useAuth();
     const { getStudentRateForTutor } = useStudentRate();
-    
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
     const [lessons, setLessons] = useState([]);
     const [students, setStudents] = useState([]);
     const [courses, setCourses] = useState([]);
@@ -59,6 +120,7 @@ function LessonsArchive() {
     const [selectedLessonNotes, setSelectedLessonNotes] = useState({ notes: '', nextLessonPlan: '' });
     const [topAbsentStudents, setTopAbsentStudents] = useState([]);
     const [filteredLessons, setFilteredLessons] = useState([]);
+    const [expandedRow, setExpandedRow] = useState(null);
     const [stats, setStats] = useState({
         total: 0,
         completed: 0,
@@ -84,7 +146,6 @@ function LessonsArchive() {
         try {
             setLoading(true);
             
-            // ✅ Все запросы через axiosInstance
             const [lessonsRes, studentsRes, coursesRes] = await Promise.all([
                 getArchivedLessons(user.id),
                 axiosInstance.get(`/students/tutor/${user.id}`),
@@ -253,6 +314,21 @@ function LessonsArchive() {
         setOpenNotesDialog(true);
     };
 
+    const showSnackbar = (message, severity) => {
+        setSnackbar({ open: true, message, severity });
+    };
+    
+    const handleManualPayment = async (lesson) => {
+        if (!window.confirm('Подтвердить оплату вручную?')) return;
+        try {
+            await axiosInstance.patch(`/lessons/${lesson.id}/status`, { status: 'PAID' });
+            showSnackbar('✅ Оплата подтверждена', 'success');
+            await fetchData();
+        } catch (err) {
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        }
+    };
+
     const handleResetFilters = () => {
         setFilterStatus('all');
         setFilterStudent('all');
@@ -261,16 +337,39 @@ function LessonsArchive() {
         setPage(0);
     };
 
-    const getStatusChip = (status) => {
+    const handleRowClick = (lessonId) => {
+        setExpandedRow(expandedRow === lessonId ? null : lessonId);
+    };
+
+    const getStatusBadge = (status) => {
         switch(status) {
             case 'PAID':
-                return <Chip label="Оплачено" color="success" size="small" icon={<CheckIcon />} />;
+                return (
+                    <Box className="badge badge-success">
+                        <CheckIcon sx={{ fontSize: 12 }} />
+                        Оплачено
+                    </Box>
+                );
             case 'COMPLETED':
-                return <Chip label="Проведено" color="warning" size="small" icon={<ScheduleIcon />} />;
+                return (
+                    <Box className="badge badge-info">
+                        <ScheduleIcon sx={{ fontSize: 12 }} />
+                        Проведено
+                    </Box>
+                );
             case 'CANCELLED':
-                return <Chip label="Отменено" color="error" size="small" icon={<CancelIcon />} />;
+                return (
+                    <Box className="badge badge-danger">
+                        <CancelIcon sx={{ fontSize: 12 }} />
+                        Отменено
+                    </Box>
+                );
             default:
-                return <Chip label={status} size="small" />;
+                return (
+                    <Box className="badge badge-neutral">
+                        {status}
+                    </Box>
+                );
         }
     };
 
@@ -283,97 +382,146 @@ function LessonsArchive() {
     const maxMonthlyTotal = Math.max(...stats.monthlyStats.map(m => m.total), 1);
 
     if (loading) return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-            <CircularProgress />
-        </Box>
+        <PageContainer>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                <CircularProgress sx={{ color: '#4F46E5' }} />
+            </Box>
+            <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+                <Alert severity={snackbar.severity} sx={{ borderRadius: '8px' }}>{snackbar.message}</Alert>
+            </Snackbar>
+        </PageContainer>
     );
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
-            <Box sx={{ p: 3 }}>
-                {/* Заголовок */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+            <PageContainer>
+                {/* Заголовок страницы */}
+                <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    mb: 4, 
+                    flexWrap: 'wrap', 
+                    gap: 2 
+                }}>
                     <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        <Typography 
+                            variant="h1" 
+                            sx={{ 
+                                fontSize: '28px', 
+                                fontWeight: 600, 
+                                color: '#1F2937',
+                                mb: 0.5,
+                                fontFamily: 'Inter, sans-serif',
+                            }}
+                        >
                             Архив занятий
                         </Typography>
-                        <Typography variant="body2" color="textSecondary">
+                        <Typography 
+                            variant="body2" 
+                            sx={{ 
+                                color: '#6B7280',
+                                fontSize: '14px',
+                            }}
+                        >
                             История проведённых, оплаченных и отменённых занятий
                         </Typography>
                     </Box>
-                    <Button
-                        variant="outlined"
-                        startIcon={<RefreshIcon />}
-                        onClick={fetchData}
-                        size="small"
-                        sx={{ borderRadius: 2, textTransform: 'none' }}
-                    >
-                        Обновить
-                    </Button>
+                    
+                    <ViewToggle>
+                        <ViewToggleBtn 
+                            active={viewMode === 'table'}
+                            onClick={() => setViewMode('table')}
+                            startIcon={<VisibilityIcon />}
+                        >
+                            Список
+                        </ViewToggleBtn>
+                        <ViewToggleBtn 
+                            active={viewMode === 'stats'}
+                            onClick={() => setViewMode('stats')}
+                            startIcon={<TimelineIcon />}
+                        >
+                            Аналитика
+                        </ViewToggleBtn>
+                    </ViewToggle>
                 </Box>
 
-                {/* Статистика */}
+                {/* Карточки статистики */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
-                    <Grid item xs={6} sm={3}>
-                        <Card sx={{ borderRadius: 3 }}>
-                            <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-                                <Typography variant="h5" sx={{ fontWeight: 600, color: '#3B82F6' }}>
-                                    {stats.total}
-                                </Typography>
-                                <Typography variant="caption" color="textSecondary">
-                                    Всего записей
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={6} sm={3}>
-                        <Card sx={{ borderRadius: 3 }}>
-                            <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-                                <Typography variant="h5" sx={{ fontWeight: 600, color: '#F59E0B' }}>
-                                    {stats.completed}
-                                </Typography>
-                                <Typography variant="caption" color="textSecondary">
-                                    Проведено
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={6} sm={3}>
-                        <Card sx={{ borderRadius: 3 }}>
-                            <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-                                <Typography variant="h5" sx={{ fontWeight: 600, color: '#10B981' }}>
-                                    {stats.paid}
-                                </Typography>
-                                <Typography variant="caption" color="textSecondary">
-                                    Оплачено
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={6} sm={3}>
-                        <Card sx={{ borderRadius: 3 }}>
-                            <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-                                <Typography variant="h5" sx={{ fontWeight: 600, color: '#EF5350' }}>
-                                    {stats.cancelled}
-                                </Typography>
-                                <Typography variant="caption" color="textSecondary">
-                                    Отменено
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
+                    {[
+                        { label: 'Всего записей', value: stats.total, color: '#3B82F6', bg: '#EFF6FF' },
+                        { label: 'Проведено', value: stats.completed, color: '#F59E0B', bg: '#FFFBEB' },
+                        { label: 'Оплачено', value: stats.paid, color: '#10B981', bg: '#ECFDF5' },
+                        { label: 'Отменено', value: stats.cancelled, color: '#EF4444', bg: '#FEF2F2' },
+                    ].map((item) => (
+                        <Grid item xs={6} sm={3} key={item.label}>
+                            <StatCard>
+                                <CardContent sx={{ textAlign: 'center', py: 2, '&:last-child': { pb: 2 } }}>
+                                    <Box
+                                        sx={{
+                                            width: 40,
+                                            height: 40,
+                                            borderRadius: '10px',
+                                            backgroundColor: item.bg,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            margin: '0 auto 8px',
+                                        }}
+                                    >
+                                        <Typography sx={{ fontSize: 18, fontWeight: 700, color: item.color }}>
+                                            {item.value}
+                                        </Typography>
+                                    </Box>
+                                    <Typography 
+                                        variant="h5" 
+                                        sx={{ 
+                                            fontWeight: 600, 
+                                            color: '#1F2937',
+                                            fontSize: '24px',
+                                            fontFamily: 'Inter, sans-serif',
+                                        }}
+                                    >
+                                        {item.value}
+                                    </Typography>
+                                    <Typography 
+                                        variant="caption" 
+                                        sx={{ 
+                                            color: '#6B7280',
+                                            fontSize: '13px',
+                                        }}
+                                    >
+                                        {item.label}
+                                    </Typography>
+                                </CardContent>
+                            </StatCard>
+                        </Grid>
+                    ))}
                 </Grid>
 
                 {/* Фильтры */}
-                <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+                <FilterPaper elevation={0}>
                     <Grid container spacing={2} alignItems="center">
                         <Grid item xs={12} sm={6} md={3}>
                             <FormControl fullWidth size="small">
-                                <InputLabel>Статус</InputLabel>
+                                <InputLabel sx={{ fontSize: '13px', color: '#6B7280' }}>Статус</InputLabel>
                                 <Select
                                     value={filterStatus}
                                     onChange={(e) => setFilterStatus(e.target.value)}
                                     label="Статус"
+                                    sx={{
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#E5E7EB',
+                                            borderRadius: '8px',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#D1D5DB',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#4F46E5',
+                                            boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.1)',
+                                        },
+                                    }}
                                 >
                                     <MenuItem value="all">Все статусы</MenuItem>
                                     <MenuItem value="PAID">Оплачено</MenuItem>
@@ -384,11 +532,24 @@ function LessonsArchive() {
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
                             <FormControl fullWidth size="small">
-                                <InputLabel>Ученик</InputLabel>
+                                <InputLabel sx={{ fontSize: '13px', color: '#6B7280' }}>Ученик</InputLabel>
                                 <Select
                                     value={filterStudent}
                                     onChange={(e) => setFilterStudent(e.target.value)}
                                     label="Ученик"
+                                    sx={{
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#E5E7EB',
+                                            borderRadius: '8px',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#D1D5DB',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#4F46E5',
+                                            boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.1)',
+                                        },
+                                    }}
                                 >
                                     <MenuItem value="all">Все ученики</MenuItem>
                                     {students.map(s => (
@@ -404,7 +565,23 @@ function LessonsArchive() {
                                 onChange={setSelectedMonth}
                                 views={['year', 'month']}
                                 format="LLLL yyyy"
-                                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                                slotProps={{ 
+                                    textField: { 
+                                        size: 'small', 
+                                        fullWidth: true,
+                                        sx: {
+                                            '& .MuiOutlinedInput-root': {
+                                                borderRadius: '8px',
+                                                '& fieldset': { borderColor: '#E5E7EB' },
+                                                '&:hover fieldset': { borderColor: '#D1D5DB' },
+                                                '&.Mui-focused fieldset': { 
+                                                    borderColor: '#4F46E5',
+                                                    boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.1)',
+                                                },
+                                            },
+                                        }
+                                    } 
+                                }}
                             />
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
@@ -414,10 +591,28 @@ function LessonsArchive() {
                                 fullWidth
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        borderRadius: '8px',
+                                        '& fieldset': { borderColor: '#E5E7EB' },
+                                        '&:hover fieldset': { borderColor: '#D1D5DB' },
+                                        '&.Mui-focused fieldset': { 
+                                            borderColor: '#4F46E5',
+                                            boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.1)',
+                                        },
+                                    },
+                                }}
                                 InputProps={{
                                     startAdornment: (
                                         <InputAdornment position="start">
-                                            <SearchIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                                            <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+                                        </InputAdornment>
+                                    ),
+                                    endAdornment: searchTerm && (
+                                        <InputAdornment position="end">
+                                            <IconButton size="small" onClick={() => setSearchTerm('')}>
+                                                <ClearIcon sx={{ fontSize: 16 }} />
+                                            </IconButton>
                                         </InputAdornment>
                                     ),
                                 }}
@@ -427,48 +622,56 @@ function LessonsArchive() {
                             <Grid item xs={12}>
                                 <Button 
                                     size="small" 
-                                    variant="text" 
                                     onClick={handleResetFilters}
                                     startIcon={<ClearIcon />}
+                                    sx={{ 
+                                        color: '#6B7280',
+                                        textTransform: 'none',
+                                        fontSize: '13px',
+                                        '&:hover': { backgroundColor: '#F3F4F6' },
+                                    }}
                                 >
                                     Сбросить все фильтры
+                                </Button>
+                                <Button 
+                                    size="small" 
+                                    onClick={fetchData}
+                                    startIcon={<RefreshIcon />}
+                                    sx={{ 
+                                        color: '#4F46E5',
+                                        textTransform: 'none',
+                                        fontSize: '13px',
+                                        ml: 1,
+                                        '&:hover': { backgroundColor: '#EEF2FF' },
+                                    }}
+                                >
+                                    Обновить
                                 </Button>
                             </Grid>
                         )}
                     </Grid>
-                </Paper>
-
-                {/* Переключатель вида */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                    <Tabs 
-                        value={viewMode} 
-                        onChange={(e, v) => setViewMode(v)}
-                        sx={{ minHeight: 36 }}
-                    >
-                        <Tab 
-                            value="table" 
-                            icon={<VisibilityIcon />} 
-                            label="Список"
-                            sx={{ textTransform: 'none', minHeight: 36, py: 0 }}
-                        />
-                        <Tab 
-                            value="stats" 
-                            icon={<TimelineIcon />} 
-                            label="Аналитика"
-                            sx={{ textTransform: 'none', minHeight: 36, py: 0 }}
-                        />
-                    </Tabs>
-                </Box>
+                </FilterPaper>
 
                 {error ? (
-                    <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
+                    <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>
                 ) : viewMode === 'stats' ? (
-                    <Paper sx={{ p: 3, borderRadius: 3 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    /* ========== РЕЖИМ АНАЛИТИКИ ========== */
+                    <Paper sx={{ p: 3, borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                        <Typography 
+                            sx={{ 
+                                fontSize: '18px', 
+                                fontWeight: 600, 
+                                color: '#1F2937',
+                                mb: 3,
+                                fontFamily: 'Inter, sans-serif',
+                            }}
+                        >
                             Динамика занятий по месяцам
                         </Typography>
-                        <Box sx={{ height: 200, mb: 3 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, height: '100%' }}>
+                        
+                        {/* Бар-график */}
+                        <Box sx={{ height: 200, mb: 4 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, height: '100%', px: 1 }}>
                                 {stats.monthlyStats.map((item, idx) => {
                                     const height = maxMonthlyTotal > 0 ? (item.total / maxMonthlyTotal) * 160 : 0;
                                     return (
@@ -476,15 +679,27 @@ function LessonsArchive() {
                                             <Box sx={{ flex: 1, textAlign: 'center' }}>
                                                 <Box 
                                                     sx={{ 
-                                                        height: height,
-                                                        bgcolor: '#ff6b6b',
+                                                        height: Math.max(height, 4),
+                                                        background: 'linear-gradient(180deg, #4F46E5 0%, #7C3AED 100%)',
                                                         borderRadius: '8px 8px 4px 4px',
-                                                        transition: 'all 0.2s',
                                                         cursor: 'pointer',
-                                                        '&:hover': { bgcolor: '#ff5252' }
+                                                        transition: 'all 0.3s ease',
+                                                        '&:hover': { 
+                                                            opacity: 0.85,
+                                                            transform: 'scaleY(1.05)',
+                                                            transformOrigin: 'bottom',
+                                                        }
                                                     }}
                                                 />
-                                                <Typography variant="caption" sx={{ fontSize: '0.7rem', mt: 1, display: 'block' }}>
+                                                <Typography 
+                                                    variant="caption" 
+                                                    sx={{ 
+                                                        fontSize: '11px', 
+                                                        mt: 1, 
+                                                        display: 'block',
+                                                        color: '#6B7280',
+                                                    }}
+                                                >
                                                     {item.month}
                                                 </Typography>
                                             </Box>
@@ -494,10 +709,21 @@ function LessonsArchive() {
                             </Box>
                         </Box>
 
+                        {/* Топ пропускающих */}
                         {topAbsentStudents.length > 0 && (
-                            <Box sx={{ mb: 3 }}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <WarningIcon sx={{ color: '#EF5350' }} />
+                            <Box sx={{ mb: 4 }}>
+                                <Typography 
+                                    sx={{ 
+                                        fontSize: '16px', 
+                                        fontWeight: 600, 
+                                        color: '#1F2937',
+                                        mb: 2, 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: 1 
+                                    }}
+                                >
+                                    <WarningIcon sx={{ color: '#EF4444', fontSize: 20 }} />
                                     Чаще всего пропускают
                                 </Typography>
                                 <Grid container spacing={2}>
@@ -505,28 +731,54 @@ function LessonsArchive() {
                                         <Grid item xs={12} sm={6} md={4} key={student.id}>
                                             <Card 
                                                 sx={{ 
-                                                    borderRadius: 2,
-                                                    transition: 'all 0.2s',
-                                                    '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }
+                                                    borderRadius: '12px',
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                                    transition: 'all 0.2s ease',
+                                                    '&:hover': { 
+                                                        transform: 'translateY(-2px)', 
+                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)' 
+                                                    }
                                                 }}
                                             >
-                                                <CardContent>
+                                                <CardContent sx={{ '&:last-child': { pb: 2 } }}>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                        <Avatar sx={{ bgcolor: '#EF5350', width: 48, height: 48 }}>
-                                                            <AbsentIcon />
+                                                        <Avatar 
+                                                            sx={{ 
+                                                                bgcolor: getAvatarColor(student.name), 
+                                                                width: 44, 
+                                                                height: 44,
+                                                                fontSize: 16,
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {getInitials(student.name)}
                                                         </Avatar>
                                                         <Box sx={{ flex: 1 }}>
-                                                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                                            <Typography 
+                                                                sx={{ 
+                                                                    fontWeight: 600, 
+                                                                    fontSize: '15px',
+                                                                    color: '#1F2937',
+                                                                }}
+                                                            >
                                                                 {student.name}
                                                             </Typography>
                                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
                                                                 <Chip 
                                                                     label={`${student.count} пропусков`}
                                                                     size="small"
-                                                                    color="error"
-                                                                    sx={{ fontWeight: 500 }}
+                                                                    sx={{ 
+                                                                        backgroundColor: '#FEF2F2',
+                                                                        color: '#991B1B',
+                                                                        fontWeight: 500,
+                                                                        fontSize: '11px',
+                                                                        borderRadius: '100px',
+                                                                    }}
                                                                 />
-                                                                <Typography variant="caption" color="textSecondary">
+                                                                <Typography 
+                                                                    variant="caption" 
+                                                                    sx={{ color: '#6B7280' }}
+                                                                >
                                                                     {student.lessons.length} занятий
                                                                 </Typography>
                                                             </Box>
@@ -535,8 +787,16 @@ function LessonsArchive() {
                                                     
                                                     {student.lessons.length > 0 && (
                                                         <>
-                                                            <Divider sx={{ my: 1.5 }} />
-                                                            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
+                                                            <Divider sx={{ my: 1.5, borderColor: '#F3F4F6' }} />
+                                                            <Typography 
+                                                                variant="caption" 
+                                                                sx={{ 
+                                                                    color: '#9CA3AF',
+                                                                    display: 'block', 
+                                                                    mb: 1,
+                                                                    fontSize: '11px',
+                                                                }}
+                                                            >
                                                                 Последние пропуски:
                                                             </Typography>
                                                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
@@ -546,7 +806,12 @@ function LessonsArchive() {
                                                                             label={format(new Date(lesson.date), 'd MMM', { locale: ru })}
                                                                             size="small"
                                                                             variant="outlined"
-                                                                            sx={{ fontSize: '0.7rem' }}
+                                                                            sx={{ 
+                                                                                fontSize: '11px',
+                                                                                borderRadius: '6px',
+                                                                                borderColor: '#E5E7EB',
+                                                                                color: '#6B7280',
+                                                                            }}
                                                                         />
                                                                     </Tooltip>
                                                                 ))}
@@ -555,6 +820,11 @@ function LessonsArchive() {
                                                                         label={`+${student.lessons.length - 3}`}
                                                                         size="small"
                                                                         variant="outlined"
+                                                                        sx={{ 
+                                                                            fontSize: '11px',
+                                                                            borderRadius: '6px',
+                                                                            borderColor: '#E5E7EB',
+                                                                        }}
                                                                     />
                                                                 )}
                                                             </Box>
@@ -568,47 +838,86 @@ function LessonsArchive() {
                             </Box>
                         )}
                         
-                        <Divider sx={{ my: 2 }} />
+                        <Divider sx={{ my: 3, borderColor: '#F3F4F6' }} />
                         
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                        {/* Детальная таблица по месяцам */}
+                        <Typography 
+                            sx={{ 
+                                fontSize: '16px', 
+                                fontWeight: 600, 
+                                color: '#1F2937',
+                                mb: 2,
+                            }}
+                        >
                             Детали по месяцам
                         </Typography>
-                        <TableContainer component={Paper} variant="outlined">
+                        <TableContainer 
+                            component={Paper} 
+                            variant="outlined" 
+                            sx={{ 
+                                borderRadius: '8px',
+                                border: '1px solid #E5E7EB',
+                                boxShadow: 'none',
+                            }}
+                        >
                             <Table size="small">
                                 <TableHead>
-                                    <TableRow sx={{ bgcolor: '#f8f9fa' }}>
-                                        <TableCell sx={{ fontWeight: 600 }}>Месяц</TableCell>
-                                        <TableCell align="center" sx={{ fontWeight: 600 }}>Всего</TableCell>
-                                        <TableCell align="center" sx={{ fontWeight: 600 }}>Проведено</TableCell>
-                                        <TableCell align="center" sx={{ fontWeight: 600 }}>Оплачено</TableCell>
-                                        <TableCell align="center" sx={{ fontWeight: 600 }}>Отменено</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 600 }}>Доход</TableCell>
+                                    <TableRow sx={{ backgroundColor: '#F9FAFB' }}>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>Месяц</TableCell>
+                                        <TableCell align="center" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>Всего</TableCell>
+                                        <TableCell align="center" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>Проведено</TableCell>
+                                        <TableCell align="center" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>Оплачено</TableCell>
+                                        <TableCell align="center" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>Отменено</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', borderBottom: '1px solid #E5E7EB' }}>Доход</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {stats.monthlyStats.slice().reverse().map((item, idx) => (
-                                        <TableRow key={idx}>
-                                            <TableCell>{item.fullMonth}</TableCell>
-                                            <TableCell align="center">{item.total}</TableCell>
-                                            <TableCell align="center">{item.completed}</TableCell>
-                                            <TableCell align="center">
+                                        <TableRow 
+                                            key={idx}
+                                            sx={{ 
+                                                '&:nth-of-type(even)': { backgroundColor: '#F9FAFB' },
+                                            }}
+                                        >
+                                            <TableCell sx={{ fontSize: '14px', color: '#1F2937', borderBottom: '1px solid #F3F4F6' }}>{item.fullMonth}</TableCell>
+                                            <TableCell align="center" sx={{ fontSize: '14px', color: '#1F2937', borderBottom: '1px solid #F3F4F6' }}>{item.total}</TableCell>
+                                            <TableCell align="center" sx={{ fontSize: '14px', color: '#1F2937', borderBottom: '1px solid #F3F4F6' }}>{item.completed}</TableCell>
+                                            <TableCell align="center" sx={{ borderBottom: '1px solid #F3F4F6' }}>
                                                 <Chip 
                                                     label={item.paid} 
                                                     size="small" 
-                                                    color={item.paid > 0 ? 'success' : 'default'}
-                                                    sx={{ minWidth: 40 }}
+                                                    sx={{ 
+                                                        backgroundColor: item.paid > 0 ? '#ECFDF5' : '#F3F4F6',
+                                                        color: item.paid > 0 ? '#065F46' : '#9CA3AF',
+                                                        fontWeight: 500,
+                                                        minWidth: 40,
+                                                        borderRadius: '100px',
+                                                        fontSize: '12px',
+                                                    }}
                                                 />
                                             </TableCell>
-                                            <TableCell align="center">
+                                            <TableCell align="center" sx={{ borderBottom: '1px solid #F3F4F6' }}>
                                                 <Chip 
                                                     label={item.cancelled} 
                                                     size="small" 
-                                                    color={item.cancelled > 0 ? 'error' : 'default'}
-                                                    sx={{ minWidth: 40 }}
+                                                    sx={{ 
+                                                        backgroundColor: item.cancelled > 0 ? '#FEF2F2' : '#F3F4F6',
+                                                        color: item.cancelled > 0 ? '#991B1B' : '#9CA3AF',
+                                                        fontWeight: 500,
+                                                        minWidth: 40,
+                                                        borderRadius: '100px',
+                                                        fontSize: '12px',
+                                                    }}
                                                 />
                                             </TableCell>
-                                            <TableCell align="right">
-                                                <Typography variant="body2" sx={{ fontWeight: 500, color: '#2E7D32' }}>
+                                            <TableCell align="right" sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                <Typography 
+                                                    sx={{ 
+                                                        fontWeight: 600, 
+                                                        color: '#10B981',
+                                                        fontSize: '14px',
+                                                    }}
+                                                >
                                                     {item.income.toLocaleString()} ₽
                                                 </Typography>
                                             </TableCell>
@@ -619,24 +928,61 @@ function LessonsArchive() {
                         </TableContainer>
                     </Paper>
                 ) : filteredLessons.length === 0 ? (
-                    <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>
-                        <CalendarIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 2 }} />
-                        <Typography variant="h6" color="textSecondary" gutterBottom>
-                            Нет записей в архиве
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                            {filterStatus !== 'all' || filterStudent !== 'all' || searchTerm 
-                                ? 'Попробуйте изменить параметры фильтрации'
-                                : 'Здесь будут отображаться проведённые, оплаченные и отменённые занятия'}
-                        </Typography>
+                    /* ========== ПУСТОЕ СОСТОЯНИЕ ========== */
+                    <Paper sx={{ borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                        <EmptyStateContainer>
+                            <EmptyStateIcon>
+                                <ArchiveIcon sx={{ fontSize: 40, color: '#9CA3AF' }} />
+                            </EmptyStateIcon>
+                            <Typography 
+                                sx={{ 
+                                    fontSize: '18px', 
+                                    fontWeight: 600, 
+                                    color: '#1F2937',
+                                    mb: 1,
+                                }}
+                            >
+                                Нет записей в архиве
+                            </Typography>
+                            <Typography 
+                                sx={{ 
+                                    fontSize: '14px', 
+                                    color: '#6B7280',
+                                    mb: 3,
+                                    maxWidth: 400,
+                                }}
+                            >
+                                {filterStatus !== 'all' || filterStudent !== 'all' || searchTerm 
+                                    ? 'Попробуйте изменить параметры фильтрации'
+                                    : 'Здесь будут отображаться проведённые, оплаченные и отменённые занятия'}
+                            </Typography>
+                            {(filterStatus !== 'all' || filterStudent !== 'all' || searchTerm) && (
+                                <Button 
+                                    onClick={handleResetFilters}
+                                    startIcon={<ClearIcon />}
+                                    sx={{
+                                        color: '#4F46E5',
+                                        textTransform: 'none',
+                                        fontSize: '14px',
+                                        fontWeight: 500,
+                                        borderRadius: '8px',
+                                        '&:hover': { backgroundColor: '#EEF2FF' },
+                                    }}
+                                >
+                                    Сбросить фильтры
+                                </Button>
+                            )}
+                        </EmptyStateContainer>
                     </Paper>
                 ) : (
+                    /* ========== ТАБЛИЦА ========== */
                     <>
-                        <TableContainer component={Paper} sx={{ borderRadius: 3, overflow: 'hidden' }}>
+                        <StyledTableContainer component={Paper} elevation={0}>
                             <Table stickyHeader>
                                 <TableHead>
-                                    <TableRow sx={{ bgcolor: '#f8f9fa' }}>
-                                        <TableCell sx={{ fontWeight: 600 }}>
+                                    <TableRow>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB', width: 40 }}></TableCell>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
                                             <TableSortLabel
                                                 active={orderBy === 'lessonDate'}
                                                 direction={orderBy === 'lessonDate' ? order : 'asc'}
@@ -645,7 +991,7 @@ function LessonsArchive() {
                                                 Дата
                                             </TableSortLabel>
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
                                             <TableSortLabel
                                                 active={orderBy === 'startTime'}
                                                 direction={orderBy === 'startTime' ? order : 'asc'}
@@ -654,7 +1000,7 @@ function LessonsArchive() {
                                                 Время
                                             </TableSortLabel>
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
                                             <TableSortLabel
                                                 active={orderBy === 'studentName'}
                                                 direction={orderBy === 'studentName' ? order : 'asc'}
@@ -663,83 +1009,154 @@ function LessonsArchive() {
                                                 Ученик
                                             </TableSortLabel>
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>Предмет</TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>Статус</TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>Заметки</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Предмет</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Статус</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Сумма</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {paginatedLessons.map((lesson) => {
                                         const student = students.find(s => s.id === lesson.student?.id);
                                         const course = courses.find(c => c.id === lesson.course?.id);
+                                        const rate = getStudentRateForTutor(student, user?.id) || 0;
+                                        const isExpanded = expandedRow === lesson.id;
+                                        
                                         return (
-                                            <TableRow 
-                                                key={lesson.id}
-                                                sx={{ '&:hover': { bgcolor: '#fafafa' }, transition: 'background-color 0.2s' }}
-                                            >
-                                                <TableCell>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                        <CalendarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                                        <Typography variant="body2">
-                                                            {formatDate(lesson.lessonDate)}
+                                            <React.Fragment key={lesson.id}>
+                                                <StyledTableRow onClick={() => handleRowClick(lesson.id)}>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6', width: 40 }}>
+                                                        <IconButton size="small" sx={{ color: '#9CA3AF' }}>
+                                                            {isExpanded ? <ChevronDownIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+                                                        </IconButton>
+                                                    </TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                            <CalendarIcon sx={{ fontSize: 14, color: '#9CA3AF' }} />
+                                                            <Typography sx={{ fontSize: '14px', color: '#1F2937' }}>
+                                                                {formatDate(lesson.lessonDate)}
+                                                            </Typography>
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Typography sx={{ fontSize: '14px', color: '#1F2937', fontFamily: 'monospace' }}>
+                                                            {lesson.startTime?.slice(0,5)} – {lesson.endTime?.slice(0,5)}
                                                         </Typography>
-                                                    </Box>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                                                        {lesson.startTime?.slice(0,5)} - {lesson.endTime?.slice(0,5)}
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                        <Avatar sx={{ width: 32, height: 32, bgcolor: '#ff6b6b', fontSize: 14 }}>
-                                                            {student?.fullName?.charAt(0) || 'У'}
-                                                        </Avatar>
-                                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                            {student?.fullName || 'Неизвестно'}
+                                                    </TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                            <Avatar 
+                                                                sx={{ 
+                                                                    width: 32, 
+                                                                    height: 32, 
+                                                                    bgcolor: getAvatarColor(student?.fullName || '?'),
+                                                                    fontSize: 12,
+                                                                    fontWeight: 600,
+                                                                }}
+                                                            >
+                                                                {getInitials(student?.fullName || '?')}
+                                                            </Avatar>
+                                                            <Typography sx={{ fontSize: '14px', fontWeight: 500, color: '#1F2937' }}>
+                                                                {student?.fullName || 'Неизвестно'}
+                                                            </Typography>
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Chip 
+                                                            icon={<SchoolIcon sx={{ fontSize: 12, color: '#6B7280 !important' }} />}
+                                                            label={course?.name || lesson.course?.name || '—'}
+                                                            size="small"
+                                                            variant="outlined"
+                                                            sx={{ 
+                                                                borderRadius: '6px',
+                                                                borderColor: '#E5E7EB',
+                                                                color: '#6B7280',
+                                                                fontSize: '12px',
+                                                            }}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                            {getStatusBadge(lesson.status)}
+                                                            {lesson.status === 'COMPLETED' && (
+                                                                <Tooltip title="Подтвердить оплату">
+                                                                    <IconButton 
+                                                                        size="small" 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleManualPayment(lesson);
+                                                                        }}
+                                                                        sx={{ 
+                                                                            color: '#10B981', 
+                                                                            '&:hover': { color: '#059669', bgcolor: '#ECFDF5' },
+                                                                            ml: 0.5,
+                                                                        }}
+                                                                    >
+                                                                        <CheckIcon sx={{ fontSize: 16 }} />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                            )}
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell align="right" sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '14px' }}>
+                                                            {rate.toLocaleString()} ₽
                                                         </Typography>
-                                                    </Box>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Chip 
-                                                        icon={<SchoolIcon sx={{ fontSize: 14 }} />}
-                                                        label={course?.name || lesson.course?.name || '—'}
-                                                        size="small"
-                                                        variant="outlined"
-                                                        sx={{ borderRadius: 1.5 }}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    {getStatusChip(lesson.status)}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {lesson.notes ? (
-                                                        <Button 
-                                                            size="small" 
-                                                            variant="text" 
-                                                            onClick={() => handleOpenNotes(lesson)}
-                                                            startIcon={<VisibilityIcon />}
-                                                            sx={{ textTransform: 'none' }}
-                                                        >
-                                                            Просмотреть
-                                                        </Button>
-                                                    ) : '-'}
-                                                </TableCell>
-                                            </TableRow>
+                                                    </TableCell>
+                                                </StyledTableRow>
+                                                
+                                                {/* Раскрытая строка с заметками */}
+                                                {isExpanded && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={7} sx={{ backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB', p: 0 }}>
+                                                            <Box sx={{ p: 3, display: 'flex', gap: 3 }}>
+                                                                <Box sx={{ flex: 1 }}>
+                                                                    <Typography sx={{ fontSize: '11px', fontWeight: 500, color: '#9CA3AF', textTransform: 'uppercase', mb: 1 }}>
+                                                                        Что делали на уроке
+                                                                    </Typography>
+                                                                    <Paper sx={{ p: 2, backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                                                                        <Typography sx={{ fontSize: '14px', color: '#374151' }}>
+                                                                            {lesson.notes || 'Нет заметок'}
+                                                                        </Typography>
+                                                                    </Paper>
+                                                                </Box>
+                                                                <Box sx={{ flex: 1 }}>
+                                                                    <Typography sx={{ fontSize: '11px', fontWeight: 500, color: '#9CA3AF', textTransform: 'uppercase', mb: 1 }}>
+                                                                        К следующему уроку
+                                                                    </Typography>
+                                                                    <Paper sx={{ p: 2, backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                                                                        <Typography sx={{ fontSize: '14px', color: '#374151' }}>
+                                                                            {lesson.nextLessonPlan || 'Нет плана'}
+                                                                        </Typography>
+                                                                    </Paper>
+                                                                </Box>
+                                                            </Box>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </React.Fragment>
                                         );
                                     })}
                                 </TableBody>
                             </Table>
-                        </TableContainer>
+                        </StyledTableContainer>
                         
                         {filteredLessons.length > rowsPerPage && (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
                                 <Pagination
                                     count={Math.ceil(filteredLessons.length / rowsPerPage)}
                                     page={page + 1}
                                     onChange={(e, newPage) => setPage(newPage - 1)}
-                                    color="primary"
                                     size="small"
+                                    sx={{
+                                        '& .MuiPaginationItem-root': {
+                                            borderRadius: '8px',
+                                            color: '#6B7280',
+                                        },
+                                        '& .Mui-selected': {
+                                            backgroundColor: '#4F46E5 !important',
+                                            color: '#FFFFFF',
+                                        },
+                                    }}
                                 />
                             </Box>
                         )}
@@ -747,34 +1164,84 @@ function LessonsArchive() {
                 )}
 
                 {/* Диалог заметок */}
-                <Dialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} maxWidth="sm" fullWidth>
-                    <DialogTitle>Заметки к занятию</DialogTitle>
-                    <DialogContent>
+                <StyledDialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} maxWidth="sm" fullWidth>
+                    <DialogTitle sx={{ 
+                        fontSize: '18px', 
+                        fontWeight: 600, 
+                        color: '#1F2937',
+                        px: 3, 
+                        pt: 3, 
+                        pb: 1,
+                    }}>
+                        Заметки к занятию
+                    </DialogTitle>
+                    <DialogContent sx={{ px: 3 }}>
                         <Box sx={{ pt: 2 }}>
-                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                                📝 Что делали на уроке:
+                            <Typography 
+                                sx={{ 
+                                    fontSize: '12px', 
+                                    fontWeight: 500, 
+                                    color: '#9CA3AF', 
+                                    textTransform: 'uppercase',
+                                    mb: 1,
+                                }}
+                            >
+                                Что делали на уроке
                             </Typography>
-                            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2, borderRadius: 2 }}>
-                                <Typography variant="body1">
+                            <Paper sx={{ 
+                                p: 2.5, 
+                                backgroundColor: '#F9FAFB', 
+                                mb: 3, 
+                                borderRadius: '8px',
+                                border: '1px solid #E5E7EB',
+                            }}>
+                                <Typography sx={{ fontSize: '14px', color: '#374151', lineHeight: 1.6 }}>
                                     {selectedLessonNotes.notes}
                                 </Typography>
                             </Paper>
                             
-                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                                🎯 Что сделать к следующему уроку:
+                            <Typography 
+                                sx={{ 
+                                    fontSize: '12px', 
+                                    fontWeight: 500, 
+                                    color: '#9CA3AF', 
+                                    textTransform: 'uppercase',
+                                    mb: 1,
+                                }}
+                            >
+                                Что сделать к следующему уроку
                             </Typography>
-                            <Paper sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 2 }}>
-                                <Typography variant="body1">
+                            <Paper sx={{ 
+                                p: 2.5, 
+                                backgroundColor: '#EEF2FF', 
+                                borderRadius: '8px',
+                                border: '1px solid #C7D2FE',
+                            }}>
+                                <Typography sx={{ fontSize: '14px', color: '#374151', lineHeight: 1.6 }}>
                                     {selectedLessonNotes.nextLessonPlan}
                                 </Typography>
                             </Paper>
                         </Box>
                     </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setOpenNotesDialog(false)}>Закрыть</Button>
+                    <DialogActions sx={{ px: 3, pb: 3 }}>
+                        <Button 
+                            onClick={() => setOpenNotesDialog(false)}
+                            sx={{
+                                backgroundColor: '#4F46E5',
+                                color: '#FFFFFF',
+                                borderRadius: '8px',
+                                px: 3,
+                                textTransform: 'none',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                '&:hover': { backgroundColor: '#4338CA' },
+                            }}
+                        >
+                            Закрыть
+                        </Button>
                     </DialogActions>
-                </Dialog>
-            </Box>
+                </StyledDialog>
+            </PageContainer>
         </LocalizationProvider>
     );
 }

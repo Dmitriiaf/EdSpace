@@ -31,19 +31,23 @@ public class BoardSessionService {
     private LessonRepository lessonRepository;
 
     @Transactional
-    public BoardSession createBoard(Long tutorId, Long studentId, Long lessonId, String title) {
+    public BoardSession createBoard(Long tutorId, Long studentId, Long lessonId, String title, String url) {
         String roomName = "edspace-board-" + UUID.randomUUID().toString().substring(0, 8);
 
         Tutor tutor = tutorRepository.findById(tutorId)
                 .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
-        Student student = studentRepository.findById(studentId)
-                .orElseThrow(() -> new RuntimeException("Ученик не найден"));
+        Student student = null;
+        if (studentId != null) {
+            student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Ученик не найден"));
+        }
 
         BoardSession.BoardSessionBuilder builder = BoardSession.builder()
                 .roomName(roomName)
                 .tutor(tutor)
                 .student(student)
                 .title(title)
+                .url(url)
                 .status("ACTIVE")
                 .createdAt(LocalDateTime.now());
 
@@ -64,9 +68,9 @@ public class BoardSessionService {
             Map<String, Object> map = new HashMap<>();
             map.put("id", b.getId());
             map.put("roomName", b.getRoomName());
-            map.put("roomUrl", "https://excalidraw.com/#room=" + b.getRoomName());
+            map.put("url", b.getUrl());
             map.put("title", b.getTitle());
-            map.put("studentName", b.getStudent() != null ? b.getStudent().getFullName() : "Ученик");
+            map.put("studentName", b.getStudent() != null ? b.getStudent().getFullName() : "");
             map.put("lessonId", b.getLesson() != null ? b.getLesson().getId() : null);
             map.put("createdAt", b.getCreatedAt().toString());
             result.add(map);
@@ -82,9 +86,9 @@ public class BoardSessionService {
             Map<String, Object> map = new HashMap<>();
             map.put("id", b.getId());
             map.put("roomName", b.getRoomName());
-            map.put("roomUrl", "https://excalidraw.com/#room=" + b.getRoomName());
+            map.put("url", b.getUrl());
             map.put("title", b.getTitle());
-            map.put("tutorName", b.getTutor() != null ? b.getTutor().getFullName() : "Репетитор");
+            map.put("tutorName", b.getTutor() != null ? b.getTutor().getFullName() : "");
             map.put("lessonId", b.getLesson() != null ? b.getLesson().getId() : null);
             map.put("createdAt", b.getCreatedAt().toString());
             result.add(map);
@@ -118,5 +122,10 @@ public class BoardSessionService {
 
     public BoardSession getByLessonId(Long lessonId) {
         return boardSessionRepository.findByLessonIdAndStatus(lessonId, "ACTIVE").orElse(null);
+    }
+
+    @Transactional
+    public BoardSession save(BoardSession board) {
+        return boardSessionRepository.save(board);
     }
 }

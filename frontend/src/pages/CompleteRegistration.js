@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Container, Box, TextField, Button, Typography,
     Paper, Alert, CircularProgress, InputAdornment,
-    IconButton, Avatar
+    IconButton, Avatar, Stack
 } from '@mui/material';
 import {
     Person as PersonIcon,
@@ -15,7 +15,6 @@ import {
     VisibilityOff as VisibilityOffIcon,
     School as SchoolIcon
 } from '@mui/icons-material';
-// ✅ Правильный импорт
 import axiosInstance from '../api/axiosConfig';
 
 function CompleteRegistration() {
@@ -28,6 +27,8 @@ function CompleteRegistration() {
     const [showPassword, setShowPassword] = useState(false);
     const [invitationData, setInvitationData] = useState(null);
     
+    const [fullName, setFullName] = useState('');
+    const [email, setEmail] = useState('');
     const [formData, setFormData] = useState({
         phone: '',
         birthday: '',
@@ -48,9 +49,15 @@ function CompleteRegistration() {
 
     const validateToken = async () => {
         try {
-            // ✅ Исправлено: добавлен /api/ и axiosInstance
             const response = await axiosInstance.get(`/invitations/validate?token=${token}`);
             setInvitationData(response.data);
+            // Если email уже есть в приглашении — заполняем
+            if (response.data.email && response.data.email !== 'pending') {
+                setEmail(response.data.email);
+            }
+            if (response.data.studentName) {
+                setFullName(response.data.studentName);
+            }
             setError('');
         } catch (err) {
             setError(err.response?.data?.error || 'Недействительное приглашение');
@@ -66,11 +73,18 @@ function CompleteRegistration() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
+        if (!fullName.trim()) {
+            setError('Введите ваше имя');
+            return;
+        }
+        if (!email.trim()) {
+            setError('Введите email');
+            return;
+        }
         if (formData.password !== formData.confirmPassword) {
             setError('Пароли не совпадают');
             return;
         }
-
         if (formData.password.length < 6) {
             setError('Пароль должен быть не менее 6 символов');
             return;
@@ -80,9 +94,10 @@ function CompleteRegistration() {
         setError('');
 
         try {
-            // ✅ Исправлено: добавлен /api/ и axiosInstance
             await axiosInstance.post('/invitations/complete-student', {
                 token,
+                fullName: fullName,
+                email: email,
                 phone: formData.phone,
                 birthday: formData.birthday,
                 password: formData.password
@@ -112,14 +127,14 @@ function CompleteRegistration() {
     if (success) {
         return (
             <Container maxWidth="sm">
-                <Paper elevation={3} sx={{ p: 5, mt: 8, textAlign: 'center', borderRadius: 4 }}>
+                <Paper elevation={0} sx={{ p: 5, mt: 8, textAlign: 'center', borderRadius: 4, border: '1px solid #E5E7EB' }}>
                     <Avatar sx={{ bgcolor: '#10B981', width: 80, height: 80, mx: 'auto', mb: 2 }}>
                         <SchoolIcon sx={{ fontSize: 48 }} />
                     </Avatar>
                     <Typography variant="h4" sx={{ fontWeight: 600, color: '#10B981', mb: 2 }}>
                         🎉 Готово!
                     </Typography>
-                    <Typography variant="body1" sx={{ mb: 3 }}>
+                    <Typography variant="body1" sx={{ mb: 3, color: '#6B7280' }}>
                         Регистрация успешно завершена! Сейчас вы будете перенаправлены на страницу входа.
                     </Typography>
                     <CircularProgress size={24} />
@@ -130,9 +145,9 @@ function CompleteRegistration() {
 
     return (
         <Container maxWidth="sm">
-            <Paper elevation={3} sx={{ p: 4, mt: 4, borderRadius: 4 }}>
+            <Paper elevation={0} sx={{ p: 4, mt: 4, borderRadius: 4, border: '1px solid #E5E7EB' }}>
                 <Box sx={{ textAlign: 'center', mb: 4 }}>
-                    <Avatar sx={{ bgcolor: '#6366F1', width: 70, height: 70, mx: 'auto', mb: 2 }}>
+                    <Avatar sx={{ bgcolor: '#4F46E5', width: 70, height: 70, mx: 'auto', mb: 2 }}>
                         <SchoolIcon sx={{ fontSize: 40 }} />
                     </Avatar>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1F2937' }}>
@@ -146,122 +161,146 @@ function CompleteRegistration() {
                 </Box>
 
                 {error && (
-                    <Alert severity="error" sx={{ mb: 3 }}>
+                    <Alert severity="error" sx={{ mb: 3, borderRadius: '8px' }}>
                         {error}
                     </Alert>
                 )}
 
-                <Box sx={{ bgcolor: '#F3F4F6', p: 2, borderRadius: 2, mb: 3 }}>
-                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <EmailIcon sx={{ fontSize: 18, color: '#6366F1' }} />
-                        <strong>{invitationData?.email}</strong>
-                    </Typography>
-                    {invitationData?.studentName && (
-                        <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                            <PersonIcon sx={{ fontSize: 18, color: '#6366F1' }} />
-                            {invitationData.studentName}
-                        </Typography>
-                    )}
-                </Box>
-
                 <form onSubmit={handleSubmit}>
-                    <TextField
-                        fullWidth
-                        label="Телефон (необязательно)"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        margin="normal"
-                        placeholder="+7 (999) 123-45-67"
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <PhoneIcon sx={{ color: '#9CA3AF' }} />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
+                    <Stack spacing={2}>
+                        <TextField
+                            fullWidth
+                            label="Ваше имя *"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            required
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <PersonIcon sx={{ color: '#9CA3AF' }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                        />
 
-                    <TextField
-                        fullWidth
-                        label="Дата рождения (необязательно)"
-                        name="birthday"
-                        type="date"
-                        value={formData.birthday}
-                        onChange={handleChange}
-                        margin="normal"
-                        InputLabelProps={{ shrink: true }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <CakeIcon sx={{ color: '#9CA3AF' }} />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
+                        <TextField
+                            fullWidth
+                            label="Email *"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            disabled={!!invitationData?.email && invitationData.email !== 'pending'}
+                            helperText={invitationData?.email && invitationData.email !== 'pending' ? 'Email из приглашения' : 'Введите ваш email'}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <EmailIcon sx={{ color: '#9CA3AF' }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                        />
 
-                    <TextField
-                        fullWidth
-                        label="Придумайте пароль"
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={formData.password}
-                        onChange={handleChange}
-                        margin="normal"
-                        required
-                        helperText="Минимум 6 символов"
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <LockIcon sx={{ color: '#9CA3AF' }} />
-                                </InputAdornment>
-                            ),
-                            endAdornment: (
-                                <InputAdornment position="end">
-                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                                        {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                                    </IconButton>
-                                </InputAdornment>
-                            )
-                        }}
-                    />
+                        <TextField
+                            fullWidth
+                            label="Телефон (необязательно)"
+                            name="phone"
+                            value={formData.phone}
+                            onChange={handleChange}
+                            placeholder="+7 (999) 123-45-67"
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <PhoneIcon sx={{ color: '#9CA3AF' }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                        />
 
-                    <TextField
-                        fullWidth
-                        label="Подтвердите пароль"
-                        name="confirmPassword"
-                        type={showPassword ? 'text' : 'password'}
-                        value={formData.confirmPassword}
-                        onChange={handleChange}
-                        margin="normal"
-                        required
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <LockIcon sx={{ color: '#9CA3AF' }} />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
+                        <TextField
+                            fullWidth
+                            label="Дата рождения (необязательно)"
+                            name="birthday"
+                            type="date"
+                            value={formData.birthday}
+                            onChange={handleChange}
+                            InputLabelProps={{ shrink: true }}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <CakeIcon sx={{ color: '#9CA3AF' }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                        />
 
-                    <Button
-                        type="submit"
-                        fullWidth
-                        variant="contained"
-                        disabled={submitting}
-                        sx={{
-                            mt: 3,
-                            py: 1.5,
-                            bgcolor: '#6366F1',
-                            borderRadius: 2,
-                            textTransform: 'none',
-                            fontSize: '1rem',
-                            fontWeight: 600,
-                            '&:hover': { bgcolor: '#4F46E5' }
-                        }}
-                    >
-                        {submitting ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Завершить регистрацию'}
-                    </Button>
+                        <TextField
+                            fullWidth
+                            label="Придумайте пароль *"
+                            name="password"
+                            type={showPassword ? 'text' : 'password'}
+                            value={formData.password}
+                            onChange={handleChange}
+                            required
+                            helperText="Минимум 6 символов"
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <LockIcon sx={{ color: '#9CA3AF' }} />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                                            {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                                        </IconButton>
+                                    </InputAdornment>
+                                )
+                            }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                        />
+
+                        <TextField
+                            fullWidth
+                            label="Подтвердите пароль *"
+                            name="confirmPassword"
+                            type="password"
+                            value={formData.confirmPassword}
+                            onChange={handleChange}
+                            required
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <LockIcon sx={{ color: '#9CA3AF' }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                        />
+
+                        <Button
+                            type="submit"
+                            fullWidth
+                            variant="contained"
+                            disabled={submitting}
+                            sx={{
+                                mt: 2,
+                                py: 1.8,
+                                bgcolor: '#4F46E5',
+                                borderRadius: '12px',
+                                textTransform: 'none',
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                '&:hover': { bgcolor: '#4338CA' }
+                            }}
+                        >
+                            {submitting ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Завершить регистрацию'}
+                        </Button>
+                    </Stack>
                 </form>
             </Paper>
         </Container>

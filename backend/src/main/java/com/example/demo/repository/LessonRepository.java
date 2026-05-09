@@ -37,6 +37,11 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
             @Param("startTo") LocalTime startTo);
 
 
+    List<Lesson> findByStudentIdAndLessonDateBetween(Long studentId, LocalDate start, LocalDate end);
+
+    List<Lesson> findByTutorIdAndLessonDateBetween(Long tutorId, LocalDate start, LocalDate end);
+
+    List<Lesson> findByTutorIdAndLessonDate(Long tutorId, LocalDate lessonDate);
 
     @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND l.lessonDate >= :today AND l.status IN ('SCHEDULED', 'RESCHEDULED') ORDER BY l.lessonDate ASC, l.startTime ASC")
     List<Lesson> findUpcomingLessons(@Param("tutorId") Long tutorId, @Param("today") LocalDate today);

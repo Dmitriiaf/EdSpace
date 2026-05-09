@@ -43,6 +43,10 @@ public class LessonService {
     @Autowired
     private SubscriptionRepository subscriptionRepository;
 
+    public List<Lesson> getLessonsByTutorAndDate(Long tutorId, LocalDate date) {
+        return lessonRepository.findByTutorIdAndLessonDate(tutorId, date);
+    }
+
     public Student getStudentById(Long studentId) {
         return studentRepository.findByIdWithRates(studentId)
                 .orElseThrow(() -> new NotFoundException("Ученик", "id", studentId));
@@ -160,6 +164,28 @@ public class LessonService {
             lesson.setStatus("PAID");
             lesson.setPaidAt(LocalDateTime.now());
             log.info("Занятие по абонементу автоматически оплачено");
+
+            // ✅ АВТОСПИСАНИЕ ИЗ АБОНЕМЕНТА
+            subscriptionRepository
+                    .findByStudentIdAndTutorIdAndStatus(
+                            lesson.getStudent().getId(),
+                            lesson.getTutor().getId(),
+                            "ACTIVE"
+                    )
+                    .or(() -> subscriptionRepository
+                            .findByStudentIdAndTutorIdAndStatus(
+                                    lesson.getStudent().getId(),
+                                    lesson.getTutor().getId(),
+                                    "PAID"
+                            )
+                    )
+                    .ifPresent(sub -> {
+                        int used = sub.getLessonsUsed() != null ? sub.getLessonsUsed() + 1 : 1;
+                        sub.setLessonsUsed(used);
+                        subscriptionRepository.save(sub);
+                        log.info("✅ Списано занятие из абонемента {}: использовано {}/{}",
+                                sub.getId(), used, sub.getLessonsCount());
+                    });
         } else {
             lesson.setStatus("COMPLETED");
             log.info("Занятие завершено, ожидает оплаты");
@@ -224,13 +250,35 @@ public class LessonService {
         if (isSubscription) {
             originalLesson.setStatus("PAID");
             originalLesson.setPaidAt(LocalDateTime.now());
+
+            // ✅ АВТОСПИСАНИЕ ИЗ АБОНЕМЕНТА
+            subscriptionRepository
+                    .findByStudentIdAndTutorIdAndStatus(
+                            originalLesson.getStudent().getId(),
+                            originalLesson.getTutor().getId(),
+                            "ACTIVE"
+                    )
+                    .or(() -> subscriptionRepository
+                            .findByStudentIdAndTutorIdAndStatus(
+                                    originalLesson.getStudent().getId(),
+                                    originalLesson.getTutor().getId(),
+                                    "PAID"
+                            )
+                    )
+                    .ifPresent(sub -> {
+                        int used = sub.getLessonsUsed() != null ? sub.getLessonsUsed() + 1 : 1;
+                        sub.setLessonsUsed(used);
+                        subscriptionRepository.save(sub);
+                        log.info("✅ Списано занятие из абонемента {}: использовано {}/{}",
+                                sub.getId(), used, sub.getLessonsCount());
+                    });
         } else {
             originalLesson.setStatus("COMPLETED");
         }
 
         originalLesson.setCompletedAt(LocalDateTime.now());
 
-        // ✅ УДАЛЯЕМ перенесённый урок
+        // Удаляем перенесённый урок
         lessonRepository.delete(rescheduledLesson);
 
         // Сохраняем оригинальный
@@ -374,6 +422,10 @@ public class LessonService {
         }
 
         return lessonRepository.save(lesson);
+    }
+
+    public List<Lesson> getLessonsByTutorAndDateRange(Long tutorId, LocalDate start, LocalDate end) {
+        return lessonRepository.findByTutorIdAndLessonDateBetween(tutorId, start, end);
     }
 
     @Transactional

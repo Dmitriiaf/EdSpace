@@ -1,28 +1,116 @@
-// ========== frontend/src/components/WeekCalendar.js (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== frontend/src/components/WeekCalendar.js (РЕДИЗАЙН v2) ==========
 import React, { useState } from 'react';
 import {
     Box, Typography, Paper, Chip, Menu, MenuItem, Dialog,
     DialogTitle, DialogContent, DialogActions, Button, TextField,
-    FormControl, InputLabel, Select, Alert
+    FormControl, InputLabel, Select, Alert, IconButton
 } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import { getLocalHoursMinutes, formatLessonTime } from '../utils/timezone';
-import { Edit, Delete, Work as WorkIcon } from '@mui/icons-material';
+import { Edit, Delete, Work as WorkIcon, Add as AddIcon } from '@mui/icons-material';
 import { format, addMinutes, parse } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import axiosInstance from '../api/axiosConfig';
 import { replaceCancelledWithResurrect } from '../services/api';
 
+// ========== КОНСТАНТЫ ==========
 const HOUR_HEIGHT = 60;
 const MIN_STEP = 15;
 
+// ✅ Исправленные цвета статусов
 const STATUS_COLORS = {
-    SCHEDULED: { bg: '#FEF7E0', text: '#B45F06', label: 'Запланировано' },
-    COMPLETED: { bg: '#FEF3E0', text: '#C4450C', label: 'Проведено' },
-    PAID: { bg: '#E8F5E9', text: '#1B5E20', label: 'Оплачено' },
-    CANCELLED: { bg: '#FEF2F2', text: '#C62828', label: 'Отменено' },
-    RESCHEDULED: { bg: '#E8F0FE', text: '#1A73E8', label: 'Перенесено' }
+    SCHEDULED:      { bg: '#F3F4F6', text: '#374151', dot: '#9CA3AF', label: 'Не проведено' },
+    COMPLETED:      { bg: '#FFFBEB', text: '#92400E', dot: '#F59E0B', label: 'Проведено (ждёт оплаты)' },
+    PAID:           { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'Оплачено' },
+    CONFIRMED:      { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'Подтверждено' },
+    RESCHEDULED:    { bg: '#EFF6FF', text: '#1E40AF', dot: '#3B82F6', label: 'Перенесено' },
+    CANCELLED:      { bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444', label: 'Отменено' },
+    IN_PROGRESS:    { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'В процессе' },
 };
 
+// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+const CalendarPaper = styled(Paper)({
+    borderRadius: '12px',
+    overflow: 'hidden',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
+});
+
+const DayHeader = styled(Box)(({ isToday }) => ({
+    flex: 1,
+    textAlign: 'center',
+    padding: '10px 8px',
+    borderLeft: '1px solid #F3F4F6',
+    backgroundColor: isToday ? '#EEF2FF' : '#F9FAFB',
+}));
+
+const TimeLabel = styled(Box)({
+    width: 56,
+    flexShrink: 0,
+    paddingRight: 8,
+    textAlign: 'right',
+    fontSize: 11,
+    color: '#9CA3AF',
+    position: 'relative',
+});
+
+const LessonBlock = styled(Box)(({ statusStyle }) => ({
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    zIndex: 5,
+    backgroundColor: statusStyle.bg,
+    borderLeft: `3px solid ${statusStyle.dot}`,
+    borderRadius: '6px',
+    padding: '4px 6px',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+    transition: 'all 0.15s ease',
+    '&:hover': { 
+        opacity: 0.92, 
+        zIndex: 10,
+        boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+    },
+}));
+
+const HoverSlot = styled(Box)({
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    backgroundColor: 'rgba(79, 70, 229, 0.12)',
+    border: '1px solid rgba(79, 70, 229, 0.4)',
+    borderRadius: '6px',
+    pointerEvents: 'none',
+    zIndex: 20,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+});
+
+const StyledDialog = styled(Dialog)({
+    '& .MuiDialog-paper': {
+        borderRadius: '16px',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.08)',
+    },
+});
+
+const StyledMenu = styled(Menu)({
+    '& .MuiPaper-root': {
+        borderRadius: '10px',
+        boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+        minWidth: 200,
+    },
+});
+
+const StyledButton = styled(Button)({
+    borderRadius: '8px',
+    textTransform: 'none',
+    fontSize: '14px',
+    fontWeight: 500,
+});
+
+// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, onRefresh, onShowSnackbar, onOpenResurrect }) {
     const [anchorEl, setAnchorEl] = useState(null);
     const [selectedLesson, setSelectedLesson] = useState(null);
@@ -32,7 +120,6 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
     const [editForm, setEditForm] = useState({ startTime: '', duration: 60, courseId: '' });
     const [hoverSlot, setHoverSlot] = useState(null);
 
-    // Состояния для F15
     const [openReplaceDialog, setOpenReplaceDialog] = useState(false);
     const [cancelledLesson, setCancelledLesson] = useState(null);
     const [selectedDebtorId, setSelectedDebtorId] = useState('');
@@ -43,11 +130,9 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
         timeSlots.push(`${h.toString().padStart(2, '0')}:30`);
     }
 
-    // ✅ Без смещения — блок начинается ровно на линии времени
     const timeToPosition = (lesson) => {
         if (!lesson) return 0;
         const { hours, minutes } = getLocalHoursMinutes(lesson.lessonDate, lesson.startTime);
-        // Без смещения — верхняя граница блока = линия времени
         return (hours - 8) * HOUR_HEIGHT + (minutes / 60) * HOUR_HEIGHT;
     };
 
@@ -65,7 +150,6 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
         return lessons.filter(l => l.lessonDate === dateStr);
     };
 
-    // ✅ Разрешаем стыковку: конец одного = начало другого
     const checkTimeConflict = (date, startTime, duration, excludeLessonId = null) => {
         const dayLessons = getLessonsForDate(date);
         const newStart = parse(startTime, 'HH:mm', new Date());
@@ -79,6 +163,7 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
         });
     };
 
+    // ========== ВСЕ ОБРАБОТЧИКИ БЕЗ ИЗМЕНЕНИЙ ==========
     const handleSlotClick = (date, e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const y = e.clientY - rect.top;
@@ -92,7 +177,6 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
             onShowSnackbar('❌ Время занято', 'error');
             return;
         }
-
         setCreateForm({ date: dateStr, startTime: roundedTime, duration: 60, studentId: '', courseId: '' });
         setOpenCreateDialog(true);
     };
@@ -122,65 +206,49 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
             await axiosInstance.delete(`/lessons/${selectedLesson.id}`);
             onShowSnackbar('Занятие удалено', 'success');
             onRefresh();
-        } catch (err) {
-            onShowSnackbar('Ошибка', 'error');
-        }
+        } catch (err) { onShowSnackbar('Ошибка', 'error'); }
         setAnchorEl(null);
     };
 
     const handleSaveCreate = async () => {
-        if (!createForm.studentId) {
-            onShowSnackbar('Выберите ученика', 'error');
-            return;
-        }
+        if (!createForm.studentId) { onShowSnackbar('Выберите ученика', 'error'); return; }
         const lessonDate = parse(createForm.date, 'yyyy-MM-dd', new Date());
         if (checkTimeConflict(lessonDate, createForm.startTime, createForm.duration)) {
-            onShowSnackbar('❌ Время занято', 'error');
-            return;
+            onShowSnackbar('❌ Время занято', 'error'); return;
         }
         try {
             const endTime = addMinutes(parse(createForm.startTime, 'HH:mm', new Date()), createForm.duration);
             await axiosInstance.post('/lessons', {
-                tutorId: user.id,
-                studentId: createForm.studentId,
-                lessonDate: createForm.date,
-                startTime: createForm.startTime + ':00',
-                endTime: format(endTime, 'HH:mm:ss'),
-                duration: createForm.duration,
+                tutorId: user.id, studentId: createForm.studentId,
+                lessonDate: createForm.date, startTime: createForm.startTime + ':00',
+                endTime: format(endTime, 'HH:mm:ss'), duration: createForm.duration,
                 courseId: createForm.courseId || null
             });
             onShowSnackbar('✅ Занятие создано', 'success');
             setOpenCreateDialog(false);
             onRefresh();
-        } catch (err) {
-            onShowSnackbar('Ошибка', 'error');
-        }
+        } catch (err) { onShowSnackbar('Ошибка', 'error'); }
     };
 
     const handleSaveEdit = async () => {
         if (!selectedLesson) return;
         const lessonDate = parse(selectedLesson.lessonDate, 'yyyy-MM-dd', new Date());
         if (checkTimeConflict(lessonDate, editForm.startTime, editForm.duration, selectedLesson.id)) {
-            onShowSnackbar('❌ Время занято', 'error');
-            return;
+            onShowSnackbar('❌ Время занято', 'error'); return;
         }
         try {
             const endTime = addMinutes(parse(editForm.startTime, 'HH:mm', new Date()), editForm.duration);
             await axiosInstance.put(`/lessons/${selectedLesson.id}`, {
                 startTime: editForm.startTime + ':00',
-                endTime: format(endTime, 'HH:mm:ss'),
-                duration: editForm.duration,
+                endTime: format(endTime, 'HH:mm:ss'), duration: editForm.duration,
                 courseId: editForm.courseId || null
             });
             onShowSnackbar('Занятие обновлено', 'success');
             setOpenEditDialog(false);
             onRefresh();
-        } catch (err) {
-            onShowSnackbar('Ошибка', 'error');
-        }
+        } catch (err) { onShowSnackbar('Ошибка', 'error'); }
     };
 
-    // Обработчики для F15
     const handleReplaceClick = (lesson) => {
         setCancelledLesson(lesson);
         setSelectedDebtorId('');
@@ -190,7 +258,6 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
 
     const handleConfirmReplace = async () => {
         if (!cancelledLesson || !selectedDebtorId) return;
-
         try {
             await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId));
             onShowSnackbar('✅ Урок заменён на отработку долга', 'success');
@@ -202,42 +269,64 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
         }
     };
 
+    // ========== РЕНДЕР ==========
     return (
         <>
-            <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
-                <Box sx={{ display: 'flex', borderBottom: '1px solid #e0e0e0', bgcolor: '#f8f9fa' }}>
-                    <Box sx={{ width: 60, p: 1 }} />
-                    {weekDates.map((date, idx) => (
-                        <Box key={idx} sx={{ flex: 1, textAlign: 'center', p: 1, borderLeft: '1px solid #e0e0e0' }}>
-                            <Typography variant="body2" fontWeight={600}>
-                                {format(date, 'EEEEEE', { locale: ru }).toUpperCase()}
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                {format(date, 'd MMM', { locale: ru })}
-                            </Typography>
-                        </Box>
-                    ))}
+            <CalendarPaper elevation={0}>
+                {/* Заголовки дней */}
+                <Box sx={{ display: 'flex', borderBottom: '1px solid #E5E7EB' }}>
+                    <Box sx={{ width: 56, p: 1 }} />
+                    {weekDates.map((date, idx) => {
+                        const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                        return (
+                            <DayHeader key={idx} isToday={isToday}>
+                                <Typography sx={{ fontWeight: 600, fontSize: '13px', color: '#1F2937' }}>
+                                    {format(date, 'EEEEEE', { locale: ru }).toUpperCase()}
+                                </Typography>
+                                <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
+                                    {format(date, 'd MMM', { locale: ru })}
+                                </Typography>
+                            </DayHeader>
+                        );
+                    })}
                 </Box>
 
+                {/* Сетка времени */}
                 <Box sx={{ display: 'flex', position: 'relative' }}>
-                    <Box sx={{ width: 60, flexShrink: 0 }}>
+                    {/* Шкала времени */}
+                    <Box sx={{ width: 56, flexShrink: 0 }}>
                         {timeSlots.map((time, idx) => (
-                            <Box key={time} sx={{ height: HOUR_HEIGHT / 2, borderBottom: idx % 2 === 0 ? '1px solid #ccc' : '1px solid #eee', pr: 1, textAlign: 'right', fontSize: 11, color: '#666', position: 'relative' }}>
+                            <TimeLabel key={time} sx={{ 
+                                height: HOUR_HEIGHT / 2, 
+                                borderBottom: idx % 2 === 0 ? '1px solid #E5E7EB' : '1px solid #F3F4F6',
+                            }}>
                                 {idx % 2 === 0 && (
-                                    <Typography variant="caption" sx={{ position: 'absolute', top: -8, right: 4, fontWeight: 500 }}>
+                                    <Typography variant="caption" sx={{ 
+                                        position: 'absolute', top: -8, right: 4, 
+                                        fontWeight: 500, color: '#9CA3AF', fontSize: '10px',
+                                    }}>
                                         {time}
                                     </Typography>
                                 )}
-                            </Box>
+                            </TimeLabel>
                         ))}
                     </Box>
 
+                    {/* Колонки дней */}
                     {weekDates.map((date, dayIdx) => {
                         const dayLessons = getLessonsForDate(date);
+                        const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                        
                         return (
                             <Box
                                 key={dayIdx}
-                                sx={{ flex: 1, position: 'relative', borderLeft: '1px solid #e0e0e0', minHeight: timeSlots.length * (HOUR_HEIGHT / 2), cursor: 'pointer' }}
+                                sx={{ 
+                                    flex: 1, position: 'relative', 
+                                    borderLeft: '1px solid #F3F4F6', 
+                                    minHeight: timeSlots.length * (HOUR_HEIGHT / 2), 
+                                    cursor: 'pointer',
+                                    backgroundColor: isToday ? '#FAFBFF' : '#FFFFFF',
+                                }}
                                 onClick={(e) => handleSlotClick(date, e)}
                                 onMouseMove={(e) => {
                                     const rect = e.currentTarget.getBoundingClientRect();
@@ -250,11 +339,15 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
                                 }}
                                 onMouseLeave={() => setHoverSlot(null)}
                             >
+                                {/* Фоновые линии */}
                                 {timeSlots.map((_, idx) => (
-                                    <Box key={idx} sx={{ height: HOUR_HEIGHT / 2, borderBottom: idx % 2 === 0 ? '1px solid #e0e0e0' : '1px solid #f5f5f5' }} />
+                                    <Box key={idx} sx={{ 
+                                        height: HOUR_HEIGHT / 2, 
+                                        borderBottom: idx % 2 === 0 ? '1px solid #E5E7EB' : '1px solid #F9FAFB',
+                                    }} />
                                 ))}
 
-                                {/* ✅ hoverSlot с временем и без смещения */}
+                                {/* Ховер-слот */}
                                 {hoverSlot && format(hoverSlot.date, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') && (() => {
                                     const [h, m] = hoverSlot.startTime.split(':').map(Number);
                                     const hourTop = (h - 8) * HOUR_HEIGHT;
@@ -262,166 +355,178 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
                                     const top = hourTop + minuteOffset - HOUR_HEIGHT / 4;
                                     const displayTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
                                     return (
-                                        <Box
-                                            sx={{
-                                                position: 'absolute',
-                                                top: top,
-                                                left: 4,
-                                                right: 4,
-                                                height: HOUR_HEIGHT / 2,
-                                                bgcolor: 'rgba(25, 118, 210, 0.15)',
-                                                border: '1px solid #1976d2',
-                                                borderRadius: 1,
-                                                pointerEvents: 'none',
-                                                zIndex: 20,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                            }}
-                                        >
-                                            <Typography
-                                                variant="caption"
-                                                sx={{
-                                                    color: '#1976d2',
-                                                    fontWeight: 600,
-                                                    fontSize: '0.75rem',
-                                                }}
-                                            >
-                                                {displayTime}
+                                        <HoverSlot sx={{ top, height: HOUR_HEIGHT / 2 }}>
+                                            <Typography sx={{ 
+                                                color: '#4F46E5', fontWeight: 600, fontSize: '12px',
+                                            }}>
+                                                + {displayTime}
                                             </Typography>
-                                        </Box>
+                                        </HoverSlot>
                                     );
                                 })()}
 
+                                {/* Блоки занятий */}
                                 {dayLessons.map(lesson => {
                                     const statusStyle = STATUS_COLORS[lesson.status] || STATUS_COLORS.SCHEDULED;
                                     const top = timeToPosition(lesson);
                                     const height = ((lesson.duration || 60) / 60) * HOUR_HEIGHT;
                                     return (
-                                        <Box
+                                        <LessonBlock
                                             key={lesson.id}
-                                            sx={{
-                                                position: 'absolute', top, left: 4, right: 4, height, zIndex: 5,
-                                                bgcolor: statusStyle.bg, borderLeft: `4px solid ${statusStyle.text}`,
-                                                borderRadius: 1, p: 0.5, overflow: 'hidden', cursor: 'pointer',
-                                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)', '&:hover': { opacity: 0.9, zIndex: 10 }
-                                            }}
+                                            statusStyle={statusStyle}
+                                            sx={{ top, height }}
                                             onClick={(e) => handleLessonClick(e, lesson)}
                                         >
-                                            <Typography variant="caption" fontWeight={600} display="block">{lesson.student?.fullName}</Typography>
-                                            <Typography variant="caption" display="block" fontSize={10}>
+                                            <Typography sx={{ 
+                                                fontWeight: 600, fontSize: '11px', color: statusStyle.text,
+                                                lineHeight: 1.2,
+                                            }}>
+                                                {lesson.student?.fullName}
+                                            </Typography>
+                                            <Typography sx={{ fontSize: '10px', color: '#6B7280' }}>
                                                 {formatLessonTime(lesson.lessonDate, lesson.startTime)} ({lesson.duration || 60} мин)
                                             </Typography>
-                                            {lesson.course && <Typography variant="caption" display="block" fontSize={10} color="textSecondary">{lesson.course.name}</Typography>}
-                                        </Box>
+                                            {lesson.course && (
+                                                <Typography sx={{ fontSize: '10px', color: '#9CA3AF' }}>
+                                                    {lesson.course.name}
+                                                </Typography>
+                                            )}
+                                        </LessonBlock>
                                     );
                                 })}
                             </Box>
                         );
                     })}
                 </Box>
-            </Paper>
+            </CalendarPaper>
 
-            <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+            {/* Меню при клике на занятие */}
+            <StyledMenu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
                 {selectedLesson?.status === 'CANCELLED' ? (
-                    <MenuItem onClick={() => handleReplaceClick(selectedLesson)}>
-                        <WorkIcon sx={{ mr: 1, fontSize: 18, color: 'success.main' }} />
-                        🔄 Заменить на отработку долга
+                    <MenuItem onClick={() => handleReplaceClick(selectedLesson)} sx={{ fontSize: '14px', gap: 1 }}>
+                        <WorkIcon sx={{ fontSize: 18, color: '#10B981' }} />
+                        Заменить на отработку долга
                     </MenuItem>
                 ) : (
-                    <>
-                        <MenuItem onClick={handleEditLesson}>
-                            <Edit sx={{ mr: 1, fontSize: 18 }} /> Редактировать
+                    [
+                        <MenuItem key="edit" onClick={handleEditLesson} sx={{ fontSize: '14px', gap: 1 }}>
+                            <Edit sx={{ fontSize: 18, color: '#6B7280' }} />
+                            Редактировать
+                        </MenuItem>,
+                        <MenuItem key="delete" onClick={handleDeleteLesson} sx={{ fontSize: '14px', gap: 1 }}>
+                            <Delete sx={{ fontSize: 18, color: '#EF4444' }} />
+                            Удалить
                         </MenuItem>
-                        <MenuItem onClick={handleDeleteLesson}>
-                            <Delete sx={{ mr: 1, fontSize: 18, color: 'error.main' }} /> Удалить
-                        </MenuItem>
-                    </>
+                    ]
                 )}
-            </Menu>
+            </StyledMenu>
 
-            <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Добавить занятие</DialogTitle>
-                <DialogContent>
+            {/* Диалог создания занятия */}
+            <StyledDialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
+                    Добавить занятие
+                </DialogTitle>
+                <DialogContent sx={{ px: 3 }}>
                     <Box sx={{ pt: 2 }}>
-                        <Typography variant="body2" color="textSecondary" gutterBottom>{createForm.date}, {createForm.startTime}</Typography>
-                        <FormControl fullWidth margin="normal">
-                            <InputLabel>Длительность</InputLabel>
-                            <Select value={createForm.duration} onChange={(e) => setCreateForm({...createForm, duration: e.target.value})} label="Длительность">
-                                <MenuItem value={30}>30 минут</MenuItem><MenuItem value={45}>45 минут</MenuItem><MenuItem value={60}>1 час</MenuItem><MenuItem value={90}>1,5 часа</MenuItem><MenuItem value={120}>2 часа</MenuItem>
+                        <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 2 }}>
+                            {createForm.date}, {createForm.startTime}
+                        </Typography>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                            <InputLabel sx={{ fontSize: '14px' }}>Длительность</InputLabel>
+                            <Select value={createForm.duration} onChange={(e) => setCreateForm({...createForm, duration: e.target.value})} label="Длительность"
+                                sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
+                                <MenuItem value={30}>30 минут</MenuItem><MenuItem value={45}>45 минут</MenuItem>
+                                <MenuItem value={60}>1 час</MenuItem><MenuItem value={90}>1,5 часа</MenuItem>
+                                <MenuItem value={120}>2 часа</MenuItem>
                             </Select>
                         </FormControl>
-                        <FormControl fullWidth margin="normal">
-                            <InputLabel>Ученик</InputLabel>
-                            <Select value={createForm.studentId} onChange={(e) => setCreateForm({...createForm, studentId: e.target.value})} label="Ученик">
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                            <InputLabel sx={{ fontSize: '14px' }}>Ученик</InputLabel>
+                            <Select value={createForm.studentId} onChange={(e) => setCreateForm({...createForm, studentId: e.target.value})} label="Ученик"
+                                sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
                                 {students.map(s => <MenuItem key={s.id} value={s.id}>{s.fullName}</MenuItem>)}
                             </Select>
                         </FormControl>
-                        <FormControl fullWidth margin="normal">
-                            <InputLabel>Предмет</InputLabel>
-                            <Select value={createForm.courseId} onChange={(e) => setCreateForm({...createForm, courseId: e.target.value})} label="Предмет">
+                        <FormControl fullWidth>
+                            <InputLabel sx={{ fontSize: '14px' }}>Предмет</InputLabel>
+                            <Select value={createForm.courseId} onChange={(e) => setCreateForm({...createForm, courseId: e.target.value})} label="Предмет"
+                                sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
                                 <MenuItem value="">— Без предмета —</MenuItem>
                                 {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                             </Select>
                         </FormControl>
                     </Box>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenCreateDialog(false)}>Отмена</Button>
-                    <Button onClick={handleSaveCreate} variant="contained" disabled={!createForm.studentId}>Добавить</Button>
+                <DialogActions sx={{ px: 3, pb: 3 }}>
+                    <StyledButton onClick={() => setOpenCreateDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
+                    <StyledButton onClick={handleSaveCreate} variant="contained" disabled={!createForm.studentId}
+                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>Добавить</StyledButton>
                 </DialogActions>
-            </Dialog>
+            </StyledDialog>
 
-            <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Редактировать занятие</DialogTitle>
-                <DialogContent>
+            {/* Диалог редактирования */}
+            <StyledDialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
+                    Редактировать занятие
+                </DialogTitle>
+                <DialogContent sx={{ px: 3 }}>
                     <Box sx={{ pt: 2 }}>
-                        <TextField label="Время начала" type="time" value={editForm.startTime} onChange={(e) => setEditForm({...editForm, startTime: e.target.value})} fullWidth margin="normal" inputProps={{ step: 300 }} />
-                        <FormControl fullWidth margin="normal">
-                            <InputLabel>Длительность</InputLabel>
-                            <Select value={editForm.duration} onChange={(e) => setEditForm({...editForm, duration: e.target.value})} label="Длительность">
-                                <MenuItem value={30}>30 минут</MenuItem><MenuItem value={45}>45 минут</MenuItem><MenuItem value={60}>1 час</MenuItem><MenuItem value={90}>1,5 часа</MenuItem><MenuItem value={120}>2 часа</MenuItem>
+                        <TextField label="Время начала" type="time" value={editForm.startTime}
+                            onChange={(e) => setEditForm({...editForm, startTime: e.target.value})}
+                            fullWidth sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                            InputLabelProps={{ shrink: true }} inputProps={{ step: 300 }} />
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                            <InputLabel sx={{ fontSize: '14px' }}>Длительность</InputLabel>
+                            <Select value={editForm.duration} onChange={(e) => setEditForm({...editForm, duration: e.target.value})} label="Длительность"
+                                sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
+                                <MenuItem value={30}>30 минут</MenuItem><MenuItem value={45}>45 минут</MenuItem>
+                                <MenuItem value={60}>1 час</MenuItem><MenuItem value={90}>1,5 часа</MenuItem>
+                                <MenuItem value={120}>2 часа</MenuItem>
                             </Select>
                         </FormControl>
-                        <FormControl fullWidth margin="normal">
-                            <InputLabel>Предмет</InputLabel>
-                            <Select value={editForm.courseId} onChange={(e) => setEditForm({...editForm, courseId: e.target.value})} label="Предмет">
+                        <FormControl fullWidth>
+                            <InputLabel sx={{ fontSize: '14px' }}>Предмет</InputLabel>
+                            <Select value={editForm.courseId} onChange={(e) => setEditForm({...editForm, courseId: e.target.value})} label="Предмет"
+                                sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
                                 <MenuItem value="">— Без предмета —</MenuItem>
                                 {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                             </Select>
                         </FormControl>
                     </Box>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenEditDialog(false)}>Отмена</Button>
-                    <Button onClick={handleSaveEdit} variant="contained">Сохранить</Button>
+                <DialogActions sx={{ px: 3, pb: 3 }}>
+                    <StyledButton onClick={() => setOpenEditDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
+                    <StyledButton onClick={handleSaveEdit} variant="contained"
+                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>Сохранить</StyledButton>
                 </DialogActions>
-            </Dialog>
+            </StyledDialog>
 
-            <Dialog open={openReplaceDialog} onClose={() => setOpenReplaceDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>🔄 Заменить отменённый урок на отработку долга</DialogTitle>
-                <DialogContent>
+            {/* Диалог замены на отработку */}
+            <StyledDialog open={openReplaceDialog} onClose={() => setOpenReplaceDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
+                    Заменить отменённый урок на отработку долга
+                </DialogTitle>
+                <DialogContent sx={{ px: 3 }}>
                     <Box sx={{ pt: 2 }}>
-                        <Typography variant="body2" color="textSecondary" gutterBottom>
+                        <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 2 }}>
                             Отменённый урок: {cancelledLesson?.lessonDate} в {cancelledLesson?.startTime?.slice(0,5)}
                         </Typography>
-
                         {debtors.length > 0 ? (
-                            <FormControl fullWidth sx={{ mt: 2 }}>
-                                <InputLabel>Выберите должника</InputLabel>
-                                <Select
-                                    value={selectedDebtorId}
-                                    onChange={(e) => setSelectedDebtorId(e.target.value)}
-                                    label="Выберите должника"
-                                >
+                            <FormControl fullWidth>
+                                <InputLabel sx={{ fontSize: '14px' }}>Выберите должника</InputLabel>
+                                <Select value={selectedDebtorId} onChange={(e) => setSelectedDebtorId(e.target.value)} label="Выберите должника"
+                                    sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
                                     {debtors.map(student => (
                                         <MenuItem key={student.id} value={student.id}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                                                <Typography>{student.fullName}</Typography>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                                <Typography sx={{ fontSize: '14px' }}>{student.fullName}</Typography>
                                                 <Chip
                                                     label={`Долг: ${student.debtLessons || student.missedLessons || 0}`}
                                                     size="small"
-                                                    color="warning"
+                                                    sx={{ 
+                                                        bgcolor: '#FFFBEB', color: '#92400E', 
+                                                        fontWeight: 500, borderRadius: '100px', fontSize: '11px',
+                                                    }}
                                                 />
                                             </Box>
                                         </MenuItem>
@@ -429,24 +534,20 @@ function WeekCalendar({ weekDates, lessons, students, courses, debtors, user, on
                                 </Select>
                             </FormControl>
                         ) : (
-                            <Alert severity="info" sx={{ mt: 2 }}>
+                            <Alert severity="info" sx={{ borderRadius: '8px', fontSize: '13px' }}>
                                 Нет учеников с долгами
                             </Alert>
                         )}
                     </Box>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenReplaceDialog(false)}>Отмена</Button>
-                    <Button
-                        onClick={handleConfirmReplace}
-                        variant="contained"
-                        color="primary"
-                        disabled={!selectedDebtorId}
-                    >
+                <DialogActions sx={{ px: 3, pb: 3 }}>
+                    <StyledButton onClick={() => setOpenReplaceDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
+                    <StyledButton onClick={handleConfirmReplace} variant="contained" disabled={!selectedDebtorId}
+                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
                         Заменить
-                    </Button>
+                    </StyledButton>
                 </DialogActions>
-            </Dialog>
+            </StyledDialog>
         </>
     );
 }

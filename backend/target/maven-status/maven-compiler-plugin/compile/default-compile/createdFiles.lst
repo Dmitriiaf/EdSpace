@@ -18,6 +18,7 @@ com\example\demo\dto\GradeHomeworkRequest.class
 com\example\demo\config\SecurityConfig.class
 com\example\demo\dto\SubscriptionDTO.class
 com\example\demo\service\LessonConflictChecker.class
+com\example\demo\controller\BoardController.class
 com\example\demo\service\YandexVisionService.class
 com\example\demo\controller\SubscriptionController.class
 com\example\demo\service\JitsiService$JitsiRoomInfo.class
@@ -45,6 +46,7 @@ com\example\demo\entity\Payment.class
 com\example\demo\entity\InvitationToken.class
 com\example\demo\service\JitsiService.class
 com\example\demo\repository\PasswordResetTokenRepository.class
+com\example\demo\config\WebSocketConfig.class
 com\example\demo\controller\SubscriptionInitController.class
 com\example\demo\controller\InvitationController.class
 com\example\demo\entity\StudentStepikCourse.class
@@ -64,6 +66,7 @@ com\example\demo\repository\NotificationRepository.class
 com\example\demo\repository\TaskBankRepository.class
 com\example\demo\entity\Lesson.class
 com\example\demo\repository\StepikTokenRepository.class
+com\example\demo\repository\StudentBoardRepository.class
 com\example\demo\repository\StudentRepository.class
 com\example\demo\dto\GradeWithScoreRequest.class
 com\example\demo\service\GroupService.class
@@ -86,6 +89,7 @@ com\example\demo\config\JwtUtils.class
 com\example\demo\entity\Homework.class
 com\example\demo\repository\TutorRepository.class
 com\example\demo\controller\GroupController.class
+com\example\demo\entity\StudentBoard.class
 com\example\demo\service\BoardSessionService.class
 com\example\demo\entity\Group.class
 com\example\demo\repository\MaterialFolderRepository.class
@@ -110,6 +114,7 @@ com\example\demo\exception\GlobalExceptionHandler.class
 com\example\demo\service\ExcalidrawService$BoardInfo.class
 com\example\demo\service\CourseService.class
 com\example\demo\exception\ValidationException.class
+com\example\demo\controller\BoardWebSocketController.class
 com\example\demo\repository\CourseRepository.class
 com\example\demo\service\ProgressService.class
 com\example\demo\dto\StudentDTO.class

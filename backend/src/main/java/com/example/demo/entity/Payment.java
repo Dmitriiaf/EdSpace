@@ -44,6 +44,10 @@ public class Payment {
     private String notes;
 
     @ManyToOne
+    @JoinColumn(name = "course_id")
+    private Course course;
+
+    @ManyToOne
     @JoinColumn(name = "lesson_id")
     private Lesson lesson;
 
@@ -95,6 +99,10 @@ public class Payment {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Course getCourse() { return course; }
+    public void setCourse(Course course) { this.course = course; }
+    public Long getCourseId() { return course != null ? course.getId() : null; }
 
     public String getReceiptNumber() { return receiptNumber; }
     public void setReceiptNumber(String receiptNumber) { this.receiptNumber = receiptNumber; }
