@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/entity/Subscription.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -41,7 +42,7 @@ public class Subscription {
     @Column(name = "end_date")
     private LocalDate endDate;
 
-    private String status = "pending";
+    private String status = "PENDING";
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -60,7 +61,7 @@ public class Subscription {
         this.price = price;
         this.startDate = startDate;
         this.endDate = endDate;
-        this.status = "pending";
+        this.status = "PENDING";
         this.createdAt = LocalDateTime.now();
     }
 

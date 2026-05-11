@@ -44,6 +44,12 @@ public class RateLimitFilter implements Filter {
             return;
         }
 
+        // ✅ Пропускаем WebSocket
+        if (path.startsWith("/ws-board")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         // ✅ Пропускаем авторизацию
         if (path.startsWith("/api/auth/") || path.startsWith("/api/student-auth/") ||
                 path.startsWith("/api/parent-auth/")) {

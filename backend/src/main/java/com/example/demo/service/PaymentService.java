@@ -1,3 +1,4 @@
+// ========== PaymentService.java (исправленный) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -151,15 +152,15 @@ public class PaymentService {
         Payment payment = getPaymentById(id);
 
         // Валидация статусов
-        List<String> allowedStatuses = List.of("CONFIRMED", "REJECTED", "PAID", "PENDING");
+        List<String> allowedStatuses = List.of("REJECTED", "PAID", "PENDING");
         if (!allowedStatuses.contains(newStatus)) {
             throw new BusinessException("Недопустимый статус: " + newStatus + ". Разрешены: " + allowedStatuses);
         }
 
         // Проверка перехода из PAID
-        if ("CONFIRMED".equals(newStatus) || "REJECTED".equals(newStatus)) {
+        if ("REJECTED".equals(newStatus)) {
             if (!"PAID".equals(payment.getStatus())) {
-                throw new BusinessException("Можно подтвердить или отклонить только платёж в статусе PAID. Текущий: " + payment.getStatus());
+                throw new BusinessException("Можно отклонить только платёж в статусе PAID. Текущий: " + payment.getStatus());
             }
         }
 
@@ -167,13 +168,13 @@ public class PaymentService {
         payment.setStatus(newStatus);
         Payment saved = paymentRepository.save(payment);
 
-        // Если подтверждён — обновляем урок
-        if ("CONFIRMED".equals(newStatus) && payment.getLesson() != null) {
+        // Если платёж PAID — обновляем урок
+        if ("PAID".equals(newStatus) && payment.getLesson() != null) {
             Lesson lesson = payment.getLesson();
-            lesson.setStatus("CONFIRMED");
+            lesson.setStatus("PAID");
             lesson.setPaidAt(LocalDateTime.now());
             lessonRepository.save(lesson);
-            log.info("✅ Урок {} оплачен (подтверждён платёж {})", lesson.getId(), payment.getId());
+            log.info("✅ Урок {} оплачен (платёж {})", lesson.getId(), payment.getId());
         }
 
         // Если отклонён — возвращаем урок в COMPLETED
@@ -229,21 +230,21 @@ public class PaymentService {
         List<Payment> allPayments = paymentRepository.findByTutorId(tutorId);
 
         double totalPaid = allPayments.stream()
-                .filter(p -> "CONFIRMED".equals(p.getStatus()) || "PAID".equals(p.getStatus()))
+                .filter(p -> "PAID".equals(p.getStatus()))
                 .mapToDouble(Payment::getAmount)
                 .sum();
 
         double totalPending = allPayments.stream()
-                .filter(p -> "PAID".equals(p.getStatus()))
+                .filter(p -> "PENDING".equals(p.getStatus()))
                 .mapToDouble(Payment::getAmount)
                 .sum();
 
         long paidCount = allPayments.stream()
-                .filter(p -> "CONFIRMED".equals(p.getStatus()))
+                .filter(p -> "PAID".equals(p.getStatus()))
                 .count();
 
         long pendingCount = allPayments.stream()
-                .filter(p -> "PAID".equals(p.getStatus()))
+                .filter(p -> "PENDING".equals(p.getStatus()))
                 .count();
 
         return Map.of(
@@ -311,7 +312,7 @@ public class PaymentService {
         String message;
         String emailSubject;
 
-        if ("CONFIRMED".equals(newStatus)) {
+        if ("PAID".equals(newStatus)) {
             message = String.format("✅ Ваш платёж на сумму %s ₽ подтверждён репетитором", amount);
             emailSubject = "Платёж подтверждён — EdSpace";
         } else if ("REJECTED".equals(newStatus)) {
@@ -321,7 +322,7 @@ public class PaymentService {
             return;
         }
 
-        // Системное уведомление (колокольчик) — для родителя используем createNotification
+        // Системное уведомление (колокольчик)
         try {
             notificationService.createNotification(
                     parent.getId(),

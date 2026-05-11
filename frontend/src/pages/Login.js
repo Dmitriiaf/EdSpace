@@ -1,5 +1,5 @@
 // ========== frontend/src/pages/Login.js (ПЕРЕХОДНЫЙ ДИЗАЙН) ==========
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, TextField, Button, Typography, Container, Tabs, Tab,
@@ -143,6 +143,27 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [lockedUntil, setLockedUntil] = useState(null);
+    const [countdown, setCountdown] = useState('');
+
+    useEffect(() => {
+        if (!lockedUntil) return;
+        const timer = setInterval(() => {
+            const now = new Date().getTime();
+            const lockTime = new Date(lockedUntil).getTime();
+            const diff = Math.max(0, lockTime - now);
+            const minutes = Math.floor(diff / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            setCountdown(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+            if (diff <= 0) {
+                setLockedUntil(null);
+                setCountdown('');
+                setError('');
+                clearInterval(timer);
+            }
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [lockedUntil]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -154,8 +175,14 @@ const Login = () => {
             else if (tab === 1) result = await studentLogin(email, password);
             else result = await parentLogin(email, password);
             
-            if (result?.error) setError(result.error);
-            else navigate(tab === 0 ? '/dashboard' : tab === 1 ? '/student' : '/parent/dashboard', { replace: true });
+            if (result?.error) {
+                if (result.lockedUntil) {
+                    setLockedUntil(result.lockedUntil);
+                }
+                setError(result.error);
+            } else {
+                navigate(tab === 0 ? '/dashboard' : tab === 1 ? '/student' : '/parent/dashboard', { replace: true });
+            }
         } catch (err) {
             setError('Неверный email или пароль');
         } finally {
@@ -212,7 +239,16 @@ const Login = () => {
                         <Tab icon={<Badge sx={{ fontSize: 20, mr: 1 }} />} label="Родитель" iconPosition="start" />
                     </StyledTabs>
 
-                    {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>{error}</Alert>}
+                    {error && (
+                        <Alert severity={lockedUntil ? 'warning' : 'error'} sx={{ mb: 3, borderRadius: 3 }}>
+                            {error}
+                            {countdown && (
+                                <Typography sx={{ fontWeight: 700, mt: 0.5, fontSize: '1.1rem' }}>
+                                    {countdown}
+                                </Typography>
+                            )}
+                        </Alert>
+                    )}
 
                     <form onSubmit={handleSubmit}>
                         <StyledTextField

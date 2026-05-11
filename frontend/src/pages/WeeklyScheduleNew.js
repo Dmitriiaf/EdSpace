@@ -41,7 +41,6 @@ const STATUS_COLORS = {
     SCHEDULED:      { bg: '#F3F4F6', text: '#374151', dot: '#9CA3AF', label: 'Не проведено' },
     COMPLETED:      { bg: '#FFFBEB', text: '#92400E', dot: '#F59E0B', label: 'Проведено (ждёт оплаты)' },
     PAID:           { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'Оплачено' },
-    CONFIRMED:      { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'Подтверждено' },
     RESCHEDULED:    { bg: '#EFF6FF', text: '#1E40AF', dot: '#3B82F6', label: 'Перенесено' },
     CANCELLED:      { bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444', label: 'Отменено' },
     // Разовое занятие — использует SCHEDULED, но можно добавить отдельный статус если нужно
@@ -190,7 +189,7 @@ function WeeklySchedule() {
                 .filter(student => {
                     const activeSub = subscriptionsData.find(
                         sub => sub.student?.id === student.id && 
-                            (sub.status === 'active' || sub.status === 'PAID') && 
+                            (sub.status === 'ACTIVE' || sub.status === 'active') && 
                             sub.debtLessons > 0
                     );
                     return !!activeSub;
@@ -198,7 +197,7 @@ function WeeklySchedule() {
                 .map(student => {
                     const activeSub = subscriptionsData.find(
                         sub => sub.student?.id === student.id && 
-                            (sub.status === 'active' || sub.status === 'PAID')
+                            (sub.status === 'ACTIVE' || sub.status === 'active')
                     );
                     return {
                         ...student,

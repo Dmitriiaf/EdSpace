@@ -1,47 +1,33 @@
-// ========== frontend/src/pages/LandingPage.js (ПОЛНОСТЬЮ НОВЫЙ) ==========
+// ========== frontend/src/pages/LandingPage.js (БЕТА-ТЕСТ v2) ==========
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Box, Button, Typography, Container, Grid,
     AppBar, Toolbar, IconButton, Drawer, List, ListItem, ListItemText,
     useMediaQuery, useTheme, Stack, TextField, Snackbar, Alert,
-    Avatar, AvatarGroup, Chip
+    Avatar, AvatarGroup
 } from '@mui/material';
 import { styled, keyframes } from '@mui/material/styles';
 import {
-    CalendarMonth, AttachMoney, Videocam, Draw,
     Menu as MenuIcon, ArrowForward, Star, Send,
-    Close, TrendingUp, Groups, AutoAwesome,
-    Bolt, VerifiedUser, SupportAgent
+    Close, Bolt, VerifiedUser, SupportAgent, AutoAwesome
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 // ========== АНИМАЦИИ ==========
-const fadeInUp = keyframes`
-    from { opacity: 0; transform: translateY(40px); }
-    to { opacity: 1; transform: translateY(0); }
-`;
-
-const shimmer = keyframes`
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-`;
-
-const orbit = keyframes`
-    from { transform: rotate(0deg) translateX(80px) rotate(0deg); }
-    to { transform: rotate(360deg) translateX(80px) rotate(-360deg); }
-`;
-
 const float = keyframes`
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-10px); }
 `;
 
+const glow = keyframes`
+    0%, 100% { boxShadow: '0 0 20px rgba(79, 70, 229, 0.3)'; }
+    50% { boxShadow: '0 0 40px rgba(79, 70, 229, 0.6)'; }
+`;
+
 // ========== СТИЛИ ==========
 const ACCENT = '#4F46E5';
 const DARK = '#0F0F1A';
-const SURFACE = '#1A1A2E';
-const CARD = '#16213E';
-const TEXT = '#FFFFFF';
+const CARD_BG = 'rgba(255, 255, 255, 0.03)';
 const TEXT_DIM = '#8892B0';
 const SUCCESS = '#10B981';
 
@@ -57,15 +43,14 @@ const StyledButton = styled(Button)({
 const GlowButton = styled(StyledButton)({
     background: `linear-gradient(135deg, ${ACCENT}, #7C3AED)`,
     color: 'white',
-    boxShadow: `0 0 30px rgba(79, 70, 229, 0.4)`,
+    animation: `${glow} 3s ease-in-out infinite`,
     '&:hover': {
-        boxShadow: `0 0 50px rgba(79, 70, 229, 0.6)`,
         transform: 'translateY(-2px)',
     },
 });
 
 const GlassCard = styled(Box)({
-    background: 'rgba(255, 255, 255, 0.03)',
+    background: CARD_BG,
     backdropFilter: 'blur(20px)',
     border: '1px solid rgba(255, 255, 255, 0.06)',
     borderRadius: 24,
@@ -79,12 +64,13 @@ const GlassCard = styled(Box)({
 });
 
 const StatNumber = styled(Typography)({
-    fontSize: '3.5rem',
+    fontSize: '3rem',
     fontWeight: 800,
     background: `linear-gradient(135deg, ${ACCENT}, #A78BFA)`,
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     lineHeight: 1,
+    '@media (max-width: 600px)': { fontSize: '2.2rem' },
 });
 
 const StatLabel = styled(Typography)({
@@ -103,8 +89,8 @@ const LandingPage = () => {
     const [snackbar, setSnackbar] = useState(false);
     const [typedText, setTypedText] = useState('');
     const fullText = 'репетитора';
-    const [statsVisible, setStatsVisible] = useState(false);
     const statsRef = useRef(null);
+    const [statsVisible, setStatsVisible] = useState(false);
 
     useEffect(() => {
         let i = 0;
@@ -134,9 +120,21 @@ const LandingPage = () => {
     };
 
     const advantages = [
-        { icon: <Bolt sx={{ fontSize: 28 }} />, title: 'Молниеносно', desc: 'Создайте расписание на месяц вперёд за 10 секунд. Шаблоны, повторы, переносы.' },
-        { icon: <VerifiedUser  sx={{ fontSize: 28 }} />, title: 'Прозрачно', desc: 'Родители видят каждое занятие, каждую оплату. Больше никаких вопросов «а было ли занятие?»' },
-        { icon: <SupportAgent sx={{ fontSize: 28 }} />, title: 'Поддержка 24/7', desc: 'Мы на связи в Telegram. Ответим, поможем, доработаем платформу под вас.' },
+        { 
+            icon: <Bolt sx={{ fontSize: 28 }} />, 
+            title: 'Всё в одном окне', 
+            desc: 'Расписание, видеозвонки, онлайн-доска, домашние задания, оплаты и уведомления — одна платформа вместо четырёх сервисов.' 
+        },
+        { 
+            icon: <VerifiedUser sx={{ fontSize: 28 }} />, 
+            title: 'Прозрачно для родителей', 
+            desc: 'Родители видят расписание, успеваемость и финансы. Сами загружают чеки и оплачивают занятия — вы просто ведёте уроки.' 
+        },
+        { 
+            icon: <SupportAgent sx={{ fontSize: 28 }} />, 
+            title: 'Активная доработка', 
+            desc: 'Платформа в бета-тесте. Мы каждый день добавляем новые функции по запросам репетиторов. Ваши идеи становятся реальностью.' 
+        },
     ];
 
     const testimonials = [
@@ -145,7 +143,7 @@ const LandingPage = () => {
     ];
 
     return (
-        <Box sx={{ bgcolor: DARK, color: TEXT, minHeight: '100vh', overflowX: 'hidden' }}>
+        <Box sx={{ bgcolor: DARK, color: '#FFFFFF', minHeight: '100vh', overflowX: 'hidden' }}>
             {/* ========== ДЕКОРАТИВНЫЙ ФОН ========== */}
             <Box sx={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
                 <Box sx={{ position: 'absolute', top: '10%', left: '5%', width: 400, height: 400, borderRadius: '50%', background: `radial-gradient(circle, rgba(79,70,229,0.15) 0%, transparent 70%)`, filter: 'blur(40px)' }} />
@@ -162,18 +160,18 @@ const LandingPage = () => {
                     </Box>
                     {!isMobile && (
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <Button onClick={() => navigate('/login')} sx={{ color: TEXT_DIM, textTransform: 'none', fontWeight: 500, borderRadius: 3, px: 3, '&:hover': { color: TEXT } }}>Войти</Button>
+                            <Button onClick={() => navigate('/login')} sx={{ color: TEXT_DIM, textTransform: 'none', fontWeight: 500, borderRadius: 3, px: 3, '&:hover': { color: '#FFFFFF' } }}>Войти</Button>
                             <StyledButton onClick={() => navigate('/register')} sx={{ bgcolor: ACCENT, color: 'white', py: 1, px: 4, fontSize: '0.9rem', '&:hover': { bgcolor: '#4338CA' } }}>Попробовать</StyledButton>
                         </Stack>
                     )}
-                    {isMobile && <IconButton onClick={() => setMobileMenu(true)} sx={{ color: TEXT }}><MenuIcon /></IconButton>}
+                    {isMobile && <IconButton onClick={() => setMobileMenu(true)} sx={{ color: '#FFFFFF' }}><MenuIcon /></IconButton>}
                 </Toolbar>
             </AppBar>
 
             {/* ========== МОБИЛЬНОЕ МЕНЮ ========== */}
-            <Drawer anchor="right" open={mobileMenu} onClose={() => setMobileMenu(false)} PaperProps={{ sx: { bgcolor: SURFACE, color: TEXT } }}>
+            <Drawer anchor="right" open={mobileMenu} onClose={() => setMobileMenu(false)} PaperProps={{ sx: { bgcolor: '#1A1A2E', color: '#FFFFFF' } }}>
                 <Box sx={{ width: 250, p: 2 }}>
-                    <IconButton onClick={() => setMobileMenu(false)} sx={{ color: TEXT, mb: 2 }}><Close /></IconButton>
+                    <IconButton onClick={() => setMobileMenu(false)} sx={{ color: '#FFFFFF', mb: 2 }}><Close /></IconButton>
                     <List>
                         <ListItem button onClick={() => { navigate('/login'); setMobileMenu(false); }}><ListItemText primary="Войти" /></ListItem>
                         <ListItem button onClick={() => { navigate('/register'); setMobileMenu(false); }}><ListItemText primary="Попробовать" sx={{ color: ACCENT }} /></ListItem>
@@ -187,7 +185,7 @@ const LandingPage = () => {
                     {/* Бейдж */}
                     <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(79,70,229,0.15)', border: '1px solid rgba(79,70,229,0.3)', borderRadius: 50, px: 2.5, py: 1, mb: 4 }}>
                         <AutoAwesome sx={{ fontSize: 16, color: ACCENT }} />
-                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 500, color: '#A78BFA' }}>Бета-тест открыт</Typography>
+                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 500, color: '#A78BFA' }}>Открытое бета-тестирование</Typography>
                     </Box>
 
                     {/* Заголовок */}
@@ -199,8 +197,8 @@ const LandingPage = () => {
                         </Box>
                     </Typography>
 
-                    <Typography sx={{ fontSize: { xs: '1rem', md: '1.2rem' }, color: TEXT_DIM, maxWidth: 500, mx: 'auto', mb: 6, lineHeight: 1.7 }}>
-                        Расписание, видео, онлайн-доска, домашки, оплаты — всё, что нужно для проведения занятий. Соберите свой идеальный рабочий день в одном окне.
+                    <Typography sx={{ fontSize: { xs: '1rem', md: '1.2rem' }, color: TEXT_DIM, maxWidth: 550, mx: 'auto', mb: 6, lineHeight: 1.7 }}>
+                        Расписание, видео, онлайн-доска, домашние задания, оплаты и уведомления — всё, что нужно для проведения занятий, в одном окне.
                     </Typography>
 
                     {/* Кнопки */}
@@ -209,7 +207,7 @@ const LandingPage = () => {
                             Начать бесплатно
                         </GlowButton>
                         <StyledButton variant="outlined" onClick={() => navigate('/login')}
-                            sx={{ borderColor: 'rgba(255,255,255,0.2)', color: TEXT, '&:hover': { borderColor: 'rgba(255,255,255,0.5)' } }}>
+                            sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#FFFFFF', '&:hover': { borderColor: 'rgba(255,255,255,0.5)' } }}>
                             Уже есть аккаунт
                         </StyledButton>
                     </Stack>
@@ -235,10 +233,10 @@ const LandingPage = () => {
                 <Container maxWidth="lg">
                     <Grid container spacing={4} justifyContent="center">
                         {[
-                            { value: '250+', label: 'Проведено занятий' },
-                            { value: '30', label: 'Активных учеников' },
+                            { value: '300+', label: 'Проведено занятий' },
+                            { value: '35', label: 'Активных учеников' },
                             { value: '200k+', label: 'Заработано репетиторами' },
-                            { value: '98%', label: 'Довольных пользователей' },
+                            { value: '24/7', label: 'Поддержка в Telegram' },
                         ].map((stat, i) => (
                             <Grid item xs={6} md={3} key={i}>
                                 <Box sx={{ textAlign: 'center' }}>
@@ -327,7 +325,7 @@ const LandingPage = () => {
                         Готовы начать?
                     </Typography>
                     <Typography sx={{ color: TEXT_DIM, mb: 5, fontSize: '1.05rem', lineHeight: 1.7 }}>
-                        Оставьте email — и мы пришлём приглашение в бету. Первые 14 дней — бесплатно.
+                        Присоединяйтесь к бета-тесту. Первые 14 дней — бесплатно. Мы поможем настроить всё под вас.
                     </Typography>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
                         <TextField
@@ -336,10 +334,11 @@ const LandingPage = () => {
                             onChange={(e) => setEmail(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && handleSubscribe()}
                             sx={{
+                                width: { xs: '100%', sm: 300 },
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 50,
-                                    bgcolor: SURFACE,
-                                    color: TEXT,
+                                    bgcolor: '#1A1A2E',
+                                    color: '#FFFFFF',
                                     '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
                                     '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
                                     '&.Mui-focused fieldset': { borderColor: ACCENT },
@@ -358,7 +357,7 @@ const LandingPage = () => {
             <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.04)', py: 4, textAlign: 'center' }}>
                 <Container maxWidth="lg">
                     <Typography sx={{ color: TEXT_DIM, fontSize: '0.9rem' }}>
-                        © 2026 EdSpace. Сделано с ❤️ для репетиторов.
+                        © 2026 EdSpace. Сделано с ❤️ для репетиторов. Сейчас платформа в стадии бета-тестирования.
                     </Typography>
                 </Container>
             </Box>

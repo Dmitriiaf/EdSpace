@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -60,6 +62,14 @@ public class TutorService {
     public Tutor getTutorById(Long id) {
         return tutorRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Репетитор", "id", id));
+    }
+
+    public Map<String, Object> getReferralStats(Long tutorId) {
+        long count = tutorRepository.countByReferredBy(tutorId);
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalReferrals", count);
+        stats.put("bonusDays", count * 7); // +7 дней за каждого приглашённого
+        return stats;
     }
 
     public Tutor updateTutor(Long id, String phone, String fullName,
@@ -147,4 +157,15 @@ public class TutorService {
         tutor.setAvatar(avatarBase64);
         tutorRepository.save(tutor);
     }
+
+    // ДОБАВИТЬ в TutorService.java перед последней закрывающей скобкой класса:
+
+    public Tutor save(Tutor tutor) {
+        return tutorRepository.save(tutor);
+    }
+
+    public Tutor findByReferralCode(String referralCode) {
+        return tutorRepository.findByReferralCode(referralCode).orElse(null);
+    }
+
 }

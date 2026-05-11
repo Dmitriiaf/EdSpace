@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/service/WeeklyTemplateService.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -41,20 +42,14 @@ public class WeeklyTemplateService {
     @Autowired
     private NotificationService notificationService;
 
-    // ✅ Количество недель для проверки конфликтов
     private static final int WEEKS_TO_CHECK = 4;
 
-    /**
-     * Проверяет конфликты на несколько недель вперёд
-     * @return сообщение об ошибке или null, если конфликтов нет
-     */
     private String checkConflictsForWeeks(Long tutorId, String studentEmail, int dayOfWeek,
                                           LocalTime startTime, LocalTime endTime) {
         LocalDate checkDate = LocalDate.now();
         int weeksChecked = 0;
 
         while (weeksChecked < WEEKS_TO_CHECK) {
-            // Находим ближайшую дату с нужным днём недели
             while (checkDate.getDayOfWeek().getValue() != dayOfWeek) {
                 checkDate = checkDate.plusDays(1);
             }
@@ -67,16 +62,13 @@ public class WeeklyTemplateService {
                 return String.format("%s (на дату %s)", conflict, checkDate);
             }
 
-            checkDate = checkDate.plusDays(1); // Переходим к следующему дню
+            checkDate = checkDate.plusDays(1);
             weeksChecked++;
         }
 
         return null;
     }
 
-    /**
-     * Проверяет конфликты при обновлении шаблона (исключая сам шаблон)
-     */
     private String checkConflictsForWeeksExcludingTemplate(Long tutorId, String studentEmail,
                                                            int dayOfWeek, LocalTime startTime,
                                                            LocalTime endTime, Long excludeTemplateId) {
@@ -88,8 +80,6 @@ public class WeeklyTemplateService {
                 checkDate = checkDate.plusDays(1);
             }
 
-            // TODO: В будущем добавить метод checkConflictsExcludingTemplate в LessonConflictChecker
-            // Пока используем обычную проверку, т.к. шаблон может конфликтовать сам с собой только по времени
             String conflict = conflictChecker.checkConflicts(
                     tutorId, studentEmail, checkDate, startTime, endTime);
 
@@ -129,7 +119,6 @@ public class WeeklyTemplateService {
 
         Course course = courseId != null ? courseRepository.findById(courseId).orElse(null) : null;
 
-        // АВТОМАТИЧЕСКАЯ ЗАПИСЬ УЧЕНИКА НА КУРС
         if (course != null) {
             boolean alreadyEnrolled = course.getEnrolledStudents().stream()
                     .anyMatch(s -> s.getId().equals(studentId));
@@ -147,7 +136,6 @@ public class WeeklyTemplateService {
             throw new RuntimeException("На это время уже есть шаблон занятия");
         }
 
-        // ✅ Проверяем конфликты на 4 недели вперёд
         String conflict = checkConflictsForWeeks(
                 tutorId,
                 student.getEmail(),
@@ -191,7 +179,6 @@ public class WeeklyTemplateService {
 
         Course course = courseId != null ? courseRepository.findById(courseId).orElse(null) : null;
 
-        // АВТОМАТИЧЕСКАЯ ЗАПИСЬ УЧЕНИКА НА КУРС ПРИ ОБНОВЛЕНИИ
         if (course != null) {
             boolean alreadyEnrolled = course.getEnrolledStudents().stream()
                     .anyMatch(s -> s.getId().equals(studentId));
@@ -202,7 +189,6 @@ public class WeeklyTemplateService {
             }
         }
 
-        // Проверяем, не занято ли это время другим шаблоном
         boolean exists = templateRepository.existsByTutorIdAndDayOfWeekAndStartTime(
                 template.getTutor().getId(), dayOfWeek, startTime);
 
@@ -210,7 +196,6 @@ public class WeeklyTemplateService {
             throw new RuntimeException("На это время уже есть шаблон занятия");
         }
 
-        // ✅ Проверяем конфликты на 4 недели вперёд
         String conflict = checkConflictsForWeeksExcludingTemplate(
                 template.getTutor().getId(),
                 student.getEmail(),
@@ -300,9 +285,9 @@ public class WeeklyTemplateService {
         for (Subscription sub : existingSubs) {
             YearMonth subMonth = YearMonth.from(sub.getStartDate());
             if (subMonth.equals(month)) {
-                if ("active".equals(sub.getStatus())) {
+                if ("ACTIVE".equals(sub.getStatus())) {
                     activeSubscription = sub;
-                } else if ("pending".equals(sub.getStatus())) {
+                } else if ("PENDING".equals(sub.getStatus())) {
                     pendingSubscription = sub;
                 }
             }
@@ -326,7 +311,7 @@ public class WeeklyTemplateService {
 
                 for (Subscription sub : existingSubs) {
                     YearMonth subMonth = YearMonth.from(sub.getStartDate());
-                    if (subMonth.equals(month) && "pending".equals(sub.getStatus())) {
+                    if (subMonth.equals(month) && "PENDING".equals(sub.getStatus())) {
                         subscriptionRepository.delete(sub);
                         log.info("  → Удалён лишний pending абонемент (ID={})", sub.getId());
                     }
@@ -374,7 +359,7 @@ public class WeeklyTemplateService {
                 month.atDay(1),
                 month.atEndOfMonth()
         );
-        newSubscription.setStatus("pending");
+        newSubscription.setStatus("PENDING");
         subscriptionRepository.save(newSubscription);
 
         if (student.getParent() != null) {

@@ -1,4 +1,4 @@
-// ========== backend/src/main/java/com/example/demo/service/SubscriptionCalculator.java (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
+// ========== backend/src/main/java/com/example/demo/service/SubscriptionCalculator.java (ИСПРАВЛЕННАЯ ВЕРСИЯ — ЕДИНЫЙ РЕГИСТР) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -37,7 +37,6 @@ public class SubscriptionCalculator {
         LocalDate startDate = month.atDay(1);
         LocalDate endDate = month.atEndOfMonth();
 
-        // ✅ Исправлено: используем startDate и endDate, приводим long к int
         long count = lessonRepository.countLessonsInMonth(studentId, startDate, endDate);
         int lessonsCount = (int) count;
 
@@ -72,7 +71,6 @@ public class SubscriptionCalculator {
                     if (!currentDate.isBefore(today)) {
                         count++;
                     }
-                    // ✅ ИСПРАВЛЕНО: убрали break — считаем все шаблоны на этот день
                 }
             }
             currentDate = currentDate.plusDays(1);
@@ -103,7 +101,6 @@ public class SubscriptionCalculator {
                     if (!currentDate.isBefore(today)) {
                         count++;
                     }
-                    // ✅ ИСПРАВЛЕНО: убрали break — считаем все шаблоны на этот день
                 }
             }
             currentDate = currentDate.plusDays(1);
@@ -133,11 +130,11 @@ public class SubscriptionCalculator {
         for (Subscription existing : existingSubs) {
             YearMonth existingMonth = YearMonth.from(existing.getStartDate());
             if (existingMonth.equals(month)) {
-                if ("active".equals(existing.getStatus())) {
+                if ("ACTIVE".equals(existing.getStatus())) {
                     log.info("✅ Активный абонемент на {} уже существует", month);
                     return existing;
                 }
-                if ("pending".equals(existing.getStatus())) {
+                if ("PENDING".equals(existing.getStatus())) {
                     log.info("⏳ Абонемент на {} ожидает оплаты", month);
                     return existing;
                 }
@@ -164,7 +161,7 @@ public class SubscriptionCalculator {
                 month.atDay(1),
                 month.atEndOfMonth()
         );
-        subscription.setStatus("pending");
+        subscription.setStatus("PENDING");
 
         Subscription saved = subscriptionRepository.save(subscription);
 
@@ -189,7 +186,7 @@ public class SubscriptionCalculator {
 
                 boolean hasActive = existing.stream()
                         .anyMatch(s -> YearMonth.from(s.getStartDate()).equals(month)
-                                && "active".equals(s.getStatus()));
+                                && "ACTIVE".equals(s.getStatus()));
 
                 if (hasActive) {
                     log.info("⏭️ У ученика {} уже есть активный абонемент на {}", student.getFullName(), month);

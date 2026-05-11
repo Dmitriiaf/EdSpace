@@ -67,6 +67,7 @@ com\example\demo\repository\TaskBankRepository.class
 com\example\demo\entity\Lesson.class
 com\example\demo\repository\StepikTokenRepository.class
 com\example\demo\repository\StudentBoardRepository.class
+com\example\demo\config\WebConfig.class
 com\example\demo\repository\StudentRepository.class
 com\example\demo\dto\GradeWithScoreRequest.class
 com\example\demo\service\GroupService.class
@@ -80,6 +81,7 @@ com\example\demo\service\TutorService.class
 com\example\demo\controller\NotificationController.class
 com\example\demo\service\StudentService.class
 com\example\demo\repository\VariantRepository.class
+com\example\demo\config\RequestLoggingInterceptor.class
 com\example\demo\controller\BoardSessionController.class
 com\example\demo\controller\StudentAuthController.class
 com\example\demo\controller\LessonController.class
@@ -112,6 +114,7 @@ com\example\demo\controller\HomeworkController.class
 com\example\demo\controller\ParentAuthController.class
 com\example\demo\exception\GlobalExceptionHandler.class
 com\example\demo\service\ExcalidrawService$BoardInfo.class
+com\example\demo\config\ScheduledTasks.class
 com\example\demo\service\CourseService.class
 com\example\demo\exception\ValidationException.class
 com\example\demo\controller\BoardWebSocketController.class

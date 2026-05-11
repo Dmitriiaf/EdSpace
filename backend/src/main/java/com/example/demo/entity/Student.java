@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/entity/Student.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -81,9 +82,15 @@ public class Student {
     @JsonIgnore
     private String passwordHash;
 
-    // ✅ НОВОЕ ПОЛЕ: АРХИВИРОВАН
     @Column(name = "archived")
     private Boolean archived = false;
+
+    // ✅ SEC-5: Лимит попыток входа
+    @Column(name = "failed_login_attempts")
+    private Integer failedLoginAttempts = 0;
+
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
 
     public Student() {}
 
@@ -97,6 +104,7 @@ public class Student {
         this.role = "ROLE_STUDENT";
         this.paymentType = "single";
         this.createdAt = LocalDateTime.now();
+        this.failedLoginAttempts = 0;
     }
 
     // Геттеры
@@ -120,7 +128,9 @@ public class Student {
     public String getPaymentType() { return paymentType; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public String getPasswordHash() { return passwordHash; }
-    public Boolean getArchived() { return archived; }  // ✅ Геттер
+    public Boolean getArchived() { return archived; }
+    public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
+    public LocalDateTime getLockedUntil() { return lockedUntil; }
 
     // Сеттеры
     public void setResetToken(String resetToken) { this.resetToken = resetToken; }
@@ -143,7 +153,23 @@ public class Student {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public void setCourses(List<Course> courses) { this.courses = courses; }
-    public void setArchived(Boolean archived) { this.archived = archived; }  // ✅ Сеттер
+    public void setArchived(Boolean archived) { this.archived = archived; }
+    public void setFailedLoginAttempts(Integer failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
+    public void setLockedUntil(LocalDateTime lockedUntil) { this.lockedUntil = lockedUntil; }
+
+    // ✅ Вспомогательные методы
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now());
+    }
+
+    public void incrementFailedAttempts() {
+        this.failedLoginAttempts = (this.failedLoginAttempts == null ? 0 : this.failedLoginAttempts) + 1;
+    }
+
+    public void resetFailedAttempts() {
+        this.failedLoginAttempts = 0;
+        this.lockedUntil = null;
+    }
 
     public void addTutor(Tutor tutor) {
         if (this.tutors == null) this.tutors = new ArrayList<>();

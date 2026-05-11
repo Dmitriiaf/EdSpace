@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/controller/StudentAuthController.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.Student;
@@ -9,6 +10,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.dao.DataAccessException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -18,6 +20,9 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/student-auth")
 @CrossOrigin(origins = "http://localhost:3000")
 public class StudentAuthController {
+
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCK_DURATION_MINUTES = 15;
 
     @Autowired
     private StudentRepository studentRepository;
@@ -50,14 +55,33 @@ public class StudentAuthController {
 
             Student primaryStudent = students.get(0);
 
+            // Проверка блокировки
+            if (primaryStudent.isLocked()) {
+                long remainingMinutes = java.time.Duration.between(LocalDateTime.now(), primaryStudent.getLockedUntil()).toMinutes();
+                return ResponseEntity.status(423).body(Map.of(
+                        "error", "Аккаунт заблокирован. Попробуйте через " + remainingMinutes + " мин.",
+                        "lockedUntil", primaryStudent.getLockedUntil().toString()
+                ));
+            }
+
             // Проверка пароля
             if (primaryStudent.getPasswordHash() == null) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Для этого ученика не установлен пароль. Обратитесь к репетитору."));
             }
 
             if (!passwordEncoder.matches(password, primaryStudent.getPasswordHash())) {
+                // Увеличиваем счётчик
+                primaryStudent.incrementFailedAttempts();
+                if (primaryStudent.getFailedLoginAttempts() >= MAX_FAILED_ATTEMPTS) {
+                    primaryStudent.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_DURATION_MINUTES));
+                }
+                studentRepository.save(primaryStudent);
                 return ResponseEntity.badRequest().body(Map.of("error", "Неверный пароль"));
             }
+
+            // Успешный вход — сбрасываем
+            primaryStudent.resetFailedAttempts();
+            studentRepository.save(primaryStudent);
 
             List<Long> allStudentIds = students.stream()
                     .map(Student::getId)

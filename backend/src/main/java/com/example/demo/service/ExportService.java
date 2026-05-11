@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/service/ExportService.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -37,7 +38,6 @@ public class ExportService {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new RuntimeException("Ученик не найден"));
 
-        // Получаем имя репетитора (первого из списка)
         String tutorName = "";
         if (!student.getTutors().isEmpty()) {
             tutorName = student.getTutors().get(0).getFullName();
@@ -48,7 +48,6 @@ public class ExportService {
         List<Payment> payments = paymentRepository.findByStudentId(studentId);
         List<ProgressRecord> progress = progressRecordRepository.findByStudentIdAndDateRange(studentId, startDate, endDate);
 
-        // Фильтрация по дате
         if (startDate != null && endDate != null) {
             lessons = lessons.stream()
                     .filter(l -> l.getLessonDate().atStartOfDay().isAfter(startDate) &&
@@ -62,7 +61,6 @@ public class ExportService {
                     .toList();
         }
 
-        // Статистика
         int totalLessons = lessons.size();
         int completedLessons = (int) lessons.stream().filter(l -> "PAID".equals(l.getStatus()) || "COMPLETED".equals(l.getStatus())).count();
         int cancelledLessons = (int) lessons.stream().filter(l -> "CANCELLED".equals(l.getStatus())).count();
@@ -78,11 +76,10 @@ public class ExportService {
                 .orElse(0);
 
         double totalPayments = payments.stream()
-                .filter(p -> "paid".equals(p.getStatus()))
+                .filter(p -> "PAID".equals(p.getStatus()))
                 .mapToDouble(Payment::getAmount)
                 .sum();
 
-        // Данные для графика прогресса
         List<Map<String, Object>> progressTimeline = progress.stream()
                 .map(p -> {
                     Map<String, Object> point = new HashMap<>();
@@ -94,7 +91,6 @@ public class ExportService {
                 })
                 .toList();
 
-        // Детали занятий
         List<Map<String, Object>> lessonDetails = lessons.stream()
                 .map(l -> {
                     Map<String, Object> detail = new HashMap<>();
@@ -107,7 +103,6 @@ public class ExportService {
                 })
                 .toList();
 
-        // Детали ДЗ
         List<Map<String, Object>> homeworkDetails = homework.stream()
                 .map(h -> {
                     Map<String, Object> detail = new HashMap<>();
@@ -131,7 +126,6 @@ public class ExportService {
         report.put("periodEnd", endDate != null ? endDate.format(dateFormatter) : "все время");
         report.put("generatedAt", LocalDateTime.now().format(dateTimeFormatter));
 
-        // Статистика
         report.put("totalLessons", totalLessons);
         report.put("completedLessons", completedLessons);
         report.put("cancelledLessons", cancelledLessons);
@@ -141,7 +135,6 @@ public class ExportService {
         report.put("averageGrade", Math.round(averageGrade * 10) / 10.0);
         report.put("totalPayments", totalPayments);
 
-        // Детали
         report.put("progressTimeline", progressTimeline);
         report.put("lessonDetails", lessonDetails);
         report.put("homeworkDetails", homeworkDetails);
@@ -155,14 +148,13 @@ public class ExportService {
     public Map<String, Object> generateFinancialReport(Long tutorId, LocalDateTime startDate, LocalDateTime endDate) {
         List<Payment> payments = paymentRepository.findByTutorIdAndPaymentDateBetween(tutorId, startDate, endDate);
 
-        // Доходы по типам
         double totalIncome = payments.stream()
-                .filter(p -> "paid".equals(p.getStatus()))
+                .filter(p -> "PAID".equals(p.getStatus()))
                 .mapToDouble(Payment::getAmount)
                 .sum();
 
         double subscriptionIncome = payments.stream()
-                .filter(p -> "paid".equals(p.getStatus()) &&
+                .filter(p -> "PAID".equals(p.getStatus()) &&
                         ("subscription".equals(p.getPaymentType()) ||
                                 (p.getCourseName() != null && p.getCourseName().contains("Абонемент"))))
                 .mapToDouble(Payment::getAmount)
@@ -170,7 +162,6 @@ public class ExportService {
 
         double singleIncome = totalIncome - subscriptionIncome;
 
-        // Доходы по месяцам
         Map<String, Double> monthlyIncome = new LinkedHashMap<>();
         LocalDateTime current = startDate;
         while (current.isBefore(endDate)) {
@@ -179,7 +170,7 @@ public class ExportService {
             final LocalDateTime monthEnd = current.plusMonths(1);
 
             double monthTotal = payments.stream()
-                    .filter(p -> "paid".equals(p.getStatus()))
+                    .filter(p -> "PAID".equals(p.getStatus()))
                     .filter(p -> p.getPaymentDate().isAfter(monthStart) && p.getPaymentDate().isBefore(monthEnd))
                     .mapToDouble(Payment::getAmount)
                     .sum();
@@ -188,12 +179,11 @@ public class ExportService {
             current = current.plusMonths(1);
         }
 
-        // Доходы по ученикам
         List<Map<String, Object>> studentIncome = new ArrayList<>();
         Map<Long, Double> studentTotal = new HashMap<>();
 
         for (Payment payment : payments) {
-            if ("paid".equals(payment.getStatus()) && payment.getStudent() != null) {
+            if ("PAID".equals(payment.getStatus()) && payment.getStudent() != null) {
                 Long studentId = payment.getStudent().getId();
                 studentTotal.put(studentId, studentTotal.getOrDefault(studentId, 0.0) + payment.getAmount());
             }
@@ -230,14 +220,12 @@ public class ExportService {
      * Формирование отчёта по группе/курсу
      */
     public Map<String, Object> generateCourseReport(Long tutorId, Long courseId, LocalDateTime startDate, LocalDateTime endDate) {
-        // Получаем всех учеников, у которых есть этот репетитор
         List<Student> allStudents = studentRepository.findAll();
         List<Student> students = allStudents.stream()
                 .filter(s -> s.getTutors().stream().anyMatch(t -> t.getId().equals(tutorId)))
                 .toList();
 
         if (courseId != null) {
-            // Фильтрация по курсу (нужно будет доработать)
             students = students.stream()
                     .filter(s -> {
                         List<Lesson> studentLessons = lessonRepository.findByStudentIdOrderByLessonDateAscStartTimeAsc(s.getId());
@@ -253,7 +241,6 @@ public class ExportService {
             studentReports.add(studentReport);
         }
 
-        // Общая статистика по группе
         double classAverageGrade = studentReports.stream()
                 .mapToDouble(r -> (Double) r.getOrDefault("averageGrade", 0.0))
                 .average()

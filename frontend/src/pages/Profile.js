@@ -105,7 +105,16 @@ const Profile = () => {
     const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
     const [passwordError, setPasswordError] = useState('');
 
-    useEffect(() => { if (user?.id) { fetchProfile(); fetchStats(); fetchAvatar(); fetchActivityData(); } }, [user]);
+    const [referralStats, setReferralStats] = useState({ totalReferrals: 0, bonusDays: 0 });
+    
+    useEffect(() => { if (user?.id) { fetchProfile(); fetchStats(); fetchAvatar(); fetchActivityData(); fetchReferralStats(); } }, [user]);
+
+    const fetchReferralStats = async () => {
+        try {
+            const res = await axiosInstance.get(`/tutors/${user.id}/referral-stats`);
+            setReferralStats({ totalReferrals: res.data.totalReferrals || 0, bonusDays: res.data.bonusDays || 0 });
+        } catch (err) { /* тихо */ }
+    };
 
     // ========== ВСЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ==========
     const fetchProfile = async () => {
@@ -126,12 +135,12 @@ const Profile = () => {
             const completedLessons = lessonsRes.data.filter(l => l.status === 'COMPLETED' || l.status === 'PAID');
             let totalHours = 0;
             completedLessons.forEach(l => { const start = l.startTime.split(':'); const end = l.endTime.split(':'); totalHours += parseInt(end[0]) - parseInt(start[0]); });
-            const totalIncome = paymentsRes.data.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
+            const totalIncome = paymentsRes.data.filter(p => p.status === 'PAID' || p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
             const now = new Date();
             const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
             const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-            const thisMonthIncome = paymentsRes.data.filter(p => { const d = new Date(p.paymentDate); return d >= thisMonthStart && p.status === 'paid'; }).reduce((s, p) => s + p.amount, 0);
+            const thisMonthIncome = paymentsRes.data.filter(p => { const d = new Date(p.paymentDate); return d >= thisMonthStart && (p.status === 'PAID' || p.status === 'paid'); }).reduce((s, p) => s + p.amount, 0);
             const lastMonthIncome = paymentsRes.data.filter(p => { const d = new Date(p.paymentDate); return d >= lastMonthStart && d <= lastMonthEnd && p.status === 'paid'; }).reduce((s, p) => s + p.amount, 0);
             const monthlyGrowth = lastMonthIncome > 0 ? ((thisMonthIncome - lastMonthIncome) / lastMonthIncome) * 100 : 0;
             setStats({ studentsCount, lessonsCount: completedLessons.length, totalHours, totalIncome, monthlyGrowth, thisMonthIncome, lastMonthIncome });
@@ -376,7 +385,66 @@ const Profile = () => {
                                     ))}
                                     {stats.lessonsCount === 0 && <Chip icon={<WarningIcon sx={{ fontSize: 14 }} />} label="Начинающий" variant="outlined" sx={{ borderRadius: '100px', borderColor: '#E5E7EB' }} />}
                                 </Box>
-                                {stats.lessonsCount === 0 && <Alert severity="info" sx={{ mt: 2, borderRadius: '8px', fontSize: '13px' }}>Начните проводить занятия, чтобы открывать новые достижения!</Alert>}
+                                                                {stats.lessonsCount === 0 && <Alert severity="info" sx={{ mt: 2, borderRadius: '8px', fontSize: '13px' }}>Начните проводить занятия, чтобы открывать новые достижения!</Alert>}
+
+                                {/* ========== РЕФЕРАЛЬНАЯ СИСТЕМА ========== */}
+                                <Divider sx={{ my: 3, borderColor: '#F3F4F6' }} />
+                                
+                                <Typography sx={{ fontWeight: 600, fontSize: '15px', color: '#1F2937', mb: 2 }}>
+                                    🎁 Пригласи друга
+                                </Typography>
+                                <Paper sx={{ p: 2.5, bgcolor: '#F5F3FF', borderRadius: '12px', border: '1px solid #C7D2FE' }}>
+                                    {/* Статистика */}
+                                    <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                                        <Box sx={{ flex: 1, textAlign: 'center', p: 1.5, bgcolor: '#FFFFFF', borderRadius: '10px', border: '1px solid #E5E7EB' }}>
+                                            <Typography sx={{ fontSize: '22px', fontWeight: 700, color: '#7C3AED' }}>
+                                                {referralStats.totalReferrals}
+                                            </Typography>
+                                            <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>Приглашено</Typography>
+                                        </Box>
+                                        <Box sx={{ flex: 1, textAlign: 'center', p: 1.5, bgcolor: '#FFFFFF', borderRadius: '10px', border: '1px solid #E5E7EB' }}>
+                                            <Typography sx={{ fontSize: '22px', fontWeight: 700, color: '#10B981' }}>
+                                                +{referralStats.bonusDays}
+                                            </Typography>
+                                            <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>Бонусных дней</Typography>
+                                        </Box>
+                                    </Box>
+                                    
+                                    <Typography sx={{ fontSize: '13px', color: '#5B21B6', mb: 2, lineHeight: 1.6 }}>
+                                        {referralStats.totalReferrals > 0 
+                                            ? `Вы пригласили ${referralStats.totalReferrals} чел. и получили +${referralStats.bonusDays} дней! Отправьте ссылку другу, чтобы получить ещё.`
+                                            : 'Отправьте реферальную ссылку другу. Когда он зарегистрируется, вы оба получите бонус!'}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <TextField
+                                            fullWidth
+                                            size="small"
+                                            value={`https://ed-space.ru/register?ref=${user?.referralCode || '...'}`}
+                                            InputProps={{ readOnly: true }}
+                                            sx={{
+                                                '& .MuiOutlinedInput-root': {
+                                                    borderRadius: '8px',
+                                                    bgcolor: '#FFFFFF',
+                                                    fontSize: '12px',
+                                                    '& fieldset': { borderColor: '#C7D2FE' },
+                                                },
+                                                '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: '11px' }
+                                            }}
+                                        />
+                                        <StyledButton
+                                            variant="contained"
+                                            size="small"
+                                            onClick={() => {
+                                                const link = `https://ed-space.ru/register?ref=${user?.referralCode || ''}`;
+                                                navigator.clipboard.writeText(link);
+                                                showSnackbar('🔗 Ссылка скопирована!', 'success');
+                                            }}
+                                            sx={{ bgcolor: '#7C3AED', '&:hover': { bgcolor: '#6D28D9' }, whiteSpace: 'nowrap', fontSize: '12px', px: 2 }}
+                                        >
+                                            📋 Копировать
+                                        </StyledButton>
+                                    </Box>
+                                </Paper>
                             </Box>
                         )}
                     </StyledPaper>

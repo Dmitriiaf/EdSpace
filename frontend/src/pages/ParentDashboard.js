@@ -108,8 +108,8 @@ function ParentDashboard() {
                     if (student.paymentType === 'subscription') {
                         const response = await axiosInstance.get(`/subscriptions/student/${child.id}`);
                         
-                        const pending = response.data.filter(s => s.status === 'pending');
-                        const active = response.data.filter(s => s.status === 'active');
+                        const pending = response.data.filter(s => s.status === 'PENDING' || s.status === 'pending');
+                        const active = response.data.filter(s => s.status === 'ACTIVE' || s.status === 'active');
                         
                         const pendingWithChild = pending.map(sub => ({
                             ...sub,
@@ -149,11 +149,11 @@ function ParentDashboard() {
                     const subscriptions = response.data;
                     
                     for (const sub of subscriptions) {
-                        if (sub.status === 'active') {
+                        if (sub.status === 'ACTIVE' || sub.status === 'active') {
                             const paymentsRes = await axiosInstance.get(`/payments/student/${child.id}`);
                             
                             const paidAmount = paymentsRes.data
-                                .filter(p => p.subscriptionId === sub.id && p.status === 'paid')
+                                .filter(p => p.subscriptionId === sub.id && (p.status === 'PAID' || p.status === 'paid'))
                                 .reduce((sum, p) => sum + p.amount, 0);
                             
                             const remainingAmount = sub.price - paidAmount;
@@ -474,8 +474,7 @@ function ParentDashboard() {
             return { label: 'Оплачено (абонемент)', color: 'success' };
         }
         
-        if (lesson.status === 'CONFIRMED') return { label: '✅ Оплачено (подтверждено)', color: 'success' };
-        if (lesson.status === 'PAID') return { label: '⏳ Оплачено (ожидает подтверждения)', color: 'warning' };
+        if (lesson.status === 'PAID') return { label: '✅ Оплачено', color: 'success' };
         
         switch(lesson.status) {
             case 'COMPLETED': return { label: 'Проведено (ждёт оплаты)', color: 'warning' };

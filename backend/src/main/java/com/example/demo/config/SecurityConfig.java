@@ -69,6 +69,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/password-reset/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/homework/file/**").permitAll()
+                        .requestMatchers("/ws-board/**").permitAll()
+                        .requestMatchers("/api/boards/*/save-canvas").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(rateLimitFilter(), UsernamePasswordAuthenticationFilter.class)

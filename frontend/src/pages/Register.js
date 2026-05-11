@@ -136,7 +136,10 @@ const Register = () => {
         setLoading(true);
         try {
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const result = await register(formData.fullName, formData.email, formData.password, timezone);
+            // Извлекаем ref из URL (?ref=ede52283)
+            const params = new URLSearchParams(window.location.search);
+            const refCode = params.get('ref') || '';
+            const result = await register(formData.fullName, formData.email, formData.password, timezone, refCode);
             if (result?.error) setError(result.error);
             else navigate('/dashboard', { replace: true });
         } catch (err) {

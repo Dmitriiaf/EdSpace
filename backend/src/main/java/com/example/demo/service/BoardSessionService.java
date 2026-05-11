@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/service/BoardSessionService.java (МНОГО УЧЕНИКОВ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.BoardSession;
@@ -31,25 +32,30 @@ public class BoardSessionService {
     private LessonRepository lessonRepository;
 
     @Transactional
-    public BoardSession createBoard(Long tutorId, Long studentId, Long lessonId, String title, String url) {
+    public BoardSession createBoard(Long tutorId, List<Long> studentIds, Long lessonId, String title, String url) {
         String roomName = "edspace-board-" + UUID.randomUUID().toString().substring(0, 8);
 
         Tutor tutor = tutorRepository.findById(tutorId)
                 .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
-        Student student = null;
-        if (studentId != null) {
-            student = studentRepository.findById(studentId)
-                    .orElseThrow(() -> new RuntimeException("Ученик не найден"));
+
+        List<Student> students = new ArrayList<>();
+        if (studentIds != null && !studentIds.isEmpty()) {
+            students = studentRepository.findAllById(studentIds);
         }
 
         BoardSession.BoardSessionBuilder builder = BoardSession.builder()
                 .roomName(roomName)
                 .tutor(tutor)
-                .student(student)
+                .students(students)
                 .title(title)
                 .url(url)
                 .status("ACTIVE")
                 .createdAt(LocalDateTime.now());
+
+        // Обратная совместимость — первый ученик в student_id
+        if (!students.isEmpty()) {
+            builder.student(students.get(0));
+        }
 
         if (lessonId != null) {
             Lesson lesson = lessonRepository.findById(lessonId)
@@ -70,7 +76,9 @@ public class BoardSessionService {
             map.put("roomName", b.getRoomName());
             map.put("url", b.getUrl());
             map.put("title", b.getTitle());
-            map.put("studentName", b.getStudent() != null ? b.getStudent().getFullName() : "");
+            map.put("studentName", b.getStudentNames());
+            map.put("studentIds", b.getStudentIds());
+            map.put("studentCount", b.getStudents() != null ? b.getStudents().size() : 0);
             map.put("lessonId", b.getLesson() != null ? b.getLesson().getId() : null);
             map.put("createdAt", b.getCreatedAt().toString());
             result.add(map);
@@ -94,6 +102,29 @@ public class BoardSessionService {
             result.add(map);
         }
         return result;
+    }
+
+    @Transactional
+    public BoardSession updateBoard(Long boardId, String title, String url, List<Long> studentIds) {
+        BoardSession board = boardSessionRepository.findById(boardId)
+                .orElseThrow(() -> new RuntimeException("Доска не найдена"));
+
+        if (title != null) board.setTitle(title);
+        if (url != null) board.setUrl(url);
+
+        if (studentIds != null) {
+            List<Student> newStudents = studentRepository.findAllById(studentIds);
+            board.setStudents(newStudents);
+            // Обратная совместимость
+            if (!newStudents.isEmpty()) {
+                board.setStudent(newStudents.get(0));
+            } else {
+                board.setStudent(null);
+            }
+        }
+
+        board.setUpdatedAt(LocalDateTime.now());
+        return boardSessionRepository.save(board);
     }
 
     public BoardSession getById(Long id) {
@@ -122,6 +153,51 @@ public class BoardSessionService {
 
     public BoardSession getByLessonId(Long lessonId) {
         return boardSessionRepository.findByLessonIdAndStatus(lessonId, "ACTIVE").orElse(null);
+    }
+
+    @Transactional
+    public int archiveOldBoards(int daysOld) {
+        LocalDateTime threshold = LocalDateTime.now().minusDays(daysOld);
+        List<BoardSession> oldBoards = boardSessionRepository
+                .findByStatusAndUpdatedAtBefore("ACTIVE", threshold);
+        int count = 0;
+        for (BoardSession board : oldBoards) {
+            board.setStatus("ARCHIVED");
+            board.setArchivedAt(LocalDateTime.now());
+            boardSessionRepository.save(board);
+            count++;
+        }
+        return count;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getArchivedTutorBoards(Long tutorId) {
+        List<BoardSession> boards = boardSessionRepository
+                .findByTutorIdAndStatusOrderByCreatedAtDesc(tutorId, "ARCHIVED");
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (BoardSession b : boards) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", b.getId());
+            map.put("roomName", b.getRoomName());
+            map.put("url", b.getUrl());
+            map.put("title", b.getTitle());
+            map.put("studentName", b.getStudentNames());
+            map.put("studentIds", b.getStudentIds());
+            map.put("studentCount", b.getStudents() != null ? b.getStudents().size() : 0);
+            map.put("archivedAt", b.getArchivedAt() != null ? b.getArchivedAt().toString() : "");
+            map.put("createdAt", b.getCreatedAt().toString());
+            result.add(map);
+        }
+        return result;
+    }
+
+    @Transactional
+    public BoardSession restoreBoard(Long boardId) {
+        BoardSession session = boardSessionRepository.findById(boardId)
+                .orElseThrow(() -> new RuntimeException("Доска не найдена"));
+        session.setStatus("ACTIVE");
+        session.setArchivedAt(null);
+        return boardSessionRepository.save(session);
     }
 
     @Transactional

@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/controller/ParentAuthController.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.Parent;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -17,6 +19,9 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/parent-auth")
 @CrossOrigin(origins = "http://localhost:3000")
 public class ParentAuthController {
+
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCK_DURATION_MINUTES = 15;
 
     @Autowired
     private ParentRepository parentRepository;
@@ -52,13 +57,32 @@ public class ParentAuthController {
 
             Parent parent = parentOpt.get();
 
+            // Проверка блокировки
+            if (parent.isLocked()) {
+                long remainingMinutes = java.time.Duration.between(LocalDateTime.now(), parent.getLockedUntil()).toMinutes();
+                return ResponseEntity.status(423).body(Map.of(
+                        "error", "Аккаунт заблокирован. Попробуйте через " + remainingMinutes + " мин.",
+                        "lockedUntil", parent.getLockedUntil().toString()
+                ));
+            }
+
             if (parent.getPasswordHash() == null) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Для этого родителя не установлен пароль. Обратитесь к репетитору."));
             }
 
             if (!passwordEncoder.matches(password, parent.getPasswordHash())) {
+                // Увеличиваем счётчик
+                parent.incrementFailedAttempts();
+                if (parent.getFailedLoginAttempts() >= MAX_FAILED_ATTEMPTS) {
+                    parent.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_DURATION_MINUTES));
+                }
+                parentRepository.save(parent);
                 return ResponseEntity.badRequest().body(Map.of("error", "Неверный пароль"));
             }
+
+            // Успешный вход — сбрасываем
+            parent.resetFailedAttempts();
+            parentRepository.save(parent);
 
             List<Student> allChildren = studentRepository.findByParentId(parent.getId());
 

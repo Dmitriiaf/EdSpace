@@ -12,4 +12,7 @@ public interface BoardSessionRepository extends JpaRepository<BoardSession, Long
     List<BoardSession> findByStudentIdAndStatusOrderByCreatedAtDesc(Long studentId, String status);
     Optional<BoardSession> findByLessonIdAndStatus(Long lessonId, String status);
     Optional<BoardSession> findByRoomName(String roomName);
+    // ДОБАВИТЬ перед последней закрывающей скобкой:
+    List<BoardSession> findByStatusAndUpdatedAtBefore(String status, java.time.LocalDateTime threshold);
+
 }

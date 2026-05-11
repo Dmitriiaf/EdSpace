@@ -192,10 +192,10 @@ function Dashboard() {
             const studentsData = studentsRes.data || [];
             const subscriptionsData = subscriptionsRes.data || [];
             const debtorsListData = studentsData.filter(student => {
-                const activeSub = subscriptionsData.find(sub => sub.student?.id === student.id && sub.status === 'active' && sub.debtLessons > 0);
+                const activeSub = subscriptionsData.find(sub => sub.student?.id === student.id && (sub.status === 'ACTIVE' || sub.status === 'active') && sub.debtLessons > 0);
                 return !!activeSub || (student.missedLessons > 0);
             }).map(student => {
-                const activeSub = subscriptionsData.find(sub => sub.student?.id === student.id && sub.status === 'active');
+                const activeSub = subscriptionsData.find(sub => sub.student?.id === student.id && (sub.status === 'ACTIVE' || sub.status === 'active'));
                 return { ...student, debtLessons: activeSub?.debtLessons || student.missedLessons || 0 };
             });
             setDebtorsList(debtorsListData);
@@ -415,7 +415,6 @@ function Dashboard() {
             'IN_PROGRESS': { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'В процессе' },
             'COMPLETED': { bg: '#FFFBEB', color: '#92400E', dot: '#F59E0B', label: 'Проведено' },
             'PAID': { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'Оплачено' },
-            'CONFIRMED': { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'Подтверждено' },
             'CANCELLED': { bg: '#FEF2F2', color: '#991B1B', dot: '#EF4444', label: 'Отменено' },
             'RESCHEDULED': { bg: '#F5F3FF', color: '#5B21B6', dot: '#8B5CF6', label: 'Перенесено' },
         };
@@ -440,7 +439,7 @@ function Dashboard() {
         const statusConfig = getStatusConfig(lesson.status);
         const isScheduled = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
         const isInProgress = lesson.status === 'IN_PROGRESS';
-        const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID' || lesson.status === 'CONFIRMED';
+        const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID';
         const isCancelled = lesson.status === 'CANCELLED';
         
         return (
@@ -576,7 +575,7 @@ function Dashboard() {
                                         sx={{ color: '#374151', borderColor: '#D1D5DB', '&:hover': { bgcolor: '#F9FAFB' } }}>
                                         Заметки
                                     </StyledButton>
-                                    {lesson.status !== 'PAID' && lesson.status !== 'CONFIRMED' && (
+                                    {lesson.status !== 'PAID' && (
                                         <StyledButton variant="outlined" color="success" startIcon={<CheckIcon sx={{ fontSize: 16 }} />}
                                             onClick={() => handleManualPayment(lesson)}
                                             sx={{ borderColor: '#A7F3D0', color: '#059669', '&:hover': { bgcolor: '#ECFDF5' } }}>

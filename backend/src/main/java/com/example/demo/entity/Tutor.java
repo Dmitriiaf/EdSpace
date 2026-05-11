@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/entity/Tutor.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -27,7 +28,7 @@ public class Tutor {
     private String fullName;
 
     @Column(name = "timezone")
-    private String timezone = "Asia/Krasnoyarsk";  // по умолчанию Красноярск
+    private String timezone = "Asia/Krasnoyarsk";
 
     @Column(name = "avatar")
     private String avatar;
@@ -52,7 +53,6 @@ public class Tutor {
     @Column(nullable = false)
     private String role = "ROLE_TUTOR";
 
-
     @Column(name = "reset_token")
     private String resetToken;
 
@@ -61,6 +61,20 @@ public class Tutor {
 
     @Column(name = "video_room_name", unique = true)
     private String videoRoomName = "edspace-tutor-" + UUID.randomUUID().toString().substring(0, 8);
+
+    // ✅ SEC-5: Лимит попыток входа
+    @Column(name = "failed_login_attempts")
+    private Integer failedLoginAttempts = 0;
+
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
+
+    // ✅ REF-1: Реферальная система
+    @Column(name = "referral_code", unique = true)
+    private String referralCode = UUID.randomUUID().toString().substring(0, 8);
+
+    @Column(name = "referred_by")
+    private Long referredBy;
 
     @OneToMany(mappedBy = "tutor")
     private List<Course> courses = new ArrayList<>();
@@ -76,6 +90,7 @@ public class Tutor {
         this.isActive = true;
         this.role = "ROLE_TUTOR";
         this.videoRoomName = "edspace-tutor-" + UUID.randomUUID().toString().substring(0, 8);
+        this.failedLoginAttempts = 0;
     }
 
     // Геттеры
@@ -96,6 +111,8 @@ public class Tutor {
     public String getResetToken() { return resetToken; }
     public LocalDateTime getResetTokenExpiry() { return resetTokenExpiry; }
     public String getVideoRoomName() { return videoRoomName; }
+    public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
+    public LocalDateTime getLockedUntil() { return lockedUntil; }
 
     // Сеттеры
     public void setTimezone(String timezone) { this.timezone = timezone; }
@@ -113,4 +130,25 @@ public class Tutor {
     public void setResetToken(String resetToken) { this.resetToken = resetToken; }
     public void setResetTokenExpiry(LocalDateTime resetTokenExpiry) { this.resetTokenExpiry = resetTokenExpiry; }
     public void setVideoRoomName(String videoRoomName) { this.videoRoomName = videoRoomName; }
+    public void setFailedLoginAttempts(Integer failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
+    public void setLockedUntil(LocalDateTime lockedUntil) { this.lockedUntil = lockedUntil; }
+
+    public String getReferralCode() { return referralCode; }
+    public void setReferralCode(String referralCode) { this.referralCode = referralCode; }
+    public Long getReferredBy() { return referredBy; }
+    public void setReferredBy(Long referredBy) { this.referredBy = referredBy; }
+
+    // ✅ Вспомогательные методы
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now());
+    }
+
+    public void incrementFailedAttempts() {
+        this.failedLoginAttempts = (this.failedLoginAttempts == null ? 0 : this.failedLoginAttempts) + 1;
+    }
+
+    public void resetFailedAttempts() {
+        this.failedLoginAttempts = 0;
+        this.lockedUntil = null;
+    }
 }

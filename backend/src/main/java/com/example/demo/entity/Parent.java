@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/entity/Parent.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -41,13 +42,20 @@ public class Parent {
     @JsonIgnore
     private List<Student> children = new ArrayList<>();
 
-    // ✅ НОВОЕ ПОЛЕ
     @Column(name = "registration_completed")
     private Boolean registrationCompleted = false;
+
+    // ✅ SEC-5: Лимит попыток входа
+    @Column(name = "failed_login_attempts")
+    private Integer failedLoginAttempts = 0;
+
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
 
     public Parent() {
         this.createdAt = LocalDateTime.now();
         this.registrationCompleted = false;
+        this.failedLoginAttempts = 0;
     }
 
     public Parent(String fullName, String email, String phone) {
@@ -57,6 +65,7 @@ public class Parent {
         this.createdAt = LocalDateTime.now();
         this.role = "ROLE_PARENT";
         this.registrationCompleted = false;
+        this.failedLoginAttempts = 0;
     }
 
     // Геттеры
@@ -70,7 +79,9 @@ public class Parent {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public List<Student> getChildren() { return children; }
     public String getRole() { return role; }
-    public Boolean getRegistrationCompleted() { return registrationCompleted; }  // ✅ Геттер
+    public Boolean getRegistrationCompleted() { return registrationCompleted; }
+    public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
+    public LocalDateTime getLockedUntil() { return lockedUntil; }
 
     // Сеттеры
     public void setResetTokenExpiry(LocalDateTime resetTokenExpiry) { this.resetTokenExpiry = resetTokenExpiry; }
@@ -83,5 +94,21 @@ public class Parent {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public void setChildren(List<Student> children) { this.children = children; }
     public void setRole(String role) { this.role = role; }
-    public void setRegistrationCompleted(Boolean registrationCompleted) { this.registrationCompleted = registrationCompleted; }  // ✅ Сеттер
+    public void setRegistrationCompleted(Boolean registrationCompleted) { this.registrationCompleted = registrationCompleted; }
+    public void setFailedLoginAttempts(Integer failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
+    public void setLockedUntil(LocalDateTime lockedUntil) { this.lockedUntil = lockedUntil; }
+
+    // ✅ Вспомогательные методы
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now());
+    }
+
+    public void incrementFailedAttempts() {
+        this.failedLoginAttempts = (this.failedLoginAttempts == null ? 0 : this.failedLoginAttempts) + 1;
+    }
+
+    public void resetFailedAttempts() {
+        this.failedLoginAttempts = 0;
+        this.lockedUntil = null;
+    }
 }

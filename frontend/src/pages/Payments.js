@@ -144,7 +144,7 @@ function Payments() {
             const monthPayments = payments.filter(p => {
                 const paymentDate = new Date(p.paymentDate);
                 return paymentDate >= monthStart && paymentDate <= monthEnd &&
-                    (p.status === 'CONFIRMED' || p.status === 'PAID' || p.status === 'paid');
+                    (p.status === 'PAID' || p.status === 'paid');
             });
             
             // ID занятий, уже учтённых в платежах
@@ -201,8 +201,7 @@ function Payments() {
 
     const getFilteredPayments = () => {
         let filtered = payments.filter(p =>
-            p.status === 'PAID' || p.status === 'CONFIRMED' || p.status === 'REJECTED' ||
-            p.status === 'paid' || p.status === 'pending'
+            p.status === 'PAID' || p.status === 'paid' || p.status === 'REJECTED' || p.status === 'rejected'
         );
 
         const paidLessonPayments = Array.isArray(allLessons)
@@ -224,7 +223,7 @@ function Payments() {
                         return getStudentRateForTutor(student, user?.id) || 0;
                     })(),
                     paymentType: l.student?.paymentType || 'single',
-                    status: 'CONFIRMED',
+                    status: 'PAID',
                     isManual: true,
                 }))
             : [];
@@ -291,20 +290,12 @@ function Payments() {
 
     const getStatusBadge = (status) => {
         switch(status) {
-            case 'CONFIRMED':
-            case 'confirmed':
-                return (
-                    <Box className="badge badge-success">
-                        <CheckIcon sx={{ fontSize: 12 }} />
-                        Подтверждён
-                    </Box>
-                );
             case 'PAID':
             case 'paid':
                 return (
-                    <Box className="badge badge-info">
-                        <ScheduleIcon sx={{ fontSize: 12 }} />
-                        Ожидает проверки
+                    <Box className="badge badge-success">
+                        <CheckIcon sx={{ fontSize: 12 }} />
+                        Оплачено
                     </Box>
                 );
             case 'REJECTED':
@@ -404,7 +395,7 @@ function Payments() {
                                             .sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate))
                                             .map(payment => {
                                                 const studentName = getStudentName(payment.student?.id);
-                                                const isPending = payment.status === 'PAID';
+                                                const isPending = payment.status === 'PAID' || payment.status === 'paid';
                                                 return (
                                                     <StyledTableRow key={payment.id}>
                                                         <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
@@ -449,7 +440,7 @@ function Payments() {
                                                                         variant="contained"
                                                                         size="small"
                                                                         onClick={async () => {
-                                                                            await axiosInstance.patch(`/payments/${payment.id}/status`, { status: 'CONFIRMED' });
+                                                                            await axiosInstance.patch(`/payments/${payment.id}/status`, { status: 'PAID' });
                                                                             setSnackbar({ open: true, message: '✅ Платёж подтверждён', severity: 'success' });
                                                                             fetchData();
                                                                         }}

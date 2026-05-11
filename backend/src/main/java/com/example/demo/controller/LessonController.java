@@ -1,3 +1,4 @@
+// ========== LessonController.java (исправленный) ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.Lesson;
@@ -184,7 +185,8 @@ public class LessonController {
             }
 
             boolean hasDebt = false;
-            if ("subscription".equals(debtor.getPaymentTypeForTutor(currentUserId))) {                Optional<Subscription> activeSubOpt = subscriptionRepository
+            if ("subscription".equals(debtor.getPaymentTypeForTutor(currentUserId))) {
+                Optional<Subscription> activeSubOpt = subscriptionRepository
                         .findByStudentIdAndTutorIdAndStatus(debtorStudentId, currentUserId, "ACTIVE");
                 if (activeSubOpt.isPresent()) {
                     Subscription sub = activeSubOpt.get();
@@ -214,7 +216,8 @@ public class LessonController {
             lessonService.saveLesson(newLesson);
 
             boolean debtReduced = false;
-            if ("subscription".equals(debtor.getPaymentTypeForTutor(currentUserId))) {                Optional<Subscription> activeSubOpt = subscriptionRepository
+            if ("subscription".equals(debtor.getPaymentTypeForTutor(currentUserId))) {
+                Optional<Subscription> activeSubOpt = subscriptionRepository
                         .findByStudentIdAndTutorIdAndStatus(debtorStudentId, currentUserId, "ACTIVE");
                 if (activeSubOpt.isPresent()) {
                     Subscription sub = activeSubOpt.get();
@@ -476,12 +479,7 @@ public class LessonController {
                     completedLesson.getStudent().getPaymentTypeForTutor(completedLesson.getTutor().getId())
             );
 
-            if (isSubscription) {
-                completedLesson.setStatus("CONFIRMED");
-                completedLesson.setPaidAt(LocalDateTime.now());
-                subscriptionService.useLessonForStudent(completedLesson.getStudent().getId());
-                lessonService.saveLesson(completedLesson);
-            } else {
+            if (!isSubscription) {
                 if (completedLesson.getStudent().getParent() != null) {
                     String message = String.format(
                             "✅ Урок по %s с %s (%s %s) завершён. Пожалуйста, подтвердите оплату.",
@@ -585,10 +583,11 @@ public class LessonController {
             if (isNoShow) {
                 log.debug("isNoShow=true, student={}, paymentType={}", student.getFullName(), student.getPaymentType());
 
-                if ("subscription".equals(student.getPaymentTypeForTutor(currentUserId))) {                    log.debug("Ищем ACTIVE абонемент для studentId={}, tutorId={}", student.getId(), currentUserId);
+                if ("subscription".equals(student.getPaymentTypeForTutor(currentUserId))) {
+                    log.debug("Ищем ACTIVE абонемент для studentId={}, tutorId={}", student.getId(), currentUserId);
 
                     Optional<Subscription> activeSubOpt = subscriptionRepository
-                            .findByStudentIdAndTutorIdAndStatus(student.getId(), currentUserId, "active");
+                            .findByStudentIdAndTutorIdAndStatus(student.getId(), currentUserId, "ACTIVE");
 
                     if (activeSubOpt.isPresent()) {
                         Subscription sub = activeSubOpt.get();
@@ -776,7 +775,8 @@ public class LessonController {
 
             boolean debtReduced = false;
 
-            if ("subscription".equals(student.getPaymentTypeForTutor(currentUserId))) {                log.debug("[RESURRECT] Looking for active subscription: studentId={}, tutorId={}", studentId, currentUserId);
+            if ("subscription".equals(student.getPaymentTypeForTutor(currentUserId))) {
+                log.debug("[RESURRECT] Looking for active subscription: studentId={}, tutorId={}", studentId, currentUserId);
 
                 Optional<Subscription> activeSubOpt = subscriptionRepository
                         .findByStudentIdAndTutorIdAndStatus(studentId, currentUserId, "ACTIVE");

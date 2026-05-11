@@ -185,7 +185,7 @@ function Courses() {
             // 1. Все платежи по курсу (чеки + абонементы)
             const allPaymentIncome = paymentsData
                 .filter(p => (p.courseId || p.course?.id) === course.id && 
-                            (p.status === 'paid' || p.status === 'CONFIRMED' || p.status === 'PAID'))
+                            (p.status === 'PAID' || p.status === 'paid'))
                 .reduce((sum, p) => sum + (p.amount || 0), 0);
 
             // 2. ID занятий, уже учтённых в платежах

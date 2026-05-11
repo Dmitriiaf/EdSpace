@@ -243,8 +243,10 @@ function Subscriptions() {
                 );
             case 'completed':
             case 'COMPLETED':
+            case 'EXPIRED':
                 return (
-                    <Box className="badge badge-neutral">
+                    <Box classNa
+                    me="badge badge-neutral">
                         Завершён
                     </Box>
                 );
@@ -268,20 +270,19 @@ function Subscriptions() {
 
     const getFilteredSubscriptions = () => {
         if (viewMode === 'active') return subscriptions.filter(s => 
-            s.status === 'active' || s.status === 'ACTIVE' || 
-            s.status === 'pending' || s.status === 'PENDING' ||
-            s.status === 'PAID' || s.status === 'paid'
+            s.status === 'ACTIVE' || s.status === 'active' || 
+            s.status === 'PENDING' || s.status === 'pending'
         );
         if (viewMode === 'history') return subscriptions.filter(s => 
-            s.status === 'completed' || s.status === 'COMPLETED'
+            s.status === 'EXPIRED' || s.status === 'COMPLETED' || s.status === 'completed'
         );
         return subscriptions;
     };
 
     const stats = {
-        active: subscriptions.filter(s => s.status === 'active').length,
-        pending: subscriptions.filter(s => s.status === 'pending').length,
-        completed: subscriptions.filter(s => s.status === 'completed').length,
+        active: subscriptions.filter(s => s.status === 'ACTIVE' || s.status === 'active').length,
+        pending: subscriptions.filter(s => s.status === 'PENDING' || s.status === 'pending').length,
+        completed: subscriptions.filter(s => s.status === 'EXPIRED' || s.status === 'COMPLETED' || s.status === 'completed').length,
         totalLessons: subscriptions.reduce((sum, s) => sum + (s.lessonsCount || 0), 0),
         usedLessons: subscriptions.reduce((sum, s) => sum + (s.lessonsUsed || 0), 0),
         totalRevenue: subscriptions.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0)
@@ -405,8 +406,8 @@ function Subscriptions() {
                         {filteredSubscriptions.map((sub) => {
                             const remainingDays = getRemainingDays(sub.endDate);
                             const progress = getProgress(sub.lessonsUsed || 0, sub.lessonsCount);
-                            const isExpiring = remainingDays <= 7 && remainingDays > 0 && sub.status === 'active';
-                            const isOverdue = remainingDays === 0 && sub.status === 'active';
+                            const isExpiring = remainingDays <= 7 && remainingDays > 0 && (sub.status === 'ACTIVE' || sub.status === 'active');
+                            const isOverdue = remainingDays === 0 && (sub.status === 'ACTIVE' || sub.status === 'active');
                             const studentName = sub.studentName || 'Неизвестно';
                             const avatarColor = getAvatarColor(studentName);
                             
@@ -501,7 +502,7 @@ function Subscriptions() {
                                             </Box>
 
                                             {/* Предупреждение */}
-                                            {sub.status === 'active' && (
+                                            {(sub.status === 'ACTIVE' || sub.status === 'active') && (
                                                 <Box sx={{ 
                                                     display: 'flex', alignItems: 'center', gap: 1, 
                                                     p: 1.5, borderRadius: '8px',
@@ -520,7 +521,7 @@ function Subscriptions() {
                                         <Divider sx={{ borderColor: '#F3F4F6' }} />
                                         
                                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                            {(sub.status === 'pending' || sub.status === 'active' || sub.status === 'PAID' || sub.status === 'paid') && (
+                                            {(sub.status === 'PENDING' || sub.status === 'pending' || sub.status === 'ACTIVE' || sub.status === 'active') && (
                                                 <>
                                                     <Tooltip title="Пересчитать занятия">
                                                         <IconButton size="small" onClick={async () => {

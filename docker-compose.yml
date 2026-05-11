@@ -1,5 +1,5 @@
+# ========== docker-compose.yml ==========
 services:
-  # ==================== ТЕКУЩИЕ СЕРВИСЫ EDSPACE ====================
   postgres:
     image: postgres:15-alpine
     container_name: lmstutor-postgres
@@ -62,7 +62,14 @@ services:
     networks:
       - lmstutor-network
 
-  # ==================== GLITCHTIP ДЛЯ МОНИТОРИНГА ====================
+  # Excalidraw — фронтенд
+  excalidraw:
+    image: excalidraw/excalidraw:latest
+    container_name: lmstutor-excalidraw
+    restart: unless-stopped
+    networks:
+      - lmstutor-network
+
   glitchtip-postgres:
     image: postgres:15-alpine
     container_name: glitchtip-postgres

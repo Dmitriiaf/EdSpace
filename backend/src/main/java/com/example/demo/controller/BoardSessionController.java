@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/controller/BoardSessionController.java (МНОГО УЧЕНИКОВ) ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.BoardSession;
@@ -7,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -27,22 +30,104 @@ public class BoardSessionController {
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createBoard(@RequestBody Map<String, Object> request,
                                          @RequestAttribute("userId") Long tutorId) {
-        Long studentId = request.get("studentId") != null ? Long.valueOf(request.get("studentId").toString()) : null;
+        // Поддержка массива studentIds
+        List<Long> studentIds = new ArrayList<>();
+        if (request.containsKey("studentIds") && request.get("studentIds") instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Number> ids = (List<Number>) request.get("studentIds");
+            for (Number id : ids) {
+                studentIds.add(id.longValue());
+            }
+        } else if (request.get("studentId") != null) {
+            // Обратная совместимость — одиночный studentId
+            studentIds.add(Long.valueOf(request.get("studentId").toString()));
+        }
+
         Long lessonId = request.get("lessonId") != null ? Long.valueOf(request.get("lessonId").toString()) : null;
         String title = request.get("title") != null ? request.get("title").toString() : "Доска";
         String url = request.get("url") != null ? request.get("url").toString() : "";
 
-        BoardSession session = boardSessionService.createBoard(tutorId, studentId, lessonId, title, url);
+        BoardSession session = boardSessionService.createBoard(tutorId, studentIds, lessonId, title, url);
 
         return ResponseEntity.ok(Map.of(
                 "id", session.getId(),
                 "roomName", session.getRoomName(),
                 "url", session.getUrl(),
                 "title", session.getTitle(),
-                "studentName", session.getStudent() != null ? session.getStudent().getFullName() : "",
+                "studentName", session.getStudentNames(),
+                "studentIds", session.getStudentIds(),
+                "studentCount", session.getStudents() != null ? session.getStudents().size() : 0,
                 "createdAt", session.getCreatedAt().toString()
         ));
     }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> updateBoard(@PathVariable Long id,
+                                         @RequestBody Map<String, Object> request,
+                                         @RequestAttribute("userId") Long tutorId) {
+        BoardSession session = boardSessionService.getById(id);
+        if (!session.getTutor().getId().equals(tutorId)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+        }
+
+        String title = request.get("title") != null ? request.get("title").toString() : null;
+        String url = request.get("url") != null ? request.get("url").toString() : null;
+
+        List<Long> studentIds = null;
+        if (request.containsKey("studentIds") && request.get("studentIds") instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Number> ids = (List<Number>) request.get("studentIds");
+            studentIds = new ArrayList<>();
+            for (Number num : ids) {
+                studentIds.add(num.longValue());
+            }
+        } else if (request.get("studentId") != null) {
+            studentIds = new ArrayList<>();
+            studentIds.add(Long.valueOf(request.get("studentId").toString()));
+        }
+
+        BoardSession updated = boardSessionService.updateBoard(id, title, url, studentIds);
+
+        return ResponseEntity.ok(Map.of(
+                "id", updated.getId(),
+                "title", updated.getTitle(),
+                "url", updated.getUrl(),
+                "studentName", updated.getStudentNames(),
+                "studentIds", updated.getStudentIds(),
+                "studentCount", updated.getStudents() != null ? updated.getStudents().size() : 0,
+                "message", "Доска обновлена"
+        ));
+    }
+
+    // ========== АРХИВНЫЕ ДОСКИ ==========
+
+    @GetMapping("/tutor/archived")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getArchivedTutorBoards(@RequestAttribute("userId") Long tutorId) {
+        return ResponseEntity.ok(boardSessionService.getArchivedTutorBoards(tutorId));
+    }
+
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> restoreBoard(@PathVariable Long id,
+                                          @RequestAttribute("userId") Long tutorId) {
+        BoardSession session = boardSessionService.getById(id);
+        if (!session.getTutor().getId().equals(tutorId)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+        }
+        boardSessionService.restoreBoard(id);
+        return ResponseEntity.ok(Map.of("message", "Доска восстановлена"));
+    }
+
+    @PostMapping("/archive-old")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> archiveOldBoards(@RequestParam(defaultValue = "30") int days) {
+        int count = boardSessionService.archiveOldBoards(days);
+        return ResponseEntity.ok(Map.of("message", "Архивировано досок: " + count, "count", count));
+    }
+
+    // ========== ОСНОВНЫЕ ЭНДПОИНТЫ ==========
 
     @GetMapping("/tutor")
     @PreAuthorize("hasRole('TUTOR')")

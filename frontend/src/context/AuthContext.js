@@ -1,3 +1,4 @@
+// ========== frontend/src/context/AuthContext.js ==========
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axiosInstance from '../api/axiosConfig';
 
@@ -32,24 +33,24 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         try {
             const response = await axiosInstance.post('auth/login', { email, password });
-            const { token, id, email: userEmail, fullName } = response.data;
-            const userData = { id, email: userEmail, fullName, role: 'tutor' };
+            const { token, id, email: userEmail, fullName, referralCode } = response.data;
+            const userData = { id, email: userEmail, fullName, role: 'tutor', referralCode };
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(userData));
             setToken(token);
             setUser(userData);
             return { success: true };
         } catch (error) {
-            return { success: false, error: error.response?.data?.error || 'Ошибка входа' };
+            const data = error.response?.data;
+            return { success: false, error: data?.error || 'Ошибка входа', lockedUntil: data?.lockedUntil || null };
         }
     };
 
-    const register = async (email, password, fullName, phone) => {
+    const register = async (fullName, email, password, timezone, refCode) => {
         try {
-            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const response = await axiosInstance.post('/auth/register', { email, password, fullName, phone, timezone });
-            const { token, id, email: userEmail, fullName: userName } = response.data;
-            const userData = { id, email: userEmail, fullName: userName, role: 'tutor' };
+            const response = await axiosInstance.post('/auth/register', { email, password, fullName, phone: timezone, timezone, ref: refCode });
+            const { token, id, email: userEmail, fullName: userName, referralCode } = response.data;
+            const userData = { id, email: userEmail, fullName: userName, role: 'tutor', referralCode };
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(userData));
             setToken(token);
@@ -71,7 +72,8 @@ export const AuthProvider = ({ children }) => {
             setUser(userData);
             return { success: true };
         } catch (error) {
-            return { success: false, error: error.response?.data?.error || 'Ошибка входа. Проверьте email и пароль.' };
+            const data = error.response?.data;
+            return { success: false, error: data?.error || 'Ошибка входа. Проверьте email и пароль.', lockedUntil: data?.lockedUntil || null };
         }
     };
 
@@ -86,7 +88,8 @@ export const AuthProvider = ({ children }) => {
             setUser(userData);
             return { success: true };
         } catch (error) {
-            return { success: false, error: error.response?.data?.error || 'Ошибка входа. Проверьте email и пароль.' };
+            const data = error.response?.data;
+            return { success: false, error: data?.error || 'Ошибка входа. Проверьте email и пароль.', lockedUntil: data?.lockedUntil || null };
         }
     };
 

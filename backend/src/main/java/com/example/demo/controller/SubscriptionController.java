@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/controller/SubscriptionController.java (ИСПРАВЛЕННАЯ ВЕРСИЯ — ЕДИНЫЙ РЕГИСТР) ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.Lesson;
@@ -73,8 +74,8 @@ public class SubscriptionController {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
-            if (!"pending".equalsIgnoreCase(sub.getStatus())
-                    && !"active".equalsIgnoreCase(sub.getStatus())
+            if (!"PENDING".equalsIgnoreCase(sub.getStatus())
+                    && !"ACTIVE".equalsIgnoreCase(sub.getStatus())
                     && !"PAID".equalsIgnoreCase(sub.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Нельзя редактировать завершённый абонемент"));
             }
@@ -127,7 +128,6 @@ public class SubscriptionController {
             Subscription subscription = subscriptionRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Абонемент не найден"));
 
-            // Даты уже LocalDate — не нужен toLocalDate()
             LocalDate startDate = subscription.getStartDate() != null
                     ? subscription.getStartDate()
                     : LocalDate.now().minusMonths(1);

@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/service/LessonGeneratorService.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -65,7 +66,6 @@ public class LessonGeneratorService {
             for (WeeklyTemplate template : templates) {
                 if (template.getDayOfWeek() == dayOfWeek) {
 
-                    // Шаблоны уже хранятся в UTC — используем время как есть
                     LocalTime utcStartTime = template.getStartTime();
                     LocalTime utcEndTime = template.getEndTime();
                     LocalDate utcLessonDate = currentDate;
@@ -206,9 +206,9 @@ public class LessonGeneratorService {
         for (Subscription sub : existingSubs) {
             YearMonth subMonth = YearMonth.from(sub.getStartDate());
             if (subMonth.equals(month)) {
-                if ("active".equals(sub.getStatus())) {
+                if ("ACTIVE".equals(sub.getStatus())) {
                     activeSubscription = sub;
-                } else if ("pending".equals(sub.getStatus())) {
+                } else if ("PENDING".equals(sub.getStatus())) {
                     pendingSubscription = sub;
                 }
             }
@@ -234,7 +234,7 @@ public class LessonGeneratorService {
 
                 for (Subscription sub : existingSubs) {
                     YearMonth subMonth = YearMonth.from(sub.getStartDate());
-                    if (subMonth.equals(month) && "pending".equals(sub.getStatus())) {
+                    if (subMonth.equals(month) && "PENDING".equals(sub.getStatus())) {
                         subscriptionRepository.delete(sub);
                         log.info("  → Удалён лишний pending абонемент (ID={})", sub.getId());
                     }
@@ -283,7 +283,7 @@ public class LessonGeneratorService {
                 month.atDay(1),
                 month.atEndOfMonth()
         );
-        newSubscription.setStatus("pending");
+        newSubscription.setStatus("PENDING");
         subscriptionRepository.save(newSubscription);
 
         if (student.getParent() != null) {

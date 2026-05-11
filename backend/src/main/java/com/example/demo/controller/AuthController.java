@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/controller/AuthController.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.controller;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +31,9 @@ import java.util.UUID;
         "https://www.ed-space.ru"
 }, allowCredentials = "true")
 public class AuthController {
+
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCK_DURATION_MINUTES = 15;
 
     @Autowired
     private TutorService tutorService;
@@ -59,6 +64,18 @@ public class AuthController {
                     request.getOrDefault("timezone", "Asia/Krasnoyarsk")
             );
 
+            // Обработка реферального кода
+            String refCode = request.get("ref");
+            if (refCode != null && !refCode.isEmpty()) {
+                Tutor referrer = tutorService.findByReferralCode(refCode);
+                if (referrer != null) {
+                    tutor.setReferredBy(referrer.getId());
+                    tutorService.save(tutor);
+                    log.info("🎁 Репетитор {} пришёл по реферальной ссылке от {}",
+                            tutor.getEmail(), referrer.getEmail());
+                }
+            }
+
             String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR");
 
             return ResponseEntity.ok(Map.of(
@@ -66,7 +83,8 @@ public class AuthController {
                     "id", tutor.getId(),
                     "email", tutor.getEmail(),
                     "fullName", tutor.getFullName(),
-                    "role", "tutor"
+                    "role", "tutor",
+                    "referralCode", tutor.getReferralCode()
             ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -75,24 +93,143 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String password = request.get("password");
+
         try {
-            Tutor tutor = tutorService.login(
-                    request.get("email"),
-                    request.get("password")
-            );
+            // Проверяем всех: tutor, student, parent
+            Object[] userResult = findUserByEmail(email);
+            if (userResult == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Неверный email или пароль"));
+            }
 
-            String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR");
+            String userType = (String) userResult[0];
+            Object user = userResult[1];
 
-            return ResponseEntity.ok(Map.of(
-                    "token", token,
-                    "id", tutor.getId(),
-                    "email", tutor.getEmail(),
-                    "fullName", tutor.getFullName(),
-                    "role", "tutor"
-            ));
+            // Проверка блокировки
+            if (userType.equals("tutor")) {
+                Tutor tutor = (Tutor) user;
+                if (tutor.isLocked()) {
+                    long remainingMinutes = java.time.Duration.between(LocalDateTime.now(), tutor.getLockedUntil()).toMinutes();
+                    return ResponseEntity.status(423).body(Map.of(
+                            "error", "Аккаунт заблокирован. Попробуйте через " + remainingMinutes + " мин.",
+                            "lockedUntil", tutor.getLockedUntil().toString()
+                    ));
+                }
+            } else if (userType.equals("student")) {
+                Student student = (Student) user;
+                if (student.isLocked()) {
+                    long remainingMinutes = java.time.Duration.between(LocalDateTime.now(), student.getLockedUntil()).toMinutes();
+                    return ResponseEntity.status(423).body(Map.of(
+                            "error", "Аккаунт заблокирован. Попробуйте через " + remainingMinutes + " мин.",
+                            "lockedUntil", student.getLockedUntil().toString()
+                    ));
+                }
+            } else if (userType.equals("parent")) {
+                Parent parent = (Parent) user;
+                if (parent.isLocked()) {
+                    long remainingMinutes = java.time.Duration.between(LocalDateTime.now(), parent.getLockedUntil()).toMinutes();
+                    return ResponseEntity.status(423).body(Map.of(
+                            "error", "Аккаунт заблокирован. Попробуйте через " + remainingMinutes + " мин.",
+                            "lockedUntil", parent.getLockedUntil().toString()
+                    ));
+                }
+            }
+
+            // Проверка пароля
+            boolean passwordValid = false;
+            if (userType.equals("tutor")) {
+                passwordValid = passwordEncoder.matches(password, ((Tutor) user).getPasswordHash());
+            } else if (userType.equals("student")) {
+                passwordValid = passwordEncoder.matches(password, ((Student) user).getPasswordHash());
+            } else if (userType.equals("parent")) {
+                passwordValid = passwordEncoder.matches(password, ((Parent) user).getPasswordHash());
+            }
+
+            if (!passwordValid) {
+                // Увеличиваем счётчик неудачных попыток
+                if (userType.equals("tutor")) {
+                    Tutor tutor = (Tutor) user;
+                    tutor.incrementFailedAttempts();
+                    if (tutor.getFailedLoginAttempts() >= MAX_FAILED_ATTEMPTS) {
+                        tutor.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_DURATION_MINUTES));
+                        log.warn("🔒 Репетитор {} заблокирован на {} минут", email, LOCK_DURATION_MINUTES);
+                    }
+                    tutorService.save(tutor);
+                } else if (userType.equals("student")) {
+                    Student student = (Student) user;
+                    student.incrementFailedAttempts();
+                    if (student.getFailedLoginAttempts() >= MAX_FAILED_ATTEMPTS) {
+                        student.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_DURATION_MINUTES));
+                        log.warn("🔒 Ученик {} заблокирован на {} минут", email, LOCK_DURATION_MINUTES);
+                    }
+                    studentRepository.save(student);
+                } else if (userType.equals("parent")) {
+                    Parent parent = (Parent) user;
+                    parent.incrementFailedAttempts();
+                    if (parent.getFailedLoginAttempts() >= MAX_FAILED_ATTEMPTS) {
+                        parent.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_DURATION_MINUTES));
+                        log.warn("🔒 Родитель {} заблокирован на {} минут", email, LOCK_DURATION_MINUTES);
+                    }
+                    parentRepository.save(parent);
+                }
+                return ResponseEntity.badRequest().body(Map.of("error", "Неверный email или пароль"));
+            }
+
+            // Успешный вход — сбрасываем счётчик
+            if (userType.equals("tutor")) {
+                Tutor tutor = (Tutor) user;
+                tutor.resetFailedAttempts();
+                tutorService.save(tutor);
+                String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR");
+                return ResponseEntity.ok(Map.of(
+                        "token", token, "id", tutor.getId(), "email", tutor.getEmail(),
+                        "fullName", tutor.getFullName(), "role", "tutor",
+                        "referralCode", tutor.getReferralCode()
+                ));
+            } else if (userType.equals("student")) {
+                Student student = (Student) user;
+                student.resetFailedAttempts();
+                studentRepository.save(student);
+                String token = jwtUtils.generateToken(student.getEmail(), student.getId(), "ROLE_STUDENT");
+                return ResponseEntity.ok(Map.of(
+                        "token", token, "id", student.getId(), "email", student.getEmail(),
+                        "fullName", student.getFullName(), "role", "student"
+                ));
+            } else {
+                Parent parent = (Parent) user;
+                parent.resetFailedAttempts();
+                parentRepository.save(parent);
+                String token = jwtUtils.generateToken(parent.getEmail(), parent.getId(), "ROLE_PARENT");
+                return ResponseEntity.ok(Map.of(
+                        "token", token, "id", parent.getId(), "email", parent.getEmail(),
+                        "fullName", parent.getFullName(), "role", "parent"
+                ));
+            }
+
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /**
+     * Ищет пользователя по email во всех трёх таблицах.
+     * Возвращает Object[]{тип, объект} или null.
+     */
+    private Object[] findUserByEmail(String email) {
+        // Tutor
+        Tutor tutor = tutorService.findByEmail(email);
+        if (tutor != null) return new Object[]{"tutor", tutor};
+
+        // Student
+        Optional<Student> studentOpt = studentRepository.findByEmail(email).stream().findFirst();
+        if (studentOpt.isPresent()) return new Object[]{"student", studentOpt.get()};
+
+        // Parent
+        Optional<Parent> parentOpt = parentRepository.findByEmail(email);
+        if (parentOpt.isPresent()) return new Object[]{"parent", parentOpt.get()};
+
+        return null;
     }
 
     @PostMapping("/forgot-password")
@@ -108,7 +245,6 @@ public class AuthController {
             String userName = email;
             boolean found = false;
 
-            // 1. Ищем репетитора
             Tutor tutor = tutorService.findByEmail(email);
             if (tutor != null) {
                 tutorService.saveResetToken(email, resetToken);
@@ -117,7 +253,6 @@ public class AuthController {
                 log.info("✅ Найден репетитор: {}", email);
             }
 
-            // 2. Ищем ученика
             if (!found) {
                 Optional<Student> studentOpt = studentRepository.findByEmail(email)
                         .stream().findFirst();
@@ -132,7 +267,6 @@ public class AuthController {
                 }
             }
 
-            // 3. Ищем родителя
             if (!found) {
                 Optional<Parent> parentOpt = parentRepository.findByEmail(email);
                 if (parentOpt.isPresent()) {
@@ -181,10 +315,8 @@ public class AuthController {
         try {
             boolean success = false;
 
-            // 1. Пробуем сбросить для репетитора
             success = tutorService.resetPassword(token, newPassword);
 
-            // 2. Пробуем для ученика
             if (!success) {
                 Optional<Student> studentOpt = studentRepository.findByResetToken(token);
                 if (studentOpt.isPresent()) {
@@ -200,7 +332,6 @@ public class AuthController {
                 }
             }
 
-            // 3. Пробуем для родителя
             if (!success) {
                 Optional<Parent> parentOpt = parentRepository.findByResetToken(token);
                 if (parentOpt.isPresent()) {

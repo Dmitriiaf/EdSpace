@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/service/LessonService.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -121,7 +122,6 @@ public class LessonService {
                     int existDuration = l.getDuration() != null ? l.getDuration() : 60;
                     LocalTime existEnd = existStart.plusMinutes(existDuration);
 
-                    // Пересечение: !(newEnd <= existStart || newStart >= existEnd)
                     return newEnd.isAfter(existStart) && newStart.isBefore(existEnd);
                 });
     }
@@ -136,7 +136,6 @@ public class LessonService {
         return lessonRepository.findByStudentIdOrderByLessonDateAscStartTimeAsc(studentId);
     }
 
-    // ✅ ИСПРАВЛЕНО: используем оптимизированный запрос
     public Lesson getLessonById(Long id) {
         return lessonRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new NotFoundException("Занятие", "id", id));
@@ -165,26 +164,39 @@ public class LessonService {
             lesson.setPaidAt(LocalDateTime.now());
             log.info("Занятие по абонементу автоматически оплачено");
 
-            // ✅ АВТОСПИСАНИЕ ИЗ АБОНЕМЕНТА
+            // АВТОСПИСАНИЕ ИЗ АБОНЕМЕНТА
             subscriptionRepository
                     .findByStudentIdAndTutorIdAndStatus(
                             lesson.getStudent().getId(),
                             lesson.getTutor().getId(),
                             "ACTIVE"
                     )
-                    .or(() -> subscriptionRepository
-                            .findByStudentIdAndTutorIdAndStatus(
-                                    lesson.getStudent().getId(),
-                                    lesson.getTutor().getId(),
-                                    "PAID"
-                            )
-                    )
                     .ifPresent(sub -> {
                         int used = sub.getLessonsUsed() != null ? sub.getLessonsUsed() + 1 : 1;
                         sub.setLessonsUsed(used);
+                        boolean justExpired = false;
+                        if (sub.getLessonsUsed() >= sub.getLessonsCount() && !"EXPIRED".equals(sub.getStatus())) {
+                            sub.setStatus("EXPIRED");
+                            justExpired = true;
+                        }
                         subscriptionRepository.save(sub);
                         log.info("✅ Списано занятие из абонемента {}: использовано {}/{}",
                                 sub.getId(), used, sub.getLessonsCount());
+
+                        // Уведомление при исчерпании абонемента
+                        if (justExpired) {
+                            String expireMsg = String.format(
+                                    "⚠️ У ученика %s закончился абонемент. Использовано %d/%d занятий.",
+                                    lesson.getStudent().getFullName(),
+                                    used,
+                                    sub.getLessonsCount()
+                            );
+                            notificationService.createTutorNotification(
+                                    lesson.getTutor().getId(),
+                                    expireMsg
+                            );
+                            log.info("📢 Уведомление об исчерпании абонемента {} отправлено репетитору", sub.getId());
+                        }
                     });
         } else {
             lesson.setStatus("COMPLETED");
@@ -238,7 +250,6 @@ public class LessonService {
                 originalLesson.getStudent().getPaymentTypeForTutor(originalLesson.getTutor().getId())
         );
 
-        // Переносим заметки в оригинальный урок
         if (notes != null && !notes.isEmpty()) {
             originalLesson.setNotes(notes);
         }
@@ -246,31 +257,42 @@ public class LessonService {
             originalLesson.setNextLessonPlan(nextLessonPlan);
         }
 
-        // Обновляем статус оригинального урока
         if (isSubscription) {
             originalLesson.setStatus("PAID");
             originalLesson.setPaidAt(LocalDateTime.now());
 
-            // ✅ АВТОСПИСАНИЕ ИЗ АБОНЕМЕНТА
+            // АВТОСПИСАНИЕ ИЗ АБОНЕМЕНТА
             subscriptionRepository
                     .findByStudentIdAndTutorIdAndStatus(
                             originalLesson.getStudent().getId(),
                             originalLesson.getTutor().getId(),
                             "ACTIVE"
                     )
-                    .or(() -> subscriptionRepository
-                            .findByStudentIdAndTutorIdAndStatus(
-                                    originalLesson.getStudent().getId(),
-                                    originalLesson.getTutor().getId(),
-                                    "PAID"
-                            )
-                    )
                     .ifPresent(sub -> {
                         int used = sub.getLessonsUsed() != null ? sub.getLessonsUsed() + 1 : 1;
                         sub.setLessonsUsed(used);
+                        boolean justExpired = false;
+                        if (sub.getLessonsUsed() >= sub.getLessonsCount() && !"EXPIRED".equals(sub.getStatus())) {
+                            sub.setStatus("EXPIRED");
+                            justExpired = true;
+                        }
                         subscriptionRepository.save(sub);
                         log.info("✅ Списано занятие из абонемента {}: использовано {}/{}",
                                 sub.getId(), used, sub.getLessonsCount());
+
+                        if (justExpired) {
+                            String expireMsg = String.format(
+                                    "⚠️ У ученика %s закончился абонемент. Использовано %d/%d занятий.",
+                                    originalLesson.getStudent().getFullName(),
+                                    used,
+                                    sub.getLessonsCount()
+                            );
+                            notificationService.createTutorNotification(
+                                    originalLesson.getTutor().getId(),
+                                    expireMsg
+                            );
+                            log.info("📢 Уведомление об исчерпании абонемента {} отправлено репетитору", sub.getId());
+                        }
                     });
         } else {
             originalLesson.setStatus("COMPLETED");
@@ -278,10 +300,8 @@ public class LessonService {
 
         originalLesson.setCompletedAt(LocalDateTime.now());
 
-        // Удаляем перенесённый урок
         lessonRepository.delete(rescheduledLesson);
 
-        // Сохраняем оригинальный
         Lesson savedOriginal = lessonRepository.save(originalLesson);
 
         log.info("Перенесённое занятие завершено и удалено: исходное id={}", savedOriginal.getId());
@@ -312,14 +332,6 @@ public class LessonService {
         return savedLesson;
     }
 
-    @Deprecated
-    @Transactional
-    public Lesson confirmLesson(Long lessonId) {
-        Lesson lesson = getLessonById(lessonId);
-        lesson.setStatus("CONFIRMED");
-        return lessonRepository.save(lesson);
-    }
-
     @Transactional
     public Lesson cancelLesson(Long lessonId, String reason) {
         log.info("Отмена занятия: id={}, причина={}", lessonId, reason);
@@ -336,26 +348,21 @@ public class LessonService {
             throw new BusinessException("Нельзя отменить уже проведённое занятие");
         }
 
-        // Проверяем, это отмена или неявка ученика
         boolean isStudentNoShow = reason != null && reason.equals("Ученик не пришёл");
 
         if (isStudentNoShow) {
-            // Обработка неявки ученика
             Student student = lesson.getStudent();
 
-            // Ищем активный абонемент ученика у этого репетитора
             Optional<Subscription> activeSubscription = subscriptionRepository
                     .findByStudentIdAndTutorIdAndStatus(student.getId(), lesson.getTutor().getId(), "ACTIVE");
 
             if (activeSubscription.isPresent()) {
-                // Абонемент → увеличиваем долг в абонементе
                 Subscription subscription = activeSubscription.get();
                 subscription.setDebtLessons(subscription.getDebtLessons() + 1);
                 subscriptionRepository.save(subscription);
                 log.info("Долг добавлен в абонемент id={}, долгов теперь: {}",
                         subscription.getId(), subscription.getDebtLessons());
             } else {
-                // Поурочная оплата → увеличиваем счётчик пропусков ученика
                 student.setMissedLessons(student.getMissedLessons() != null ? student.getMissedLessons() + 1 : 1);
                 studentRepository.save(student);
                 log.info("Пропуск добавлен ученику id={}, пропусков теперь: {}",
@@ -369,7 +376,6 @@ public class LessonService {
             }
             lesson.setNotes(newNotes);
         } else {
-            // Обычная отмена
             lesson.setStatus("CANCELLED");
             if (reason != null && !reason.isEmpty()) {
                 String newNotes = "❌ Отменено: " + reason;
@@ -381,7 +387,6 @@ public class LessonService {
             }
         }
 
-        // Уведомление родителю
         if (lesson.getStudent().getParent() != null) {
             String message = isStudentNoShow ?
                     String.format("❌ Ученик %s не пришёл на занятие %s %s. Добавлен долг.",
@@ -435,20 +440,17 @@ public class LessonService {
 
         Lesson original = getLessonById(lessonId);
 
-        // ✅ ПРОВЕРКА: НЕЛЬЗЯ ПЕРЕНЕСТИ НА ТО ЖЕ САМОЕ ВРЕМЯ
         if (original.getLessonDate().equals(newDate) &&
                 original.getStartTime().equals(newStartTime) &&
                 original.getEndTime().equals(newEndTime)) {
             throw new BusinessException("Нельзя перенести занятие на то же самое время");
         }
 
-        // ✅ ПРОВЕРКА: НЕЛЬЗЯ ПЕРЕНЕСТИ УЖЕ ПЕРЕНЕСЁННОЕ ЗАНЯТИЕ
         if (original.isRescheduled()) {
             log.warn("Попытка перенести уже перенесённое занятие: id={}", lessonId);
             throw new BusinessException("Это занятие уже было перенесено. Перенесите новое занятие или создайте другое.");
         }
 
-        // ✅ ПРОВЕРКА: НЕЛЬЗЯ ПЕРЕНЕСТИ ПРОВЕДЁННОЕ ИЛИ ОПЛАЧЕННОЕ ЗАНЯТИЕ
         if ("PAID".equals(original.getStatus())) {
             throw new BusinessException("Нельзя перенести уже оплаченное занятие");
         }
@@ -465,7 +467,6 @@ public class LessonService {
             throw new BusinessException("Нельзя перенести отменённое занятие. Создайте новое.");
         }
 
-        // ✅ ПРОВЕРКА КОНФЛИКТОВ В РАСПИСАНИИ
         String conflict = conflictChecker.checkConflictsForReschedule(
                 lessonId,
                 original.getTutor().getId(),
@@ -480,7 +481,6 @@ public class LessonService {
             throw new BusinessException(conflict);
         }
 
-        // ✅ СОЗДАЁМ НОВОЕ ЗАНЯТИЕ
         Lesson newLesson = new Lesson(
                 original.getTutor(),
                 original.getStudent(),
@@ -493,16 +493,14 @@ public class LessonService {
         newLesson.setNotes(original.getNotes());
         newLesson.setNextLessonPlan(original.getNextLessonPlan());
         newLesson.setStatus("RESCHEDULED");
-        newLesson.setWeeklyTemplateId(original.getWeeklyTemplateId()); // ✅ Сохраняем связь с шаблоном
+        newLesson.setWeeklyTemplateId(original.getWeeklyTemplateId());
 
-        // ✅ ПОМЕЧАЕМ ОРИГИНАЛЬНОЕ ЗАНЯТИЕ КАК ПЕРЕНЕСЁННОЕ
         original.setStatus("RESCHEDULED");
         original.setUpdatedAt(LocalDateTime.now());
 
         lessonRepository.save(original);
         Lesson savedNewLesson = lessonRepository.save(newLesson);
 
-        // ✅ УВЕДОМЛЕНИЕ РОДИТЕЛЮ
         if (original.getStudent().getParent() != null) {
             String message = String.format(
                     "🔄 Занятие по %s с %s перенесено с %s %s на %s %s",

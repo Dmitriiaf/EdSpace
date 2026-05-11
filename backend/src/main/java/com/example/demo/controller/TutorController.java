@@ -135,4 +135,20 @@ public class TutorController {
         tutors.forEach(t -> t.setPasswordHash(null));
         return ResponseEntity.ok(tutors);
     }
+
+    // ========== РЕФЕРАЛЬНАЯ СТАТИСТИКА ==========
+
+    @GetMapping("/{id}/referral-stats")
+    public ResponseEntity<?> getReferralStats(@PathVariable Long id) {
+        try {
+            Tutor tutor = tutorService.getTutorById(id);
+            Map<String, Object> stats = tutorService.getReferralStats(id);
+            stats.put("referralCode", tutor.getReferralCode());
+            stats.put("referralLink", "https://ed-space.ru/register?ref=" + tutor.getReferralCode());
+            return ResponseEntity.ok(stats);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
 }
