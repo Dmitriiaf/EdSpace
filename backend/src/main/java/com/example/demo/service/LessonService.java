@@ -326,6 +326,8 @@ public class LessonService {
             throw new BusinessException("Оплатить можно только проведённое занятие");
         }
 
+
+
         if ("PAID".equals(lesson.getStatus())) {
             throw new BusinessException("Занятие уже оплачено");
         }
@@ -343,6 +345,49 @@ public class LessonService {
         log.info("Отмена занятия: id={}, причина={}", lessonId, reason);
 
         Lesson lesson = getLessonById(lessonId);
+
+        // ✅ Если отменяем перенесённый урок — отменяем и оригинал
+        if ("RESCHEDULED".equals(lesson.getStatus()) && lesson.getOriginalLesson() != null) {
+            Lesson originalLesson = lesson.getOriginalLesson();
+
+            // Отменяем оригинал
+            originalLesson.setStatus("CANCELLED");
+            if (reason != null && !reason.isEmpty()) {
+                originalLesson.setNotes("❌ Отменено: перенесённый урок отменён. Причина: " + reason);
+            } else {
+                originalLesson.setNotes("❌ Отменено: перенесённый урок отменён");
+            }
+            originalLesson.setUpdatedAt(LocalDateTime.now());
+            lessonRepository.save(originalLesson);
+
+            // Отменяем перенесённый урок
+            lesson.setStatus("CANCELLED");
+            if (reason != null && !reason.isEmpty()) {
+                lesson.setNotes("❌ Отменено: " + reason);
+            } else {
+                lesson.setNotes("❌ Отменено");
+            }
+            lesson.setUpdatedAt(LocalDateTime.now());
+
+            Lesson savedLesson = lessonRepository.save(lesson);
+            log.info("✅ Перенесённое занятие и оригинал отменены: новое id={}, оригинал id={}", lessonId, originalLesson.getId());
+
+            // Уведомление родителю
+            if (lesson.getStudent().getParent() != null) {
+                String message = String.format(
+                        "❌ Перенесённый урок %s %s отменён. Оригинальный урок также отменён.",
+                        lesson.getLessonDate().toString(),
+                        lesson.getStartTime().toString().substring(0, 5)
+                );
+                notificationService.createNotification(
+                        lesson.getStudent().getParent().getId(),
+                        lesson.getId(),
+                        message
+                );
+            }
+
+            return savedLesson;
+        }
 
         if ("PAID".equals(lesson.getStatus())) {
             log.warn("Попытка отменить оплаченное занятие: id={}", lessonId);

@@ -124,7 +124,22 @@ public class LessonController {
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         try {
             List<Lesson> lessons = lessonService.getLessonsByTutorAndDate(tutorId, date);
-            return ResponseEntity.ok(lessons);
+
+            // ✅ Фильтруем: убираем завершённые/отменённые перенесённые уроки
+            List<Lesson> filtered = lessons.stream()
+                    .filter(lesson -> {
+                        // Если это перенесённый урок (originalLesson != null) и он завершён/отменён/оплачен — скрываем
+                        if (lesson.getOriginalLesson() != null) {
+                            String status = lesson.getStatus();
+                            if ("CANCELLED".equals(status) || "COMPLETED".equals(status) || "PAID".equals(status)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(filtered);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -568,63 +583,11 @@ public class LessonController {
             }
 
             String reason = request != null ? request.get("reason") : null;
-            boolean isNoShow = "ROLE_TUTOR".equals(userRole);
 
-            // Если отменяем перенесённый урок — возвращаем оригинал в SCHEDULED
-            if ("RESCHEDULED".equals(lesson.getStatus()) && lesson.getOriginalLesson() != null) {
-                Lesson originalLesson = lesson.getOriginalLesson();
-                originalLesson.setStatus("SCHEDULED");
-                originalLesson.setUpdatedAt(LocalDateTime.now());
-                lessonRepository.save(originalLesson);
-            }
+            // ✅ Вся логика отмены (включая обработку перенесённых) — в сервисе
+            Lesson cancelledLesson = lessonService.cancelLesson(id, reason);
+            return ResponseEntity.ok(cancelledLesson);
 
-            lesson.setStatus("CANCELLED");
-
-            if (isNoShow) {
-                lesson.setNotes("❌ Ученик не пришёл");
-            } else {
-                lesson.setNotes(reason != null && !reason.isEmpty() ? "❌ Отменено: " + reason : "❌ Отменено");
-            }
-
-            Student student = lesson.getStudent();
-
-            if (isNoShow) {
-                log.debug("isNoShow=true, student={}, paymentType={}", student.getFullName(), student.getPaymentType());
-
-                if ("subscription".equals(student.getPaymentTypeForTutor(currentUserId))) {
-                    log.debug("Ищем ACTIVE абонемент для studentId={}, tutorId={}", student.getId(), currentUserId);
-
-                    Optional<Subscription> activeSubOpt = subscriptionRepository
-                            .findByStudentIdAndTutorIdAndStatus(student.getId(), currentUserId, "ACTIVE");
-
-                    if (activeSubOpt.isPresent()) {
-                        Subscription sub = activeSubOpt.get();
-                        int newDebt = (sub.getDebtLessons() != null ? sub.getDebtLessons() : 0) + 1;
-                        sub.setDebtLessons(newDebt);
-                        subscriptionRepository.save(sub);
-                        log.debug("Долг обновлён! id={}, debt_lessons={}", sub.getId(), newDebt);
-                    } else {
-                        log.debug("ACTIVE абонемент НЕ НАЙДЕН!");
-                    }
-                } else {
-                    int newMissed = (student.getMissedLessons() != null ? student.getMissedLessons() : 0) + 1;
-                    student.setMissedLessons(newMissed);
-                    studentRepository.save(student);
-                    log.debug("Пропуск обновлён! missed_lessons={}", newMissed);
-                }
-            }
-
-            Lesson savedLesson = lessonService.saveLesson(lesson);
-
-            if (student.getParent() != null) {
-                String message = isNoShow ?
-                        String.format("❌ Ученик %s не пришёл на занятие %s %s.",
-                                student.getFullName(), lesson.getLessonDate(), lesson.getStartTime().toString().substring(0, 5)) :
-                        String.format("❌ Урок отменён.");
-                notificationService.createNotification(student.getParent().getId(), lesson.getId(), message);
-            }
-
-            return ResponseEntity.ok(savedLesson);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

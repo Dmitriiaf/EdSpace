@@ -15,6 +15,7 @@ import java.io.File;
 import java.util.stream.Collectors;
 import com.example.demo.service.StudentService;
 
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,26 +44,58 @@ public class HomeworkController {
     @Autowired
     private VariantRepository variantRepository;
 
-    @PostMapping
+    @PostMapping(consumes = {"multipart/form-data"})
     @PreAuthorize("hasRole('TUTOR')")
-    public ResponseEntity<?> createHomework(@RequestBody Map<String, Object> request,
-                                            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+    public ResponseEntity<?> createHomework(
+            @RequestParam("tutorId") Long tutorId,
+            @RequestParam("studentId") Long studentId,
+            @RequestParam("task") String task,
+            @RequestParam(value = "dueDate", required = false) String dueDate,
+            @RequestParam(value = "status", defaultValue = "ASSIGNED") String status,
+            @RequestParam(value = "gradeType", defaultValue = "GRADE_5") String gradeType,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId) throws Exception {
         try {
-            Long tutorId = Long.parseLong(request.get("tutorId").toString());
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-            Long courseId = request.get("courseId") != null ? Long.parseLong(request.get("courseId").toString()) : null;
+
+            LocalDateTime dueDateTime = null;
+            if (dueDate != null && !dueDate.isEmpty()) {
+                dueDateTime = LocalDateTime.parse(dueDate);
+            }
+
             Homework homework = homeworkService.createHomework(
-                    tutorId,
-                    Long.parseLong(request.get("studentId").toString()),
-                    (String) request.get("task"),
-                    request.get("dueDate") != null ? LocalDateTime.parse(request.get("dueDate").toString()) : null,
-                    (String) request.get("status"),
-                    request.get("gradeType") != null ? (String) request.get("gradeType") : "GRADE_5",
-                    request.get("maxScore") != null ? Integer.parseInt(request.get("maxScore").toString()) : null,
-                    courseId
-            );
+                    tutorId, studentId, task, dueDateTime, status, gradeType, null, null);
+
+            // Сохраняем прикреплённые файлы
+            if (files != null && !files.isEmpty()) {
+                StringBuilder attachments = new StringBuilder();
+                String uploadDir = "/opt/EdSpace/uploads/homework/";
+                java.io.File dir = new java.io.File(uploadDir);
+                if (!dir.exists()) dir.mkdirs();
+
+                for (MultipartFile file : files) {
+                    if (file.isEmpty()) continue;
+
+                    if (file.getSize() > 10 * 1024 * 1024) {
+                        return ResponseEntity.badRequest().body(Map.of("error", "Файл '" + file.getOriginalFilename() + "' слишком большой. Максимум 10MB"));
+                    }
+
+                    String originalName = file.getOriginalFilename();
+                    String extension = "";
+                    if (originalName != null && originalName.contains(".")) {
+                        extension = originalName.substring(originalName.lastIndexOf("."));
+                    }
+                    String fileName = "hw_" + homework.getId() + "_" + System.currentTimeMillis() + extension;
+                    file.transferTo(new java.io.File(uploadDir + fileName));
+
+                    if (attachments.length() > 0) attachments.append("\n");
+                    attachments.append("/uploads/homework/").append(fileName);
+                }
+                homework.setAttachments(attachments.toString());
+            }
+
             return ResponseEntity.ok(homework);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -309,7 +342,7 @@ public class HomeworkController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<?> submitHomework(@PathVariable Long id,
                                             @RequestParam(value = "answer", required = false) String answer,
-                                            @RequestParam(value = "file", required = false) MultipartFile file,
+                                            @RequestParam(value = "files", required = false) List<MultipartFile> files,
                                             @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Homework homework = homeworkService.getHomeworkById(id);
@@ -318,35 +351,42 @@ public class HomeworkController {
             }
             String attachments = "";
             if (answer != null && !answer.isEmpty()) attachments = answer;
-            if (file != null && !file.isEmpty()) {
-                // Проверка размера
-                if (file.getSize() > 10 * 1024 * 1024) {
-                    return ResponseEntity.badRequest().body(Map.of("error", "Файл слишком большой. Максимум 10MB"));
-                }
+            if (files != null && !files.isEmpty()) {
+                for (MultipartFile file : files) {
+                    if (file.isEmpty()) continue;
 
-                // Проверка типа
-                String contentType = file.getContentType();
-                if (contentType == null || !contentType.startsWith("image/") &&
-                        !contentType.equals("application/pdf") &&
-                        !contentType.equals("application/msword") &&
-                        !contentType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document") &&
-                        !contentType.startsWith("text/")) {
-                    return ResponseEntity.badRequest().body(Map.of("error", "Неподдерживаемый формат файла"));
-                }
+                    // Проверка размера
+                    if (file.getSize() > 10 * 1024 * 1024) {
+                        return ResponseEntity.badRequest().body(Map.of("error", "Файл '" + file.getOriginalFilename() + "' слишком большой. Максимум 10MB"));
+                    }
 
-                String uploadDir = "/opt/EdSpace/uploads/homework/";
-                java.io.File dir = new java.io.File(uploadDir);
-                if (!dir.exists()) dir.mkdirs();
-                String originalName = file.getOriginalFilename();
-                String extension = "";
-                if (originalName != null && originalName.contains(".")) {
-                    extension = originalName.substring(originalName.lastIndexOf("."));
+                    // Проверка типа
+                    String contentType = file.getContentType();
+                    String fileName_lower = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
+                    if (contentType == null ||
+                            (!contentType.startsWith("image/") &&
+                                    !contentType.equals("application/pdf") &&
+                                    !contentType.equals("application/msword") &&
+                                    !contentType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document") &&
+                                    !contentType.startsWith("text/") &&
+                                    !fileName_lower.matches(".*\\.(jpg|jpeg|png|gif|webp|pdf|doc|docx|txt|odt|rtf|xlsx|xls|csv)$"))) {
+                        return ResponseEntity.badRequest().body(Map.of("error", "Неподдерживаемый формат файла '" + file.getOriginalFilename() + "'"));
+                    }
+
+                    String uploadDir = "/opt/EdSpace/uploads/homework/";
+                    java.io.File dir = new java.io.File(uploadDir);
+                    if (!dir.exists()) dir.mkdirs();
+                    String originalName = file.getOriginalFilename();
+                    String extension = "";
+                    if (originalName != null && originalName.contains(".")) {
+                        extension = originalName.substring(originalName.lastIndexOf("."));
+                    }
+                    String fileName = "hw_" + id + "_" + System.currentTimeMillis() + extension;
+                    java.io.File dest = new java.io.File(uploadDir + fileName);
+                    file.transferTo(dest);
+                    String fileUrl = "/uploads/homework/" + fileName;
+                    attachments += (attachments.isEmpty() ? "" : "\n") + fileUrl;
                 }
-                String fileName = "hw_" + id + "_" + System.currentTimeMillis() + extension;
-                java.io.File dest = new java.io.File(uploadDir + fileName);
-                file.transferTo(dest);
-                String fileUrl = "/uploads/homework/" + fileName;
-                attachments += (attachments.isEmpty() ? "" : "\n") + fileUrl;
             }
             if (attachments.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Нужен ответ или файл"));

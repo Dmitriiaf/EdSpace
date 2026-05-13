@@ -210,16 +210,19 @@ function Dashboard() {
         setLoading(true);
         try {
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
-            
-            // ОДИН лёгкий запрос вместо двух тяжёлых
             const lessonsRes = await getLessonsByDate(user.id, dateStr);
-            const todayLessonsData = lessonsRes.data || [];
+            const todayLessonsData = (lessonsRes.data || []).filter(lesson => {
+                // Скрываем только САМ перенесённый урок (originalLesson != null), если он завершён или отменён
+                if (lesson.originalLesson && (lesson.status === 'CANCELLED' || lesson.status === 'COMPLETED' || lesson.status === 'PAID')) {
+                    return false;
+                }
+                // Всё остальное показываем
+                return true;
+            });
             setTodayLessons(todayLessonsData.sort((a, b) => a.startTime.localeCompare(b.startTime)));
             
-            // previousLessonsMap тоже строим из этих данных (или отдельным лёгким запросом)
             fetchPreviousLessons().catch(() => {});
             fetchDebtors().catch(() => {});
-            
             setError(null);
         } catch (err) {
             setError('Ошибка загрузки данных');
@@ -235,9 +238,12 @@ function Dashboard() {
             const lessonsData = response.data !== undefined ? response.data : response;
             const filtered = lessonsData.filter(lesson => {
                 if (lesson.lessonDate !== dateStr) return false;
-                if (lesson.status === 'RESCHEDULED' && !lesson.originalLesson) {
-                    return !lessonsData.some(l => l.originalLesson?.id === lesson.id);
+                
+                // Скрываем только САМ перенесённый урок, если он завершён или отменён
+                if (lesson.originalLesson && (lesson.status === 'CANCELLED' || lesson.status === 'COMPLETED' || lesson.status === 'PAID')) {
+                    return false;
                 }
+                
                 return true;
             });
             setTodayLessons(filtered.sort((a, b) => a.startTime.localeCompare(b.startTime)));
