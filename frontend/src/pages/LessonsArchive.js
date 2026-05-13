@@ -1,5 +1,6 @@
 // ========== frontend/src/pages/LessonsArchive.js (РЕДИЗАЙН v2) ==========
 import React, { useState, useEffect } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import axiosInstance, { getArchivedLessons } from '../services/api';
 import {
     Box, Paper, Typography, Table, TableBody, TableCell,
@@ -100,6 +101,7 @@ function getInitials(name) {
 
 function LessonsArchive() {
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Расписание'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
     const [lessons, setLessons] = useState([]);
@@ -384,7 +386,7 @@ function LessonsArchive() {
     if (loading) return (
         <PageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <CircularProgress sx={{ color: '#4F46E5' }} />
+                <EdSpaceLoader text="Загрузка архива..." />
             </Box>
             <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
                 <Alert severity={snackbar.severity} sx={{ borderRadius: '8px' }}>{snackbar.message}</Alert>

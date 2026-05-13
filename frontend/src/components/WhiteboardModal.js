@@ -2,12 +2,12 @@ import React from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Box, Typography, Button } from '@mui/material';
 import { Close as CloseIcon, Draw as DrawIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material';
 
-function WhiteboardModal({ open, onClose, roomName, username }) {
+function WhiteboardModal({ open, onClose, roomName, username, encryptionKey }) {
     if (!roomName) return null;
     
     const cleanRoom = roomName.replace(/[^a-zA-Z0-9_-]/g, '');
-    const boardUrl = `/excalidraw/?room=${cleanRoom},${encodeURIComponent(username)}`;
     
+    const boardUrl = `/wbo/boards/${cleanRoom}`;
     return (
         <Dialog 
             open={open} 

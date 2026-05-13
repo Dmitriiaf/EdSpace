@@ -88,3 +88,12 @@ jitsi:
 
 excalidraw:
   url: ${EXCALIDRAW_URL:https://excalidraw.com}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

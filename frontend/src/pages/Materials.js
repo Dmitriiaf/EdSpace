@@ -1,5 +1,6 @@
 // ========== frontend/src/pages/Materials.js (РЕДИЗАЙН v2) ==========
 import React, { useState, useEffect, useRef } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import axiosInstance from '../services/api';
 import {
     Box, Button, Dialog, DialogTitle, DialogContent,
@@ -116,6 +117,7 @@ const getFileTypeFromName = (filename) => {
 
 function Materials() {
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Материалы'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
     
     const [materials, setMaterials] = useState([]);
@@ -360,7 +362,7 @@ function Materials() {
     if (loading) return (
         <PageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <CircularProgress sx={{ color: '#4F46E5' }} />
+                <EdSpaceLoader text="Загрузка..." />
             </Box>
         </PageContainer>
     );

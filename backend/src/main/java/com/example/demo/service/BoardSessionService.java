@@ -1,4 +1,3 @@
-// ========== backend/src/main/java/com/example/demo/service/BoardSessionService.java (МНОГО УЧЕНИКОВ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.BoardSession;
@@ -13,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -31,9 +31,21 @@ public class BoardSessionService {
     @Autowired
     private LessonRepository lessonRepository;
 
+    // Генерация 22-символьного ключа шифрования
+    private String generateEncryptionKey() {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        StringBuilder key = new StringBuilder();
+        SecureRandom random = new SecureRandom();
+        for (int i = 0; i < 22; i++) {
+            key.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return key.toString();
+    }
+
     @Transactional
     public BoardSession createBoard(Long tutorId, List<Long> studentIds, Long lessonId, String title, String url) {
         String roomName = "edspace-board-" + UUID.randomUUID().toString().substring(0, 8);
+        String encryptionKey = generateEncryptionKey();
 
         Tutor tutor = tutorRepository.findById(tutorId)
                 .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
@@ -45,6 +57,7 @@ public class BoardSessionService {
 
         BoardSession.BoardSessionBuilder builder = BoardSession.builder()
                 .roomName(roomName)
+                .encryptionKey(encryptionKey)
                 .tutor(tutor)
                 .students(students)
                 .title(title)
@@ -52,7 +65,6 @@ public class BoardSessionService {
                 .status("ACTIVE")
                 .createdAt(LocalDateTime.now());
 
-        // Обратная совместимость — первый ученик в student_id
         if (!students.isEmpty()) {
             builder.student(students.get(0));
         }
@@ -74,6 +86,7 @@ public class BoardSessionService {
             Map<String, Object> map = new HashMap<>();
             map.put("id", b.getId());
             map.put("roomName", b.getRoomName());
+            map.put("encryptionKey", b.getEncryptionKey());
             map.put("url", b.getUrl());
             map.put("title", b.getTitle());
             map.put("studentName", b.getStudentNames());
@@ -94,6 +107,7 @@ public class BoardSessionService {
             Map<String, Object> map = new HashMap<>();
             map.put("id", b.getId());
             map.put("roomName", b.getRoomName());
+            map.put("encryptionKey", b.getEncryptionKey());
             map.put("url", b.getUrl());
             map.put("title", b.getTitle());
             map.put("tutorName", b.getTutor() != null ? b.getTutor().getFullName() : "");
@@ -115,7 +129,6 @@ public class BoardSessionService {
         if (studentIds != null) {
             List<Student> newStudents = studentRepository.findAllById(studentIds);
             board.setStudents(newStudents);
-            // Обратная совместимость
             if (!newStudents.isEmpty()) {
                 board.setStudent(newStudents.get(0));
             } else {

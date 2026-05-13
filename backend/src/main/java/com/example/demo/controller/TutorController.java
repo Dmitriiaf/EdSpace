@@ -103,9 +103,12 @@ public class TutorController {
                                           @RequestBody Map<String, String> request) {
         try {
             String avatar = request.get("avatar");
-            // ✅ Добавлена проверка на null
             if (avatar == null || avatar.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Аватар не может быть пустым"));
+            }
+            // Проверка размера (base64, примерно)
+            if (avatar.length() > 500 * 1024) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Изображение слишком большое. Максимум 500KB"));
             }
             tutorService.updateAvatar(id, avatar);
             return ResponseEntity.ok(Map.of("message", "Фото успешно загружено"));

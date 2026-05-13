@@ -79,6 +79,7 @@ const ActivityBar = styled(Box)(({ height, hasActivity }) => ({
 
 const Profile = () => {
     const { user, updateUser } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Профиль'; }, []);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [editMode, setEditMode] = useState(false);

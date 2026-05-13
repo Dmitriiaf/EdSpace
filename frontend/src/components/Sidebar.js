@@ -40,7 +40,6 @@ const Sidebar = () => {
     const isStudent = user?.role === 'student';
     const isParent = user?.role === 'parent';
 
-    // Сдвиг контента при раскрытии сайдбара
     useEffect(() => {
         document.body.style.transition = 'margin-left 0.2s ease';
         document.body.style.marginLeft = collapsed ? '64px' : '240px';
@@ -133,7 +132,7 @@ const Sidebar = () => {
             { path: '/task-bank', label: 'Банк заданий', icon: <AssignmentIcon /> },
             { path: '/materials', label: 'Материалы', icon: <FolderIcon /> },
             { path: '/boards', label: 'Доски', icon: <DrawIcon /> },
-            { path: '/extracurricular', label: 'Внеурочная деятельность', icon: <AssignmentIcon /> },
+            { path: '/extracurricular', label: 'Домашние задания', icon: <AssignmentIcon /> },
         ]},
         { title: 'Ещё', items: [
             { path: '/lessons-archive', label: 'Архив', icon: <ArchiveIcon /> },
@@ -151,8 +150,6 @@ const Sidebar = () => {
     ] : [
         { title: '', items: [
             { path: '/parent/dashboard', label: 'Главная', icon: <DashboardIcon /> },
-            { path: '/parent/children', label: 'Дети', icon: <ChildCareIcon /> },
-            { path: '/parent/payments', label: 'Платежи', icon: <PaymentIcon /> },
             { path: '/parent/profile', label: 'Профиль', icon: <PersonIcon /> },
         ]},
     ];
@@ -176,17 +173,8 @@ const Sidebar = () => {
                             🔔 Уведомления {unreadCount > 0 && `(${unreadCount})`}
                         </Typography>
                         {unreadCount > 0 && (
-                            <Button 
-                                size="small" 
-                                onClick={handleMarkAllAsRead}
-                                sx={{ 
-                                    fontSize: '0.75rem', 
-                                    textTransform: 'none', 
-                                    color: '#4F46E5',
-                                    fontWeight: 500,
-                                    '&:hover': { backgroundColor: '#EEF2FF' }
-                                }}
-                            >
+                            <Button size="small" onClick={handleMarkAllAsRead}
+                                sx={{ fontSize: '0.75rem', textTransform: 'none', color: '#4F46E5', fontWeight: 500, '&:hover': { backgroundColor: '#EEF2FF' } }}>
                                 Прочитать всё
                             </Button>
                         )}

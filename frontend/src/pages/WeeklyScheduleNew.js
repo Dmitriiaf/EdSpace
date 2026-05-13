@@ -1,5 +1,6 @@
 // ========== frontend/src/pages/WeeklyScheduleNew.js (РЕДИЗАЙН v2) ==========
 import React, { useState, useEffect } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import { Delete, Edit, Refresh as RefreshIcon, ViewList as ListIcon, CalendarToday as CalendarIcon, Work as WorkIcon, Event as EventIcon, Add as AddIcon } from '@mui/icons-material';
 import {
     Box, Paper, Typography, Table, TableBody, TableCell,
@@ -119,6 +120,7 @@ function getInitials(name) {
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function WeeklySchedule() {
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Расписание'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
     
     const [viewMode, setViewMode] = useState('table');
@@ -327,7 +329,7 @@ function WeeklySchedule() {
     if (loading) return (
         <PageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <CircularProgress sx={{ color: '#4F46E5' }} />
+                <EdSpaceLoader text="Загрузка расписания..." />
             </Box>
         </PageContainer>
     );

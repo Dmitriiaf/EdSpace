@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/LandingPage.js (БЕТА-ТЕСТ v2) ==========
+// ========== frontend/src/pages/LandingPage.js (v3 — С ТАРИФАМИ) ==========
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Box, Button, Typography, Container, Grid,
@@ -9,7 +9,8 @@ import {
 import { styled, keyframes } from '@mui/material/styles';
 import {
     Menu as MenuIcon, ArrowForward, Star, Send,
-    Close, Bolt, VerifiedUser, SupportAgent, AutoAwesome
+    Close, Bolt, VerifiedUser, SupportAgent, AutoAwesome,
+    CheckCircle as CheckIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -44,9 +45,7 @@ const GlowButton = styled(StyledButton)({
     background: `linear-gradient(135deg, ${ACCENT}, #7C3AED)`,
     color: 'white',
     animation: `${glow} 3s ease-in-out infinite`,
-    '&:hover': {
-        transform: 'translateY(-2px)',
-    },
+    '&:hover': { transform: 'translateY(-2px)' },
 });
 
 const GlassCard = styled(Box)({
@@ -120,21 +119,9 @@ const LandingPage = () => {
     };
 
     const advantages = [
-        { 
-            icon: <Bolt sx={{ fontSize: 28 }} />, 
-            title: 'Всё в одном окне', 
-            desc: 'Расписание, видеозвонки, онлайн-доска, домашние задания, оплаты и уведомления — одна платформа вместо четырёх сервисов.' 
-        },
-        { 
-            icon: <VerifiedUser sx={{ fontSize: 28 }} />, 
-            title: 'Прозрачно для родителей', 
-            desc: 'Родители видят расписание, успеваемость и финансы. Сами загружают чеки и оплачивают занятия — вы просто ведёте уроки.' 
-        },
-        { 
-            icon: <SupportAgent sx={{ fontSize: 28 }} />, 
-            title: 'Активная доработка', 
-            desc: 'Платформа в бета-тесте. Мы каждый день добавляем новые функции по запросам репетиторов. Ваши идеи становятся реальностью.' 
-        },
+        { icon: <Bolt sx={{ fontSize: 28 }} />, title: 'Всё в одном окне', desc: 'Расписание, видеозвонки, онлайн-доска, домашние задания, оплаты и уведомления — одна платформа вместо четырёх сервисов.' },
+        { icon: <VerifiedUser sx={{ fontSize: 28 }} />, title: 'Прозрачно для родителей', desc: 'Родители видят расписание, успеваемость и финансы. Сами загружают чеки и оплачивают занятия — вы просто ведёте уроки.' },
+        { icon: <SupportAgent sx={{ fontSize: 28 }} />, title: 'Активная доработка', desc: 'Платформа в бета-тесте. Мы каждый день добавляем новые функции по запросам репетиторов. Ваши идеи становятся реальностью.' },
     ];
 
     const testimonials = [
@@ -182,14 +169,12 @@ const LandingPage = () => {
             {/* ========== HERO ========== */}
             <Box sx={{ position: 'relative', zIndex: 1, pt: { xs: 10, md: 16 }, pb: { xs: 8, md: 12 } }}>
                 <Container maxWidth="md" sx={{ textAlign: 'center' }}>
-                    {/* Бейдж */}
                     <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(79,70,229,0.15)', border: '1px solid rgba(79,70,229,0.3)', borderRadius: 50, px: 2.5, py: 1, mb: 4 }}>
                         <AutoAwesome sx={{ fontSize: 16, color: ACCENT }} />
-                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 500, color: '#A78BFA' }}>Открытое бета-тестирование</Typography>
+                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 500, color: '#A78BFA' }}>Бесплатный пробный период — 14 дней</Typography>
                     </Box>
 
-                    {/* Заголовок */}
-                    <Typography sx={{ fontSize: { xs: '2.2rem', md: '4rem' }, fontWeight: 800, lineHeight: 1.1, mb: 3, letterSpacing: -1 }}>
+                    <Typography component="h1" sx={{ fontSize: { xs: '2.2rem', md: '4rem' }, fontWeight: 800, lineHeight: 1.1, mb: 3, letterSpacing: -1 }}>
                         Платформа для{' '}
                         <Box component="span" sx={{ color: ACCENT, position: 'relative' }}>
                             {typedText}
@@ -201,7 +186,6 @@ const LandingPage = () => {
                         Расписание, видео, онлайн-доска, домашние задания, оплаты и уведомления — всё, что нужно для проведения занятий, в одном окне.
                     </Typography>
 
-                    {/* Кнопки */}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" sx={{ mb: 8 }}>
                         <GlowButton onClick={() => navigate('/register')} endIcon={<ArrowForward />}>
                             Начать бесплатно
@@ -212,7 +196,6 @@ const LandingPage = () => {
                         </StyledButton>
                     </Stack>
 
-                    {/* Аватарки */}
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
                         <AvatarGroup max={5}>
                             {['#4F46E5', '#7C3AED', '#EC4899', '#10B981', '#F59E0B'].map((color, i) => (
@@ -284,6 +267,100 @@ const LandingPage = () => {
                 </Container>
             </Box>
 
+            {/* ========== ТАРИФЫ ========== */}
+            <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 14 }, bgcolor: '#0A0A14' }}>
+                <Container maxWidth="md">
+                    <Typography sx={{ fontSize: { xs: '2rem', md: '3rem' }, fontWeight: 700, textAlign: 'center', mb: 2 }}>
+                        Выберите{' '}
+                        <Box component="span" sx={{ background: `linear-gradient(135deg, ${ACCENT}, #A78BFA)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                            тариф
+                        </Box>
+                    </Typography>
+                    <Typography sx={{ textAlign: 'center', color: TEXT_DIM, mb: 3, fontSize: '1.1rem' }}>
+                        14 дней бесплатно — карта не нужна. Отменить можно в любой момент.
+                    </Typography>
+                    <Grid container spacing={4} justifyContent="center" sx={{ maxWidth: 800, mx: 'auto' }}>
+                        {/* Пробный */}
+                        <Grid item xs={12} sm={6}>
+                            <GlassCard sx={{ textAlign: 'center' }}>
+                                <Typography sx={{ fontSize: '1.3rem', fontWeight: 700, mb: 1 }}>Пробный</Typography>
+                                <Typography sx={{ color: TEXT_DIM, mb: 3, fontSize: '0.95rem' }}>Для знакомства с платформой</Typography>
+                                <Typography sx={{ fontSize: '3rem', fontWeight: 800, mb: 4 }}>0 ₽</Typography>
+                                <Box sx={{ textAlign: 'left', mb: 4 }}>
+                                    {['14 дней бесплатно', 'До 5 учеников', 'Все функции платформы', 'Расписание', 'Видеозвонки', 'Домашние задания', 'Финансовый учёт'].map((f, i) => (
+                                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                            <CheckIcon sx={{ color: SUCCESS, fontSize: 18 }} />
+                                            <Typography sx={{ color: '#CBD5E1', fontSize: '0.9rem' }}>{f}</Typography>
+                                        </Box>
+                                    ))}
+                                </Box>
+                                <StyledButton fullWidth onClick={() => navigate('/register')}
+                                    sx={{ bgcolor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#FFFFFF', '&:hover': { borderColor: ACCENT } }}>
+                                    Начать бесплатно
+                                </StyledButton>
+                            </GlassCard>
+                        </Grid>
+
+                        {/* Профи */}
+                        <Grid item xs={12} sm={6}>
+                            <GlassCard sx={{ 
+                                textAlign: 'center', 
+                                position: 'relative',
+                                border: `2px solid ${ACCENT}`,
+                            }}>
+                                <Box sx={{ 
+                                    position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)',
+                                    bgcolor: ACCENT, color: '#fff', px: 2.5, py: 0.5, borderRadius: 50, fontSize: '0.85rem', fontWeight: 600
+                                }}>
+                                    Основной
+                                </Box>
+                                <Typography sx={{ fontSize: '1.3rem', fontWeight: 700, mb: 1 }}>Профи</Typography>
+                                <Typography sx={{ color: TEXT_DIM, mb: 3, fontSize: '0.95rem' }}>Для активных репетиторов</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', mb: 1 }}>
+                                    <Typography sx={{ fontSize: '3rem', fontWeight: 800 }}>500</Typography>
+                                    <Typography sx={{ color: TEXT_DIM, fontSize: '1.5rem', ml: 0.5 }}>₽/мес</Typography>
+                                </Box>
+                                <Box sx={{ textAlign: 'left', mb: 4 }}>
+                                    {['Всё из Пробного', 'Безлимит учеников', 'Полный финансовый учёт с прогнозами', 'Родительский кабинет', 'Экспорт чеков', 'Приоритетная поддержка', 'Реферальная программа'].map((f, i) => (
+                                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                            <CheckIcon sx={{ color: SUCCESS, fontSize: 18 }} />
+                                            <Typography sx={{ color: '#CBD5E1', fontSize: '0.9rem' }}>{f}</Typography>
+                                        </Box>
+                                    ))}
+                                </Box>
+                                <StyledButton fullWidth onClick={() => navigate('/register')}
+                                    sx={{ bgcolor: ACCENT, color: '#fff', '&:hover': { bgcolor: '#4338CA' } }}>
+                                    Попробовать
+                                </StyledButton>
+                            </GlassCard>
+                        </Grid>
+                    </Grid>
+                    <Typography sx={{ textAlign: 'center', color: TEXT_DIM, mt: 4, fontSize: '0.85rem' }}>
+                        Все функции доступны с первого дня. Ограничиваем только количество учеников в пробном периоде.
+                    </Typography>
+                </Container>
+            </Box>
+
+            {/* ========== FAQ ========== */}
+            <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 14 } }}>
+                <Container maxWidth="sm">
+                    <Typography sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, fontWeight: 700, textAlign: 'center', mb: 6 }}>
+                        Частые вопросы
+                    </Typography>
+                    {[
+                        { q: 'Можно ли отменить подписку в любой момент?', a: 'Да, вы можете отменить подписку в любой момент. Все данные сохранятся, вы просто вернётесь на бесплатный тариф.' },
+                        { q: 'Нужно ли привязывать карту для пробного периода?', a: 'Нет. 14 дней бесплатно без привязки карты. Просто зарегистрируйтесь и пользуйтесь.' },
+                        { q: 'Что будет после пробного периода?', a: 'Вы сможете выбрать тариф Профи за 500 ₽/мес или остаться на бесплатном с ограничением в 5 учеников.' },
+                        { q: 'Подходит ли EdSpace для групповых занятий?', a: 'Да, вы можете создавать группы и вести занятия для нескольких учеников одновременно. Видеозвонки и доски работают для групп.' },
+                    ].map((faq, i) => (
+                        <GlassCard key={i} sx={{ mb: 3, p: 3 }}>
+                            <Typography sx={{ fontWeight: 600, fontSize: '1.05rem', mb: 1 }}>{faq.q}</Typography>
+                            <Typography sx={{ color: TEXT_DIM, fontSize: '0.95rem', lineHeight: 1.6 }}>{faq.a}</Typography>
+                        </GlassCard>
+                    ))}
+                </Container>
+            </Box>
+
             {/* ========== ОТЗЫВЫ ========== */}
             <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 14 }, bgcolor: '#0A0A14' }}>
                 <Container maxWidth="md">
@@ -327,29 +404,9 @@ const LandingPage = () => {
                     <Typography sx={{ color: TEXT_DIM, mb: 5, fontSize: '1.05rem', lineHeight: 1.7 }}>
                         Присоединяйтесь к бета-тесту. Первые 14 дней — бесплатно. Мы поможем настроить всё под вас.
                     </Typography>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
-                        <TextField
-                            placeholder="your@email.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && handleSubscribe()}
-                            sx={{
-                                width: { xs: '100%', sm: 300 },
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 50,
-                                    bgcolor: '#1A1A2E',
-                                    color: '#FFFFFF',
-                                    '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-                                    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
-                                    '&.Mui-focused fieldset': { borderColor: ACCENT },
-                                },
-                                '& .MuiInputBase-input::placeholder': { color: TEXT_DIM },
-                            }}
-                        />
-                        <GlowButton onClick={handleSubscribe} endIcon={<Send />}>
-                            Получить доступ
-                        </GlowButton>
-                    </Stack>
+                    <GlowButton onClick={() => navigate('/register')} endIcon={<ArrowForward />}>
+                        Начать бесплатно
+                    </GlowButton>
                 </Container>
             </Box>
 

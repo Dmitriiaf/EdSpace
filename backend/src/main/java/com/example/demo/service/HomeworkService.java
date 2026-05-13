@@ -58,7 +58,6 @@ public class HomeworkService {
         }
         Homework savedHomework = homeworkRepository.save(homework);
 
-        // Уведомление ученику о новом ДЗ
         try {
             notificationService.createHomeworkNotification(
                     studentId, tutorId,
@@ -101,10 +100,9 @@ public class HomeworkService {
         Homework homework = getHomeworkById(id);
         homework.setSubmittedAt(LocalDateTime.now());
         homework.setAttachments(attachments);
-        homework.setStatus("submitted");
+        homework.setStatus("SUBMITTED");
         Homework savedHomework = homeworkRepository.save(homework);
 
-        // Уведомление репетитору о сдаче ДЗ
         try {
             notificationService.createHomeworkNotification(
                     homework.getStudent().getId(),
@@ -150,10 +148,9 @@ public class HomeworkService {
             else if (percent >= 40) homework.setGrade(2);
             else homework.setGrade(1);
         }
-        homework.setStatus("checked");
+        homework.setStatus("CHECKED");
         Homework savedHomework = homeworkRepository.save(homework);
 
-        // Уведомление ученику о проверке ДЗ
         try {
             notificationService.createHomeworkNotification(
                     homework.getStudent().getId(),
@@ -203,10 +200,9 @@ public class HomeworkService {
             homework.setGrade(normalized);
         }
         if (feedback != null) homework.setFeedback(feedback);
-        homework.setStatus("checked");
+        homework.setStatus("CHECKED");
         Homework savedHomework = homeworkRepository.save(homework);
 
-        // Уведомление ученику о проверке ДЗ
         try {
             notificationService.createHomeworkNotification(
                     homework.getStudent().getId(),
@@ -225,10 +221,9 @@ public class HomeworkService {
         log.info("Возврат на доработку: id={}", id);
         Homework homework = getHomeworkById(id);
         homework.setFeedback(feedback);
-        homework.setStatus("revision");
+        homework.setStatus("RETURNED");
         Homework savedHomework = homeworkRepository.save(homework);
 
-        // Уведомление ученику о возврате на доработку
         try {
             notificationService.createHomeworkNotification(
                     homework.getStudent().getId(),
@@ -251,11 +246,11 @@ public class HomeworkService {
     public Map<String, Long> getHomeworkStatsByStudent(Long studentId) {
         List<Homework> allHomework = homeworkRepository.findByStudentId(studentId);
         long total = allHomework.size();
-        long submitted = allHomework.stream().filter(h -> "submitted".equals(h.getStatus())).count();
-        long checked = allHomework.stream().filter(h -> "checked".equals(h.getStatus())).count();
-        long revision = allHomework.stream().filter(h -> "revision".equals(h.getStatus())).count();
+        long submitted = allHomework.stream().filter(h -> "SUBMITTED".equals(h.getStatus())).count();
+        long checked = allHomework.stream().filter(h -> "CHECKED".equals(h.getStatus())).count();
+        long revision = allHomework.stream().filter(h -> "RETURNED".equals(h.getStatus())).count();
         long overdue = allHomework.stream()
-                .filter(h -> "assigned".equals(h.getStatus()) && h.getDueDate() != null && h.getDueDate().isBefore(LocalDateTime.now()))
+                .filter(h -> "ASSIGNED".equals(h.getStatus()) && h.getDueDate() != null && h.getDueDate().isBefore(LocalDateTime.now()))
                 .count();
         Map<String, Long> stats = new HashMap<>();
         stats.put("totalHomework", total);
@@ -270,24 +265,13 @@ public class HomeworkService {
         return getDetailedProgressStats(studentId, null);
     }
 
-    /**
-     * Получает детальную статистику успеваемости студента с фильтрацией по курсу.
-     * Фильтрация выполняется на уровне БД для лучшей производительности.
-     *
-     * @param studentId ID студента
-     * @param courseId  ID курса (null — все предметы)
-     * @return Map со статистикой: totalHomework, checkedHomework, averageGrade, averagePercentage, gradeDistribution
-     */
     public Map<String, Object> getDetailedProgressStats(Long studentId, Long courseId) {
         log.info("Запрос статистики: studentId={}, courseId={}", studentId, courseId);
-
-        // Используем оптимизированный запрос с фильтрацией на уровне БД
         List<Homework> allHomework = homeworkRepository.findByStudentIdAndOptionalCourse(studentId, courseId);
-
         log.info("Найдено ДЗ: {} (courseId={})", allHomework.size(), courseId != null ? courseId : "все");
 
         List<Homework> checkedHomework = allHomework.stream()
-                .filter(h -> "checked".equals(h.getStatus())).toList();
+                .filter(h -> "CHECKED".equals(h.getStatus())).toList();
 
         double averageGrade = checkedHomework.stream()
                 .mapToInt(h -> h.getGrade() != null ? h.getGrade() : 0)
@@ -318,17 +302,11 @@ public class HomeworkService {
 
     public boolean isOverdue(Long id) {
         Homework homework = getHomeworkById(id);
-        return homework.getDueDate() != null && homework.getDueDate().isBefore(LocalDateTime.now()) && "assigned".equals(homework.getStatus());
+        return homework.getDueDate() != null && homework.getDueDate().isBefore(LocalDateTime.now()) && "ASSIGNED".equals(homework.getStatus());
     }
 
-    /**
-     * Получает статистику по всем ученикам репетитора одним запросом.
-     * Оптимизированная версия для страницы "Успеваемость".
-     */
     public List<Map<String, Object>> getTutorStudentsProgress(Long tutorId, Long courseId) {
         log.info("Массовая загрузка статистики: tutorId={}, courseId={}", tutorId, courseId);
-
-        // Получаем всех учеников репетитора
         List<Student> students = studentRepository.findByTutorId(tutorId);
         log.info("Найдено учеников: {}", students.size());
 
@@ -336,23 +314,19 @@ public class HomeworkService {
 
         for (Student student : students) {
             try {
-                // ✅ Сначала получаем ДЗ с учётом фильтра по курсу
                 List<Homework> allHomework;
                 if (courseId != null) {
-                    // При фильтрации — только ДЗ с указанным course_id
                     allHomework = homeworkRepository.findByStudentIdAndOptionalCourse(student.getId(), courseId);
                 } else {
-                    // Без фильтра — все ДЗ ученика
                     allHomework = homeworkRepository.findByStudentId(student.getId());
                 }
 
-                // ✅ ПРОПУСКАЕМ ученика, если нет ДЗ по выбранному курсу
                 if (courseId != null && allHomework.isEmpty()) {
                     continue;
                 }
 
                 List<Homework> checkedHomework = allHomework.stream()
-                        .filter(h -> "checked".equals(h.getStatus()))
+                        .filter(h -> "CHECKED".equals(h.getStatus()))
                         .collect(Collectors.toList());
 
                 double averageGrade = checkedHomework.stream()
@@ -388,25 +362,19 @@ public class HomeworkService {
         return result;
     }
 
-    /**
-     * Получает историю оценок студента для графика динамики.
-     * Возвращает список точек: дата, баллы, оценка, тип шкалы.
-     */
     public List<Map<String, Object>> getStudentProgressTimeline(Long studentId, Long courseId) {
         log.info("Запрос истории оценок: studentId={}, courseId={}", studentId, courseId);
 
-        // Получаем проверенные ДЗ
         List<Homework> checkedHomework;
         if (courseId != null) {
             List<Homework> all = homeworkRepository.findByStudentIdAndOptionalCourse(studentId, courseId);
             checkedHomework = all.stream()
-                    .filter(h -> "checked".equals(h.getStatus()))
+                    .filter(h -> "CHECKED".equals(h.getStatus()))
                     .collect(Collectors.toList());
         } else {
-            checkedHomework = homeworkRepository.findByStudentIdAndStatus(studentId, "checked");
+            checkedHomework = homeworkRepository.findByStudentIdAndStatus(studentId, "CHECKED");
         }
 
-        // Сортируем по дате создания (старые сначала)
         checkedHomework.sort((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
 
         List<Map<String, Object>> timeline = new ArrayList<>();
@@ -418,7 +386,6 @@ public class HomeworkService {
             point.put("task", hw.getTask() != null ?
                     hw.getTask().substring(0, Math.min(100, hw.getTask().length())) : "Задание");
 
-            // Баллы и проценты
             if (hw.getScore() != null && hw.getMaxScore() != null) {
                 point.put("score", hw.getScore());
                 point.put("maxScore", hw.getMaxScore());
@@ -429,12 +396,10 @@ public class HomeworkService {
                 point.put("percentage", 0);
             }
 
-            // Оценка
             point.put("grade", hw.getGrade() != null ? hw.getGrade() : 0);
             point.put("gradeType", hw.getGradeType() != null ? hw.getGradeType() : "GRADE_5");
             point.put("status", hw.getStatus());
 
-            // Название курса
             point.put("courseName", hw.getCourse() != null ? hw.getCourse().getName() : "Без предмета");
 
             timeline.add(point);

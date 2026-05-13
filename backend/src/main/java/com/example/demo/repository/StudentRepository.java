@@ -65,6 +65,11 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     @Query("SELECT COUNT(s) > 0 FROM Student s JOIN s.tutors t WHERE s.id = :studentId AND t.id = :tutorId")
     boolean existsStudentTutor(@Param("studentId") Long studentId, @Param("tutorId") Long tutorId);
 
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM StudentBoard sb WHERE sb.student.id = :studentId")
+    void deleteBoardNotesByStudentId(@Param("studentId") Long studentId);
+
     // Привязать ученика к репетитору
     @Modifying
     @Transactional

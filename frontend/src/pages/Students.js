@@ -1,6 +1,7 @@
 // ========== frontend/src/pages/Students.js (РЕДИЗАЙН v2) ==========
 import React, { useState, useEffect } from 'react';
 import axiosInstance, { getAllLessons } from '../services/api';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
     Box, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, Paper, IconButton, Alert, Snackbar,
@@ -197,6 +198,7 @@ function MiniBoard({ studentId, tutorId, expanded }) {
 function Students() {
     const navigate = useNavigate();
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Ученики'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
     
     const [students, setStudents] = useState([]);
@@ -219,14 +221,9 @@ function Students() {
     const [submitting, setSubmitting] = useState(false);
     
     const [formData, setFormData] = useState({
-        fullName: '', 
-        email: '', 
-        ratePerLesson: '', 
-        paymentType: 'single', 
-        parentEmail: '',
-        tutorId: user?.id
+        fullName: '', email: '', ratePerLesson: '', discount: 0,
+        paymentType: 'single', parentEmail: '', tutorId: user?.id
     });
-
     const [stats, setStats] = useState({ total: 0, subscription: 0, single: 0, withParent: 0 });
 
     const getStudentRate = (student) => getStudentRateForTutor(student, user?.id);
@@ -337,7 +334,7 @@ function Students() {
         if (submitting) return;
         setSubmitting(true);
         try {
-            const d = { fullName: formData.fullName, email: formData.email, ratePerLesson: formData.ratePerLesson ? parseFloat(formData.ratePerLesson) : null, paymentType: formData.paymentType, parentEmail: formData.parentEmail || null, selfPaid: formData.selfPaid || false, tutorId: user.id };
+            const d = { fullName: formData.fullName, email: formData.email, ratePerLesson: formData.ratePerLesson ? parseFloat(formData.ratePerLesson) : null, discount: formData.discount || 0, paymentType: formData.paymentType, parentEmail: formData.parentEmail || null, selfPaid: formData.selfPaid || false, tutorId: user.id };
             if (editingStudent) { await axiosInstance.put(`/students/${editingStudent.id}`, d); showSnackbar('Ученик обновлён', 'success'); }
             else { await axiosInstance.post('/students', d); showSnackbar('📧 Приглашение отправлено', 'success'); }
             handleCloseDialog();
@@ -376,7 +373,7 @@ function Students() {
     if (loading) return (
         <PageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <CircularProgress sx={{ color: '#4F46E5' }} />
+                <EdSpaceLoader text="Загрузка..." />
             </Box>
         </PageContainer>
     );
@@ -640,9 +637,14 @@ function Students() {
                                                 </Typography>
                                             </Box>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <AttachMoney sx={{ fontSize: 14, color: '#10B981' }} />
-                                                <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '16px' }}>
+                                                <AttachMoney sx={{ fontSize: 14, color: student.discount > 0 ? '#F59E0B' : '#10B981' }} />
+                                                <Typography sx={{ fontWeight: 600, color: student.discount > 0 ? '#F59E0B' : '#10B981', fontSize: '16px' }}>
                                                     {rate || '—'} ₽/занятие
+                                                    {student.discount > 0 && (
+                                                        <Typography component="span" sx={{ fontSize: '12px', color: '#9CA3AF', ml: 0.5 }}>
+                                                            (-{student.discount}%)
+                                                        </Typography>
+                                                    )}
                                                 </Typography>
                                             </Box>
                                         </Box>
@@ -893,6 +895,23 @@ function Students() {
                             value={formData.ratePerLesson} 
                             onChange={handleInputChange} 
                             required 
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: '8px',
+                                    '& fieldset': { borderColor: '#E5E7EB' },
+                                    '&:hover fieldset': { borderColor: '#D1D5DB' },
+                                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                                },
+                            }}
+                        />
+                        <TextField 
+                            fullWidth 
+                            label="Скидка (%)" 
+                            name="discount" 
+                            type="number" 
+                            value={formData.discount || 0} 
+                            onChange={handleInputChange}
+                            inputProps={{ min: 0, max: 100 }}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: '8px',

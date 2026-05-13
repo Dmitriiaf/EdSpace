@@ -217,41 +217,53 @@ public class StudentService {
     public void deleteStudent(Long id) {
         Student student = getStudentById(id);
 
+        // 1. Очистить связи с курсами
         student.getCourses().clear();
         studentRepository.save(student);
 
+        // 2. Удалить ставки
         if (student.getRates() != null) {
             student.getRates().clear();
             studentRepository.save(student);
         }
 
+        // 3. Удалить заметки (student_board)
+        studentRepository.deleteBoardNotesByStudentId(id);
+
+        // 4. Удалить шаблоны
         List<WeeklyTemplate> templates = weeklyTemplateRepository.findByStudentId(id);
         if (!templates.isEmpty()) {
             weeklyTemplateRepository.deleteAll(templates);
         }
 
+        // 5. Удалить уроки
         List<Lesson> lessons = lessonRepository.findByStudentIdOrderByLessonDateAscStartTimeAsc(id);
         if (!lessons.isEmpty()) {
             lessonRepository.deleteAll(lessons);
         }
 
+        // 6. Удалить платежи
         List<Payment> payments = paymentRepository.findByStudentId(id);
         if (!payments.isEmpty()) {
             paymentRepository.deleteAll(payments);
         }
 
+        // 7. Удалить абонементы
         List<Subscription> subscriptions = subscriptionRepository.findByStudentId(id);
         if (!subscriptions.isEmpty()) {
             subscriptionRepository.deleteAll(subscriptions);
         }
 
+        // 8. Удалить приглашения
         invitationTokenRepository.deleteByStudentId(id);
 
+        // 9. Отвязать родителя
         if (student.getParent() != null) {
             student.setParent(null);
             studentRepository.save(student);
         }
 
+        // 10. Удалить ученика
         studentRepository.delete(student);
     }
 

@@ -30,7 +30,6 @@ public class BoardSessionController {
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createBoard(@RequestBody Map<String, Object> request,
                                          @RequestAttribute("userId") Long tutorId) {
-        // Поддержка массива studentIds
         List<Long> studentIds = new ArrayList<>();
         if (request.containsKey("studentIds") && request.get("studentIds") instanceof List) {
             @SuppressWarnings("unchecked")
@@ -39,7 +38,6 @@ public class BoardSessionController {
                 studentIds.add(id.longValue());
             }
         } else if (request.get("studentId") != null) {
-            // Обратная совместимость — одиночный studentId
             studentIds.add(Long.valueOf(request.get("studentId").toString()));
         }
 
@@ -52,6 +50,7 @@ public class BoardSessionController {
         return ResponseEntity.ok(Map.of(
                 "id", session.getId(),
                 "roomName", session.getRoomName(),
+                "encryptionKey", session.getEncryptionKey(),
                 "url", session.getUrl(),
                 "title", session.getTitle(),
                 "studentName", session.getStudentNames(),
@@ -59,6 +58,19 @@ public class BoardSessionController {
                 "studentCount", session.getStudents() != null ? session.getStudents().size() : 0,
                 "createdAt", session.getCreatedAt().toString()
         ));
+    }
+
+    @PutMapping("/save-session-url")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
+    public ResponseEntity<?> saveSessionUrl(@RequestBody Map<String, String> request) {
+        String roomName = request.get("roomName");
+        String sessionUrl = request.get("sessionUrl");
+
+        BoardSession board = boardSessionService.getByRoomName(roomName);
+        board.setUrl(sessionUrl);
+        boardSessionService.save(board);
+
+        return ResponseEntity.ok(Map.of("message", "URL сохранён"));
     }
 
     @PutMapping("/{id}")

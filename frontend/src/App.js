@@ -3,6 +3,7 @@ import React, { useState, useMemo, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import NotFoundPage from './pages/NotFoundPage';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import { Brightness4 as DarkIcon, Brightness7 as LightIcon } from '@mui/icons-material';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -217,7 +218,7 @@ const AppContent = () => {
 
                         {/* Перенаправление */}
                         <Route path="/" element={<Navigate to={isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
-                        <Route path="*" element={<Navigate to={isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
+                        <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                 </Box>
             </Box>

@@ -1,5 +1,6 @@
-// ========== frontend/src/pages/Homework.js (ОРИГИНАЛ + СВЕЖИЙ ДИЗАЙН v10) ==========
+// ========== frontend/src/pages/Homework.js (ОРИГИНАЛ + СВЕЖИЙ ДИЗАЙН v11 — ИСПРАВЛЕН BUG-3) ==========
 import React, { useState, useEffect, useMemo } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
     Box, Typography, Card, CardContent, CardActions,
     Button, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -65,6 +66,7 @@ function getInitials(name) {
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function Homework() {
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Домашние задания'; }, []);
     const isTutor = user?.role === 'tutor' || user?.role === 'ROLE_TUTOR';
     const [openBankPicker, setOpenBankPicker] = useState(false);
     const [bankTab, setBankTab] = useState(0);
@@ -139,7 +141,20 @@ function Homework() {
             if (grade.returnForRevision) {
                 await axiosInstance.patch(`/homework/${selectedHomework.id}/revision`, { feedback: grade.feedback });
             } else {
-                await axiosInstance.patch(`/homework/${selectedHomework.id}/grade`, { grade: grade.grade, feedback: grade.feedback });
+                // Для 100-балльной и 10-балльной — отправляем score
+                if (selectedHomework.gradeType === 'GRADE_100' || selectedHomework.gradeType === 'GRADE_10') {
+                    const maxScore = selectedHomework.gradeType === 'GRADE_100' ? 100 : 10;
+                    await axiosInstance.patch(`/homework/${selectedHomework.id}/grade-with-score`, {
+                        score: grade.grade,
+                        maxScore: maxScore,
+                        feedback: grade.feedback
+                    });
+                } else {
+                    await axiosInstance.patch(`/homework/${selectedHomework.id}/grade`, {
+                        grade: grade.grade,
+                        feedback: grade.feedback
+                    });
+                }
             }
             setOpenCheck(false); setSelectedHomework(null);
             setGrade({ grade: 0, feedback: '', returnForRevision: false }); loadHomework();
@@ -184,7 +199,7 @@ function Homework() {
     if (loading) return (
         <PageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <CircularProgress sx={{ color: '#4F46E5' }} />
+                <EdSpaceLoader text="Загрузка..." />
             </Box>
         </PageContainer>
     );
@@ -530,7 +545,7 @@ function Homework() {
                             {selectedHomework?.status?.toUpperCase() === 'CHECKED' && selectedHomework.grade != null && (
                                 <Box sx={{ mt: 3, p: 2.5, bgcolor: '#ECFDF5', borderRadius: '12px', border: '1px solid #A7F3D0' }}>
                                     <Typography sx={{ fontWeight: 600, color: '#065F46', fontSize: '16px' }}>
-                                        ✅ Оценка: ⭐ {selectedHomework.grade}/5
+                                        ✅ Оценка: {selectedHomework.gradeType === 'GRADE_100' ? `💯 ${selectedHomework.score || selectedHomework.grade}/100` : selectedHomework.gradeType === 'GRADE_10' ? `📊 ${selectedHomework.score || selectedHomework.grade}/10` : `⭐ ${selectedHomework.grade}/5`}
                                     </Typography>
                                     {selectedHomework.feedback && <Typography sx={{ color: '#374151', mt: 1.5, fontSize: '14px' }}>💬 {selectedHomework.feedback}</Typography>}
                                 </Box>
@@ -540,11 +555,39 @@ function Homework() {
                                 <Box sx={{ mt: 3 }}>
                                     <Typography sx={{ fontWeight: 600, color: '#1F2937', mb: 2, fontSize: '16px' }}>Оценивание</Typography>
                                     <Paper sx={{ p: 2.5, bgcolor: '#F9FAFB', borderRadius: '12px', border: '1px solid #E5E7EB', mb: 2 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>Оценка:</Typography>
-                                            <Rating value={grade.grade} onChange={(e, v) => setGrade({ ...grade, grade: v })} max={5} size="large" />
-                                            <Typography sx={{ fontSize: '14px', color: '#4F46E5', fontWeight: 600 }}>{grade.grade > 0 ? `${grade.grade}/5` : ''}</Typography>
-                                        </Box>
+                                        {/* 5-балльная и 10-балльная — звёзды */}
+                                        {(selectedHomework.gradeType === 'GRADE_5' || selectedHomework.gradeType === 'GRADE_10') && (
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>Оценка:</Typography>
+                                                <Rating 
+                                                    value={grade.grade} 
+                                                    onChange={(e, v) => setGrade({ ...grade, grade: v })} 
+                                                    max={selectedHomework.gradeType === 'GRADE_10' ? 10 : 5} 
+                                                    size="large" 
+                                                />
+                                                <Typography sx={{ fontSize: '14px', color: '#4F46E5', fontWeight: 600 }}>
+                                                    {grade.grade > 0 ? `${grade.grade}/${selectedHomework.gradeType === 'GRADE_10' ? 10 : 5}` : ''}
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                        
+                                        {/* 100-балльная — поле ввода */}
+                                        {selectedHomework.gradeType === 'GRADE_100' && (
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>Баллы (0-100):</Typography>
+                                                <TextField 
+                                                    type="number" 
+                                                    value={grade.grade || ''} 
+                                                    onChange={(e) => setGrade({ ...grade, grade: parseInt(e.target.value) || 0 })} 
+                                                    inputProps={{ min: 0, max: 100 }} 
+                                                    size="small" 
+                                                    sx={{ width: 100, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} 
+                                                />
+                                                <Typography sx={{ fontSize: '14px', color: '#4F46E5', fontWeight: 600 }}>
+                                                    {grade.grade > 0 ? `${grade.grade}/100` : ''}
+                                                </Typography>
+                                            </Box>
+                                        )}
                                     </Paper>
                                     <TextField fullWidth label="Комментарий" multiline rows={3} value={grade.feedback} onChange={(e) => setGrade({ ...grade, feedback: e.target.value })} placeholder="Что хорошо, что исправить..." sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }} />
                                     <FormControlLabel control={<Checkbox checked={grade.returnForRevision} onChange={(e) => setGrade({ ...grade, returnForRevision: e.target.checked })} />} label="Вернуть на доработку" sx={{ mt: 1, color: '#92400E' }} />

@@ -1,5 +1,6 @@
 // ========== frontend/src/pages/Finance.js (РЕДИЗАЙН v2) ==========
 import React, { useState, useEffect } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
     Box, Tabs, Tab, Typography, Paper,
     Grid, Card, CardContent, Button,
@@ -7,7 +8,7 @@ import {
     Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, IconButton, Tooltip,
     Divider, Avatar,
-    Menu, MenuItem, Fade
+    Menu, MenuItem, Fade, TextField
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
@@ -122,8 +123,11 @@ function TabPanel({ children, value, index }) {
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function Finance() {
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Финансы'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
-    
+    const [reportData, setReportData] = useState(null);
+    const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
+    const [reportLoading, setReportLoading] = useState(false);
     const [tabValue, setTabValue] = useState(0);
     const [selectedMonth, setSelectedMonth] = useState(new Date());
     const [forecastMonth, setForecastMonth] = useState(new Date(new Date().setMonth(new Date().getMonth() + 1)));
@@ -152,6 +156,22 @@ function Finance() {
             fetchFinanceData();
         }
     }, [user, selectedMonth]);
+
+    const fetchReport = async () => {
+        setReportLoading(true);
+        try {
+            const res = await axiosInstance.get(`/payments/report/${user.id}?month=${reportMonth}`);
+            setReportData(res.data);
+        } catch (err) {
+            console.error('Ошибка загрузки отчёта:', err);
+        } finally {
+            setReportLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (user && tabValue === 3) fetchReport();
+    }, [user, tabValue, reportMonth]);
 
     const fetchFinanceData = async () => {
         if (!user || !user.id) return;
@@ -394,7 +414,7 @@ function Finance() {
     if (loading && tabValue === 0) return (
         <PageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <CircularProgress sx={{ color: '#4F46E5' }} />
+                <EdSpaceLoader text="Загрузка..." />
             </Box>
         </PageContainer>
     );
@@ -474,6 +494,7 @@ function Finance() {
                         <Tab icon={<AssessmentIcon sx={{ fontSize: 20 }} />} label="Обзор" iconPosition="start" />
                         <Tab icon={<PaymentsIcon sx={{ fontSize: 20 }} />} label="Платежи" iconPosition="start" />
                         <Tab icon={<CardGiftcardIcon sx={{ fontSize: 20 }} />} label="Абонементы" iconPosition="start" />
+                        <Tab icon={<AssessmentIcon sx={{ fontSize: 20 }} />} label="Отчёт" iconPosition="start" />
                     </Tabs>
                 </TabsPaper>
 
@@ -900,6 +921,99 @@ function Finance() {
 
                 <TabPanel value={tabValue} index={2}>
                     <Subscriptions />
+                </TabPanel>
+                <TabPanel value={tabValue} index={3}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                        <Typography sx={{ fontSize: '20px', fontWeight: 600, color: '#1F2937' }}>
+                            Ежемесячный отчёт
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                            <TextField
+                                type="month"
+                                value={reportMonth}
+                                onChange={(e) => setReportMonth(e.target.value)}
+                                size="small"
+                                sx={{ 
+                                    '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#fff' }
+                                }}
+                            />
+                            <StyledButton 
+                                variant="contained" 
+                                startIcon={<RefreshIcon sx={{ fontSize: 16 }} />}
+                                onClick={fetchReport}
+                                disabled={reportLoading}
+                                sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}
+                            >
+                                {reportLoading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Загрузить'}
+                            </StyledButton>
+                        </Box>
+                    </Box>
+
+                    {reportData && (
+                        <Fade in={true}>
+                            <Box>
+                                {/* Сводка */}
+                                <Grid container spacing={2} sx={{ mb: 3 }}>
+                                    {[
+                                        { label: 'Доход', value: `${reportData.totalIncome.toLocaleString()} ₽`, color: '#10B981', bg: '#ECFDF5' },
+                                        { label: 'Занятий', value: reportData.totalLessons, color: '#4F46E5', bg: '#EEF2FF' },
+                                        { label: 'Проведено', value: reportData.completedLessons, color: '#F59E0B', bg: '#FFFBEB' },
+                                        { label: 'Отменено', value: reportData.cancelledLessons, color: '#EF4444', bg: '#FEF2F2' },
+                                    ].map((stat, idx) => (
+                                        <Grid item xs={6} md={3} key={idx}>
+                                            <Paper sx={{ p: 2.5, borderRadius: '12px', textAlign: 'center', bgcolor: stat.bg, border: '1px solid #F3F4F6' }}>
+                                                <Typography sx={{ fontSize: '24px', fontWeight: 700, color: stat.color }}>{stat.value}</Typography>
+                                                <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5 }}>{stat.label}</Typography>
+                                            </Paper>
+                                        </Grid>
+                                    ))}
+                                </Grid>
+
+                                {/* Таблица по ученикам */}
+                                <Paper sx={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #F3F4F6' }}>
+                                    <Box sx={{ p: 2, borderBottom: '1px solid #F3F4F6', bgcolor: '#F9FAFB' }}>
+                                        <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '16px' }}>
+                                            Доход по ученикам
+                                        </Typography>
+                                    </Box>
+                                    <TableContainer sx={{ maxHeight: 400 }}>
+                                        <Table stickyHeader size="small">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell sx={{ fontWeight: 600, color: '#6B7280', bgcolor: '#F9FAFB' }}>Ученик</TableCell>
+                                                    <TableCell align="center" sx={{ fontWeight: 600, color: '#6B7280', bgcolor: '#F9FAFB' }}>Всего занятий</TableCell>
+                                                    <TableCell align="center" sx={{ fontWeight: 600, color: '#6B7280', bgcolor: '#F9FAFB' }}>Оплачено</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 600, color: '#6B7280', bgcolor: '#F9FAFB' }}>Доход</TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {reportData.studentBreakdown.map((s, idx) => (
+                                                    <TableRow key={idx} hover sx={{ '&:nth-of-type(even)': { bgcolor: '#F9FAFB' } }}>
+                                                        <TableCell sx={{ color: '#1F2937', fontWeight: 500 }}>{s.studentName}</TableCell>
+                                                        <TableCell align="center" sx={{ color: '#1F2937' }}>{s.totalLessons}</TableCell>
+                                                        <TableCell align="center" sx={{ color: '#1F2937' }}>{s.paidLessons}</TableCell>
+                                                        <TableCell align="right" sx={{ color: '#10B981', fontWeight: 600 }}>
+                                                            {s.income.toLocaleString()} ₽
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                    
+                                    {/* Итого */}
+                                    <Box sx={{ p: 2, borderTop: '2px solid #E5E7EB', bgcolor: '#F9FAFB', display: 'flex', justifyContent: 'space-between' }}>
+                                        <Typography sx={{ fontWeight: 600, color: '#1F2937' }}>
+                                            Итого за месяц
+                                        </Typography>
+                                        <Typography sx={{ fontWeight: 700, color: '#10B981', fontSize: '18px' }}>
+                                            {reportData.totalIncome.toLocaleString()} ₽
+                                        </Typography>
+                                    </Box>
+                                </Paper>
+                            </Box>
+                        </Fade>
+                    )}
                 </TabPanel>
             </PageContainer>
         </LocalizationProvider>

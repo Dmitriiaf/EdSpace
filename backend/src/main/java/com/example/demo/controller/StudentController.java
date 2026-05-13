@@ -73,6 +73,10 @@ public class StudentController {
             if (request.get("ratePerLesson") != null && !request.get("ratePerLesson").toString().isEmpty()) {
                 ratePerLesson = new BigDecimal(request.get("ratePerLesson").toString());
             }
+            Integer discount = 0;
+            if (request.containsKey("discount") && request.get("discount") != null) {
+                discount = Integer.parseInt(request.get("discount").toString());
+            }
 
             String paymentType = (String) request.get("paymentType");
             if (paymentType == null) {
@@ -96,6 +100,12 @@ public class StudentController {
 
                 if (ratePerLesson != null) {
                     existingStudent.setRateForTutor(tutor, ratePerLesson, paymentType);
+                }
+                if (request.containsKey("discount")) {
+                    Object discountObj = request.get("discount");
+                    if (discountObj != null) {
+                        existingStudent.setDiscount(Integer.parseInt(discountObj.toString()));
+                    }
                 }
 
                 studentRepository.save(existingStudent);
@@ -129,6 +139,12 @@ public class StudentController {
                     tutorId,
                     parentEmail
             );
+
+            // Сохраняем скидку
+            if (discount > 0) {
+                student.setDiscount(discount);
+                studentRepository.save(student);
+            }
 
             // Уведомление репетитору о новом ученике
             try {
@@ -354,6 +370,12 @@ public class StudentController {
                     student.setRateForTutor(tutor, rate);
                 }
             }
+            if ("ROLE_TUTOR".equals(userRole) && request.containsKey("discount")) {
+                Object discountObj = request.get("discount");
+                if (discountObj != null) {
+                    student.setDiscount(Integer.parseInt(discountObj.toString()));
+                }
+            }
             if (request.containsKey("archived")) {
                 student.setArchived((Boolean) request.get("archived"));
             }
@@ -474,6 +496,7 @@ public class StudentController {
             map.put("paymentType", student.getPaymentType());
         }
         map.put("missedLessons", student.getMissedLessons() != null ? student.getMissedLessons() : 0);
+        map.put("discount", student.getDiscount() != null ? student.getDiscount() : 0);
         map.put("archived", student.getArchived() != null ? student.getArchived() : false);
 
         if (tutorId != null) {

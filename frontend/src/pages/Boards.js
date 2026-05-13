@@ -1,5 +1,6 @@
 // ========== frontend/src/pages/Boards.js (ДВА ТИПА ДОСОК — ФИНАЛ) ==========
 import React, { useState, useEffect } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
     Box, Typography, Card, CardContent, CardActions,
     TextField, CircularProgress, Alert, Chip, IconButton, Grid,
@@ -83,6 +84,7 @@ function getServiceInfo(url) {
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function Boards() {
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Доски'; }, []);
     const isTutor = user?.role === 'TUTOR' || user?.role === 'ROLE_TUTOR' || user?.role === 'tutor';
     const [boards, setBoards] = useState([]);
     const [archivedBoards, setArchivedBoards] = useState([]);
@@ -140,11 +142,21 @@ function Boards() {
     const handleRestore = async (id) => { try { await axiosInstance.put(`/boards/${id}/restore`); loadBoards(); loadArchivedBoards(); } catch (err) {} };
     const handleDelete = async (id) => { if (!window.confirm('Удалить?')) return; try { await axiosInstance.delete(`/boards/${id}`); loadBoards(); loadArchivedBoards(); } catch (err) {} };
     const handleOpen = (url) => window.open(url, '_blank', 'width=1200,height=800');
-    const handleOpenWhiteboard = (board) => { setWhiteboardData({ roomName: board.roomName, boardId: board.id }); setWhiteboardOpen(true); };
-
+    const handleOpenWhiteboard = (board) => { 
+        setWhiteboardData({ 
+            roomName: board.roomName, 
+            encryptionKey: board.encryptionKey,
+            boardId: board.id 
+        }); 
+        setWhiteboardOpen(true); 
+    };
+    
     const displayBoards = viewMode === 'active' ? boards : archivedBoards;
 
-    if (loading) return <PageContainer><Box sx={{ display: 'flex', justifyContent: 'center', minHeight: '60vh', alignItems: 'center' }}><CircularProgress sx={{ color: '#4F46E5' }} /></Box></PageContainer>;
+    if (loading) return <PageContainer><Box sx={{ display: 'flex', justifyContent: 'center', minHeight: '60vh', alignItems: 'center' }}>
+        <EdSpaceLoader text="Загрузка..." />
+        </Box>
+        </PageContainer>;
 
     return (
         <PageContainer>
@@ -288,8 +300,14 @@ function Boards() {
                     </StyledButton>
                 </DialogActions>
             </StyledDialog>
-
-            <WhiteboardModal open={whiteboardOpen} onClose={() => setWhiteboardOpen(false)} roomName={whiteboardData.roomName} boardId={whiteboardData.boardId} username={user?.fullName || 'Репетитор'} />
+            <WhiteboardModal 
+                open={whiteboardOpen} 
+                onClose={() => setWhiteboardOpen(false)} 
+                roomName={whiteboardData.roomName} 
+                encryptionKey={whiteboardData.encryptionKey}
+                boardId={whiteboardData.boardId} 
+                username={user?.fullName || 'Репетитор'} 
+            />
         </PageContainer>
     );
 }

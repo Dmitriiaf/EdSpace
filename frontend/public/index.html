@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#8B004A" />
+    <meta name="theme-color" content="#4F46E5" />
     <meta name="description" content="EdSpace — платформа для репетиторов. Расписание, финансы, видеозвонки и онлайн-доска в одном окне за 500 ₽/мес." />
-    <meta name="keywords" content="репетитор, платформа для репетиторов, онлайн-уроки, расписание, финансы репетитора" />
+    <meta name="keywords" content="репетитор, платформа для репетиторов, электронное пространство репетитора, электронный дневник для репетитора, расписание занятий, учёт финансов репетитора, онлайн-доска, домашние задания, видеозвонки, онлайн-уроки" /> 
     <meta name="author" content="EdSpace" />
     <meta property="og:title" content="EdSpace — всё для репетитора в одном окне" />
     <meta property="og:description" content="Расписание + Финансы + Видеозвонки + Онлайн-доска. Подключите родителей, принимайте оплату и ведите учёт." />
@@ -19,9 +19,65 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "EdSpace",
+      "description": "Платформа для репетиторов: расписание, финансы, видеозвонки и онлайн-доска в одном окне.",
+      "applicationCategory": "EducationApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "500",
+        "priceCurrency": "RUB",
+        "subscription": "monthly"
+      },
+      "url": "https://ed-space.ru"
+    }
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+      <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root">
+      <style>
+        #root {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 100vh;
+          background: #0F0F1A;
+        }
+        .loader {
+          text-align: center;
+        }
+        .loader-logo {
+          width: 56px;
+          height: 56px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #4F46E5, #7C3AED);
+          margin: 0 auto 16px;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        .loader-text {
+          color: #8892B0;
+          font-family: 'Inter', -apple-system, sans-serif;
+          font-size: 16px;
+          font-weight: 500;
+          letter-spacing: -0.3px;
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.08); opacity: 0.8; }
+        }
+      </style>
+      <div class="loader">
+        <div class="loader-logo"></div>
+        <div class="loader-text">EdSpace загружается...</div>
+      </div>
+    </div>
+  </body>
   </body>
 </html>

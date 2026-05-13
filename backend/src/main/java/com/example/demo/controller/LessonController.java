@@ -570,6 +570,14 @@ public class LessonController {
             String reason = request != null ? request.get("reason") : null;
             boolean isNoShow = "ROLE_TUTOR".equals(userRole);
 
+            // Если отменяем перенесённый урок — возвращаем оригинал в SCHEDULED
+            if ("RESCHEDULED".equals(lesson.getStatus()) && lesson.getOriginalLesson() != null) {
+                Lesson originalLesson = lesson.getOriginalLesson();
+                originalLesson.setStatus("SCHEDULED");
+                originalLesson.setUpdatedAt(LocalDateTime.now());
+                lessonRepository.save(originalLesson);
+            }
+
             lesson.setStatus("CANCELLED");
 
             if (isNoShow) {
@@ -617,6 +625,25 @@ public class LessonController {
             }
 
             return ResponseEntity.ok(savedLesson);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/student/{studentId}/completed")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getCompletedLessons(
+            @PathVariable Long studentId,
+            @RequestParam Long tutorId,
+            @RequestParam(required = false) Long courseId,
+            @RequestParam(defaultValue = "3") int limit,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            if (!tutorId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+            List<Lesson> lessons = lessonService.getCompletedLessons(studentId, tutorId, courseId, limit);
+            return ResponseEntity.ok(lessons);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

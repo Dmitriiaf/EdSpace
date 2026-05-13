@@ -66,6 +66,9 @@ public class Student {
     @Column(name = "self_paid")
     private Boolean selfPaid = false;
 
+    @Column(name = "discount")
+    private Integer discount = 0; // Процент скидки, 0-100
+
     @Column(name = "registration_completed")
     private Boolean registrationCompleted = false;
 
@@ -108,6 +111,7 @@ public class Student {
     }
 
     // Геттеры
+    public Integer getDiscount() { return discount; }
     public String getResetToken() { return resetToken; }
     public LocalDateTime getResetTokenExpiry() { return resetTokenExpiry; }
     public List<Course> getCourses() { return courses; }
@@ -133,6 +137,7 @@ public class Student {
     public LocalDateTime getLockedUntil() { return lockedUntil; }
 
     // Сеттеры
+    public void setDiscount(Integer discount) { this.discount = discount; }
     public void setResetToken(String resetToken) { this.resetToken = resetToken; }
     public void setMissedLessons(Integer missedLessons) { this.missedLessons = missedLessons; }
     public void setId(Long id) { this.id = id; }
@@ -184,7 +189,12 @@ public class Student {
         if (rates == null) return null;
         for (StudentRate rate : rates) {
             if (rate.getTutor() != null && rate.getTutor().getId().equals(tutorId)) {
-                return rate.getRatePerLesson();
+                BigDecimal baseRate = rate.getRatePerLesson();
+                if (discount != null && discount > 0) {
+                    return baseRate.multiply(BigDecimal.valueOf(100 - discount))
+                            .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                }
+                return baseRate;
             }
         }
         return null;

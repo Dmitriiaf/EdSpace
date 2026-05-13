@@ -1,6 +1,7 @@
 // ========== backend/src/main/java/com/example/demo/service/LessonService.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.service;
 
+import java.util.stream.Collectors;
 import com.example.demo.entity.*;
 import com.example.demo.exception.BusinessException;
 import com.example.demo.exception.NotFoundException;
@@ -95,6 +96,11 @@ public class LessonService {
 
     public Lesson saveLesson(Lesson lesson) {
         return lessonRepository.save(lesson);
+    }
+
+    public List<Lesson> getCompletedLessons(Long studentId, Long tutorId, Long courseId, int limit) {
+        List<Lesson> lessons = lessonRepository.findCompletedLessonsByStudentAndCourse(studentId, tutorId, courseId);
+        return lessons.stream().limit(limit).collect(Collectors.toList());
     }
 
     public List<Lesson> getTodayLessons(Long tutorId) {

@@ -12,7 +12,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
+import java.time.LocalDate;
+import java.util.ArrayList;
+import com.example.demo.entity.Student;
+import com.example.demo.repository.StudentRepository;
 import java.io.File;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +37,9 @@ public class PaymentController {
 
     @Autowired
     private PaymentService paymentService;
+
+    @Autowired
+    private StudentRepository studentRepository;
 
     @Autowired
     private LessonService lessonService;
@@ -73,6 +79,101 @@ public class PaymentController {
                     (String) request.get("status")
             );
             return ResponseEntity.ok(payment);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/report/{tutorId}")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getMonthlyReport(
+            @PathVariable Long tutorId,
+            @RequestParam String month, // формат: "2026-05"
+            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            if (!tutorId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            LocalDate monthStart = LocalDate.parse(month + "-01");
+            LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
+
+            LocalDateTime start = monthStart.atStartOfDay();
+            LocalDateTime end = monthEnd.atTime(23, 59, 59);
+
+            List<Payment> payments = paymentService.getPaymentsByPeriod(tutorId, start, end);
+            List<Lesson> lessons = lessonService.getLessonsByTutorAndDateRange(tutorId, monthStart, monthEnd);
+            List<Student> students = studentRepository.findByTutorId(tutorId);
+
+            // Сводка по ученикам
+            List<Map<String, Object>> studentBreakdown = new ArrayList<>();
+            for (Student student : students) {
+                double studentIncome = payments.stream()
+                        .filter(p -> p.getStudent().getId().equals(student.getId()) &&
+                                ("PAID".equals(p.getStatus()) || "CONFIRMED".equals(p.getStatus())))
+                        .mapToDouble(Payment::getAmount).sum();
+
+                // Для поурочных: учитываем COMPLETED уроки по ставке ученика
+                if (studentIncome == 0) {
+                    studentIncome = lessons.stream()
+                            .filter(l -> l.getStudent().getId().equals(student.getId()) &&
+                                    ("COMPLETED".equals(l.getStatus()) || "PAID".equals(l.getStatus())))
+                            .mapToDouble(l -> {
+                                BigDecimal rate = student.getRateForTutor(tutorId);
+                                return rate != null ? rate.doubleValue() : 0;
+                            }).sum();
+                }
+
+                long studentLessons = lessons.stream()
+                        .filter(l -> l.getStudent().getId().equals(student.getId()))
+                        .count();
+
+                long paidLessons = lessons.stream()
+                        .filter(l -> l.getStudent().getId().equals(student.getId()) &&
+                                ("COMPLETED".equals(l.getStatus()) || "PAID".equals(l.getStatus())))
+                        .count();
+
+                if (studentLessons > 0 || studentIncome > 0) {
+                    studentBreakdown.add(Map.of(
+                            "studentName", student.getFullName(),
+                            "studentId", student.getId(),
+                            "totalLessons", studentLessons,
+                            "paidLessons", paidLessons,
+                            "income", studentIncome
+                    ));
+                }
+            }
+
+            // Итого
+            double totalIncome = payments.stream()
+                    .filter(p -> "PAID".equals(p.getStatus()) || "CONFIRMED".equals(p.getStatus()))
+                    .mapToDouble(Payment::getAmount).sum();
+
+            // Добавляем доход с завершённых (COMPLETED) уроков
+            double completedLessonsIncome = lessons.stream()
+                    .filter(l -> "COMPLETED".equals(l.getStatus()))
+                    .mapToDouble(l -> {
+                        BigDecimal rate = l.getStudent().getRateForTutor(tutorId);
+                        return rate != null ? rate.doubleValue() : 0;
+                    }).sum();
+            totalIncome += completedLessonsIncome;
+
+            long totalLessons = lessons.size();
+            long completedLessons = lessons.stream()
+                    .filter(l -> "COMPLETED".equals(l.getStatus()) || "PAID".equals(l.getStatus()))
+                    .count();
+            long cancelledLessons = lessons.stream()
+                    .filter(l -> "CANCELLED".equals(l.getStatus())).count();
+
+            return ResponseEntity.ok(Map.of(
+                    "month", month,
+                    "totalIncome", totalIncome,
+                    "totalLessons", totalLessons,
+                    "completedLessons", completedLessons,
+                    "cancelledLessons", cancelledLessons,
+                    "studentBreakdown", studentBreakdown,
+                    "studentsCount", students.size()
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

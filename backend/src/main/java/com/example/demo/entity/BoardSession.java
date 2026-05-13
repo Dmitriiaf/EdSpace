@@ -29,6 +29,9 @@ public class BoardSession {
     @JoinColumn(name = "student_id")
     private Student student;
 
+    @Column(length = 64)
+    private String encryptionKey;
+
     // Новая связь многие-ко-многим
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -93,6 +96,8 @@ public class BoardSession {
 
     // ========== Геттеры/сеттеры (Lombok не всегда дружит с JPA) ==========
     public String getCanvasImage() { return canvasImage; }
+    public String getEncryptionKey() { return encryptionKey; }
+    public void setEncryptionKey(String encryptionKey) { this.encryptionKey = encryptionKey; }
     public void setCanvasImage(String canvasImage) { this.canvasImage = canvasImage; }
     public String getUrl() { return url; }
     public void setUrl(String url) { this.url = url; }

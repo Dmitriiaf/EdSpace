@@ -1,5 +1,6 @@
 // ========== frontend/src/pages/Dashboard.js (ФИНАЛ — БЕЗ ДОЛЖНИКОВ) ==========
 import React, { useState, useEffect } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
     Box, Grid, Card, CardContent, Typography,
     Paper, CircularProgress, Alert, Button,
@@ -88,6 +89,7 @@ const TimeDivider = styled(Box)({
 
 function Dashboard() {
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Главная'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
     
     const [newHomeworkForLesson, setNewHomeworkForLesson] = useState({ 
@@ -129,7 +131,9 @@ function Dashboard() {
     const [cancelledLesson, setCancelledLesson] = useState(null);
     const [selectedDebtorId, setSelectedDebtorId] = useState('');
     const [debtorsList, setDebtorsList] = useState([]);
-
+    const [expandedLessonId, setExpandedLessonId] = useState(null);
+    const [previousLessonsCache, setPreviousLessonsCache] = useState({});
+    const [loadingHistory, setLoadingHistory] = useState(false);
     // ========== БАНК ЗАДАНИЙ ==========
     const [openBankPicker, setOpenBankPicker] = useState(false);
     const [bankTasks, setBankTasks] = useState([]);
@@ -238,6 +242,23 @@ function Dashboard() {
             });
             setTodayLessons(filtered.sort((a, b) => a.startTime.localeCompare(b.startTime)));
         } catch (err) {}
+    };
+
+    const fetchPreviousCompletedLessons = async (lesson) => {
+        const key = `${lesson.student?.id}_${lesson.course?.id || 'no-course'}`;
+        if (previousLessonsCache[key]) return;
+        
+        setLoadingHistory(true);
+        try {
+            const courseId = lesson.course?.id;
+            if (!courseId) return;
+            
+            const res = await axiosInstance.get(
+                `/lessons/student/${lesson.student?.id}/completed?tutorId=${user.id}&courseId=${courseId}&limit=3`
+            );
+            setPreviousLessonsCache(prev => ({ ...prev, [key]: res.data }));
+        } catch (err) { console.warn('Ошибка загрузки истории:', err); }
+        finally { setLoadingHistory(false); }
     };
 
     const fetchPreviousLessons = async () => {
@@ -531,6 +552,64 @@ function Dashboard() {
                                     </Typography>
                                 </Paper>
                             )}
+
+                            {/* Раскрывающаяся история уроков */}
+                            {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && (
+                                <Box sx={{ mt: 1 }}>
+                                    <StyledButton 
+                                        variant="text" 
+                                        size="small"
+                                        onClick={() => {
+                                            if (expandedLessonId === lesson.id) {
+                                                setExpandedLessonId(null);
+                                            } else {
+                                                setExpandedLessonId(lesson.id);
+                                                fetchPreviousCompletedLessons(lesson);
+                                            }
+                                        }}
+                                        sx={{ color: '#6B7280', fontSize: '12px', textTransform: 'none', p: 0.5 }}
+                                    >
+                                        {expandedLessonId === lesson.id ? '▲ Скрыть историю' : '▼ История занятий'}
+                                    </StyledButton>
+                                    
+                                    {expandedLessonId === lesson.id && (
+                                        <Box sx={{ mt: 1, pl: 1, borderLeft: '2px solid #E5E7EB' }}>
+                                            {loadingHistory ? (
+                                                <CircularProgress size={20} sx={{ color: '#4F46E5' }} />
+                                            ) : (() => {
+                                                const key = `${lesson.student?.id}_${lesson.course?.id || 'no-course'}`;
+                                                const history = previousLessonsCache[key] || [];
+                                                
+                                                if (history.length === 0) return (
+                                                    <Typography sx={{ fontSize: '13px', color: '#9CA3AF', fontStyle: 'italic' }}>
+                                                        Нет завершённых уроков
+                                                    </Typography>
+                                                );
+                                                
+                                                return history.map((pastLesson, idx) => (
+                                                    <Paper key={pastLesson.id} sx={{ p: 1.5, mb: 1, bgcolor: idx === 0 ? '#F0F9FF' : '#F9FAFB', borderRadius: '8px' }}>
+                                                        <Typography sx={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 500, mb: 0.5 }}>
+                                                            {format(new Date(pastLesson.lessonDate), 'd MMMM', { locale: ru })} • {formatLessonTime(pastLesson.lessonDate, pastLesson.startTime)}
+                                                        </Typography>
+                                                        {pastLesson.notes && (
+                                                            <Box sx={{ mb: 1 }}>
+                                                                <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>📝 Что делали:</Typography>
+                                                                <Typography sx={{ fontSize: '13px', color: '#374151' }}>{pastLesson.notes}</Typography>
+                                                            </Box>
+                                                        )}
+                                                        {pastLesson.nextLessonPlan && (
+                                                            <Box>
+                                                                <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>🎯 Что задано:</Typography>
+                                                                <Typography sx={{ fontSize: '13px', color: '#374151' }}>{pastLesson.nextLessonPlan}</Typography>
+                                                            </Box>
+                                                        )}
+                                                    </Paper>
+                                                ));
+                                            })()}
+                                        </Box>
+                                    )}
+                                </Box>
+                            )}
                         </Box>
                         
                         {/* Кнопки действий */}
@@ -601,7 +680,7 @@ function Dashboard() {
     if (loading) return (
         <PageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <CircularProgress sx={{ color: '#4F46E5' }} />
+                <EdSpaceLoader text="Загрузка расписания..." />
             </Box>
         </PageContainer>
     );
@@ -626,28 +705,159 @@ function Dashboard() {
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
             <PageContainer>
-                {/* ========== ШАПКА ========== */}
-                <HeaderPaper elevation={0}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-                        <Box>
-                            <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937' }}>
-                                {getGreeting()}, {user?.fullName?.split(' ')[0]}!
-                            </Typography>
-                            <Typography sx={{ color: '#6B7280', mt: 0.5, fontSize: '14px' }}>
-                                {format(currentTime, 'EEEE, d MMMM yyyy', { locale: ru })}
-                            </Typography>
+                {/* ========== ОБЪЕДИНЁННАЯ ШАПКА ========== */}
+                <Paper sx={{ 
+                    mb: 3, borderRadius: '16px', p: 3,
+                    background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+                    color: '#fff', position: 'relative', overflow: 'hidden',
+                    boxShadow: '0 4px 20px rgba(79,70,229,0.3)'
+                }}>
+                    {/* Декоративные круги */}
+                    <Box sx={{ position: 'absolute', top: -30, right: -20, width: 120, height: 120, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.1)' }} />
+                    <Box sx={{ position: 'absolute', bottom: -40, left: -30, width: 100, height: 100, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.06)' }} />
+                    
+                    <Box sx={{ position: 'relative', zIndex: 1 }}>
+                        {/* Верхняя строка: приветствие + календарь + кнопка */}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                {/* Мини-календарь */}
+                                <Box sx={{ 
+                                    width: 56, height: 56, borderRadius: '14px', bgcolor: 'rgba(255,255,255,0.2)',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                    border: '2px solid rgba(255,255,255,0.3)', flexShrink: 0
+                                }}>
+                                    <Typography sx={{ fontSize: '20px', fontWeight: 700, lineHeight: 1 }}>
+                                        {format(selectedDate, 'd')}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: '11px', opacity: 0.8 }}>
+                                        {format(selectedDate, 'MMM', { locale: ru })}
+                                    </Typography>
+                                </Box>
+                                {/* Приветствие */}
+                                <Box>
+                                    <Typography sx={{ fontSize: '22px', fontWeight: 700, lineHeight: 1.2 }}>
+                                        {getGreeting()}, {user?.fullName?.split(' ')[0]}!
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 0.5 }}>
+                                        <Typography sx={{ fontSize: '13px', opacity: 0.8 }}>
+                                            {format(currentTime, 'EEEE, d MMMM', { locale: ru })}
+                                        </Typography>
+                                        <Typography sx={{ fontSize: '15px', fontWeight: 700, color: '#FDE68A' }}>
+                                            {format(currentTime, 'HH:mm')}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            </Box>
+                            {/* Кнопка обновить */}
+                            <StyledButton 
+                                variant="contained" 
+                                startIcon={<RefreshIcon sx={{ fontSize: 16 }} />} 
+                                onClick={handleRefresh} 
+                                disabled={refreshing}
+                                sx={{ 
+                                    bgcolor: 'rgba(255,255,255,0.2)', 
+                                    color: '#fff',
+                                    border: '1px solid rgba(255,255,255,0.3)',
+                                    '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                                    borderRadius: '10px',
+                                    height: 40
+                                }}
+                            >
+                                {refreshing ? 'Обновление...' : 'Обновить'}
+                            </StyledButton>
                         </Box>
-                        <StyledButton 
-                            variant="contained" 
-                            startIcon={<RefreshIcon sx={{ fontSize: 16 }} />} 
-                            onClick={handleRefresh} 
-                            disabled={refreshing}
-                            sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}
-                        >
-                            {refreshing ? 'Обновление...' : 'Обновить'}
-                        </StyledButton>
+                        
+                        {/* Список уроков */}
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2.5 }}>
+                            {todayLessons.length === 0 ? (
+                                <Typography sx={{ fontSize: '14px', opacity: 0.7, fontStyle: 'italic' }}>
+                                    Нет занятий на этот день
+                                </Typography>
+                            ) : (
+                                todayLessons.slice(0, 6).map(lesson => (
+                                    <Chip 
+                                        key={lesson.id}
+                                        label={`${formatLessonTime(lesson.lessonDate, lesson.startTime)} ${lesson.student?.fullName?.split(' ')[0] || ''}`}
+                                        size="small"
+                                        sx={{ 
+                                            bgcolor: 'rgba(255,255,255,0.2)', 
+                                            color: '#fff', 
+                                            borderRadius: '8px',
+                                            fontSize: '12px',
+                                            height: 28,
+                                            '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                                            border: '1px solid rgba(255,255,255,0.25)'
+                                        }}
+                                    />
+                                ))
+                            )}
+                            {todayLessons.length > 6 && (
+                                <Chip 
+                                    label={`+${todayLessons.length - 6} ещё`}
+                                    size="small"
+                                    sx={{ 
+                                        bgcolor: 'rgba(255,255,255,0.15)', 
+                                        color: '#fff', 
+                                        borderRadius: '8px',
+                                        fontSize: '12px',
+                                        height: 28
+                                    }}
+                                />
+                            )}
+                        </Box>
+                        
+                        {/* Прогресс дня */}
+                        <Box sx={{ 
+                            bgcolor: 'rgba(255,255,255,0.15)', borderRadius: '12px', p: 2.5,
+                            border: '1px solid rgba(255,255,255,0.2)'
+                        }}>
+                            <Typography sx={{ fontSize: '13px', fontWeight: 500, mb: 1.5, opacity: 0.9 }}>
+                                Прогресс дня
+                            </Typography>
+                            
+                            <Grid container spacing={2} sx={{ mb: 2 }}>
+                                {[
+                                    { label: 'Всего', value: todayLessons.length, color: '#fff' },
+                                    { label: 'Проведено', value: todayLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID').length, color: '#A7F3D0' },
+                                    { label: 'Осталось', value: todayLessons.filter(l => l.status === 'SCHEDULED' || l.status === 'IN_PROGRESS' || l.status === 'RESCHEDULED').length, color: '#FDE68A' },
+                                ].map((stat, idx) => (
+                                    <Grid item xs={4} key={idx}>
+                                        <Box sx={{ textAlign: 'center' }}>
+                                            <Typography sx={{ fontSize: '28px', fontWeight: 700, color: stat.color }}>
+                                                {stat.value}
+                                            </Typography>
+                                            <Typography sx={{ fontSize: '11px', opacity: 0.7 }}>
+                                                {stat.label}
+                                            </Typography>
+                                        </Box>
+                                    </Grid>
+                                ))}
+                            </Grid>
+                            
+                            {todayLessons.length > 0 && (
+                                <Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                        <Typography sx={{ fontSize: '11px', opacity: 0.7 }}>Выполнено</Typography>
+                                        <Typography sx={{ fontSize: '13px', fontWeight: 600, opacity: 0.9 }}>
+                                            {Math.round((todayLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID').length / todayLessons.length) * 100)}%
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ 
+                                        height: 8, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.2)',
+                                        overflow: 'hidden'
+                                    }}>
+                                        <Box sx={{ 
+                                            height: '100%', borderRadius: 4,
+                                            bgcolor: '#A7F3D0',
+                                            width: `${(todayLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID').length / todayLessons.length) * 100}%`,
+                                            transition: 'width 0.5s ease'
+                                        }} />
+                                    </Box>
+                                </Box>
+                            )}
+                        </Box>
                     </Box>
-                </HeaderPaper>
+                </Paper>
 
                 {/* ========== НАВИГАЦИЯ ПО ДНЯМ ========== */}
                 <Box sx={{ 

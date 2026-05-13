@@ -1,5 +1,6 @@
 // ========== frontend/src/pages/StudentDashboard.js (ПОЛНАЯ ВЕРСИЯ С ДОСКОЙ + РЕСАЙЗ + БД) ==========
 import React, { useState, useEffect, useMemo } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import { useLocation } from 'react-router-dom';
 import axiosInstance from '../api/axiosConfig';
 import {
@@ -109,6 +110,7 @@ const LessonStatusBadge = ({ status }) => {
 function StudentDashboard() {
     const { getStudentRateForTutor } = useStudentRate();
     const { user } = useAuth();
+    useEffect(() => { document.title = 'EdSpace — Ученик'; }, []);
     const [studentSelfPaid, setStudentSelfPaid] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -539,7 +541,7 @@ function StudentDashboard() {
 
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
-            <CircularProgress size={48} sx={{ color: '#6366F1' }} />
+            <EdSpaceLoader text="Загрузка..." />
         </Box>
     );
 

@@ -1,5 +1,6 @@
 // ========== frontend/src/pages/TaskBank.js (РЕДИЗАЙН v3 — ЕДИНЫЙ ПОИСК) ==========
 import React, { useState, useEffect } from 'react';
+import EdSpaceLoader from '../components/EdSpaceLoader';
 import axiosInstance from '../services/api';
 import {
     Box, Typography, Paper, Button, Grid, Card, CardContent,
@@ -78,7 +79,7 @@ function getSourceLabel(source) {
 // ========== КОМПОНЕНТ ==========
 function TaskBank() {
     const { user } = useAuth();
-    
+    useEffect(() => { document.title = 'EdSpace — Банк заданий'; }, []);
     // Единый поиск и фильтры
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState('all'); // all, tasks, variants, plans, stepik
@@ -272,7 +273,7 @@ function TaskBank() {
     if (loading) return (
         <PageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <CircularProgress sx={{ color: '#4F46E5' }} />
+                <EdSpaceLoader text="Загрузка банка заданий..." />
             </Box>
         </PageContainer>
     );

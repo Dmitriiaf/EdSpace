@@ -34,7 +34,6 @@ public interface TaskBankRepository extends JpaRepository<TaskBank, Long> {
     @Query("SELECT DISTINCT t.topic FROM TaskBank t WHERE t.subject = :subject")
     List<String> findTopicsBySubject(@Param("subject") String subject);
 
-    // ✅ НОВЫЙ МЕТОД ДЛЯ ИЗОЛЯЦИИ
     @Query("SELECT t FROM TaskBank t WHERE t.tutor.id = :tutorId OR t.isPublic = true")
     List<TaskBank> findByTutorIdOrPublic(@Param("tutorId") Long tutorId);
 }

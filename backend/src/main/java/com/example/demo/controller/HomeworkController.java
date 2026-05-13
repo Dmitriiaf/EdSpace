@@ -9,8 +9,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.example.demo.entity.Student;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
+import java.util.stream.Collectors;
+import com.example.demo.service.StudentService;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,6 +36,9 @@ public class HomeworkController {
 
     @Autowired
     private HomeworkService homeworkService;
+
+    @Autowired
+    private StudentService studentService;
 
     @Autowired
     private VariantRepository variantRepository;
@@ -312,10 +319,30 @@ public class HomeworkController {
             String attachments = "";
             if (answer != null && !answer.isEmpty()) attachments = answer;
             if (file != null && !file.isEmpty()) {
+                // Проверка размера
+                if (file.getSize() > 10 * 1024 * 1024) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Файл слишком большой. Максимум 10MB"));
+                }
+
+                // Проверка типа
+                String contentType = file.getContentType();
+                if (contentType == null || !contentType.startsWith("image/") &&
+                        !contentType.equals("application/pdf") &&
+                        !contentType.equals("application/msword") &&
+                        !contentType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document") &&
+                        !contentType.startsWith("text/")) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Неподдерживаемый формат файла"));
+                }
+
                 String uploadDir = "/opt/EdSpace/uploads/homework/";
                 java.io.File dir = new java.io.File(uploadDir);
                 if (!dir.exists()) dir.mkdirs();
-                String fileName = "hw_" + id + "_" + System.currentTimeMillis() + "_" + file.getOriginalFilename();
+                String originalName = file.getOriginalFilename();
+                String extension = "";
+                if (originalName != null && originalName.contains(".")) {
+                    extension = originalName.substring(originalName.lastIndexOf("."));
+                }
+                String fileName = "hw_" + id + "_" + System.currentTimeMillis() + extension;
                 java.io.File dest = new java.io.File(uploadDir + fileName);
                 file.transferTo(dest);
                 String fileUrl = "/uploads/homework/" + fileName;
@@ -348,6 +375,8 @@ public class HomeworkController {
         }
     }
 
+
+
     @GetMapping("/tutor/{tutorId}")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getHomeworkByTutor(@PathVariable Long tutorId,
@@ -358,6 +387,59 @@ public class HomeworkController {
             }
             List<Homework> homework = homeworkService.getHomeworkByTutor(tutorId);
             return ResponseEntity.ok(homework);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/parent/child/{childId}/progress")
+    @PreAuthorize("hasAnyRole('PARENT', 'TUTOR')")
+    public ResponseEntity<?> getChildProgressForParent(
+            @PathVariable Long childId,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId,
+            @RequestAttribute(name = "userRole", required = false) String userRole) {
+        try {
+            if ("ROLE_PARENT".equals(userRole)) {
+                Student student = studentService.getStudentById(childId);
+                if (student.getParent() == null || !student.getParent().getId().equals(currentUserId)) {
+                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+                }
+            }
+
+            // Статистика по ДЗ
+            Map<String, Long> homeworkStats = homeworkService.getHomeworkStatsByStudent(childId);
+            Map<String, Object> detailedStats = homeworkService.getDetailedProgressStats(childId);
+
+            // Последние проверенные ДЗ
+            List<Homework> allHomework = homeworkService.getHomeworkByStudent(childId);
+            List<Map<String, Object>> recentHomework = allHomework.stream()
+                    .filter(h -> "CHECKED".equals(h.getStatus()) || "RETURNED".equals(h.getStatus()))
+                    .sorted((a, b) -> b.getUpdatedAt().compareTo(a.getUpdatedAt()))
+                    .limit(5)
+                    .map(h -> {
+                        Map<String, Object> item = new HashMap<>();
+                        item.put("id", h.getId());
+                        item.put("task", h.getTask() != null && h.getTask().length() > 80 ?
+                                h.getTask().substring(0, 80) + "..." : h.getTask());
+                        item.put("grade", h.getGrade());
+                        item.put("score", h.getScore());
+                        item.put("maxScore", h.getMaxScore());
+                        item.put("gradeType", h.getGradeType());
+                        item.put("feedback", h.getFeedback());
+                        item.put("status", h.getStatus());
+                        item.put("checkedAt", h.getUpdatedAt());
+                        return item;
+                    }).collect(Collectors.toList());
+
+            // График прогресса
+            List<Map<String, Object>> timeline = homeworkService.getStudentProgressTimeline(childId, null);
+
+            return ResponseEntity.ok(Map.of(
+                    "homeworkStats", homeworkStats,
+                    "detailedStats", detailedStats,
+                    "recentHomework", recentHomework,
+                    "timeline", timeline
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
