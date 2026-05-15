@@ -8,6 +8,17 @@ export const PageContainer = styled(Box)({
     padding: '24px 32px',
     minHeight: '100vh',
     backgroundColor: '#F3F4F6',
+    animation: 'fadeSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+    '@keyframes fadeSlideIn': {
+        from: {
+            opacity: 0,
+            transform: 'translateY(12px)',
+        },
+        to: {
+            opacity: 1,
+            transform: 'translateY(0)',
+        },
+    },
 });
 
 export const StyledButton = styled(Button)({

@@ -1,25 +1,43 @@
 package com.example.demo.service;
 
-import com.example.demo.entity.Tutor;
+import com.example.demo.entity.*;
 import com.example.demo.exception.BusinessException;
 import com.example.demo.exception.NotFoundException;
-import com.example.demo.repository.TutorRepository;
+import com.example.demo.repository.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
+@Slf4j
 @Service
 public class TutorService {
 
     @Autowired
     private TutorRepository tutorRepository;
+
+    @Autowired
+    private StudentRepository studentRepository;
+
+    @Autowired
+    private LessonRepository lessonRepository;
+
+    @Autowired
+    private PaymentRepository paymentRepository;
+
+    @Autowired
+    private SubscriptionRepository subscriptionRepository;
+
+    @Autowired
+    private WeeklyTemplateRepository weeklyTemplateRepository;
+
+    @Autowired
+    private InvitationTokenRepository invitationTokenRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -68,7 +86,7 @@ public class TutorService {
         long count = tutorRepository.countByReferredBy(tutorId);
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalReferrals", count);
-        stats.put("bonusDays", count * 7); // +7 дней за каждого приглашённого
+        stats.put("bonusDays", count * 7);
         return stats;
     }
 
@@ -98,52 +116,35 @@ public class TutorService {
 
     public boolean resetPassword(String token, String newPassword) {
         Optional<Tutor> optionalTutor = tutorRepository.findByResetToken(token);
-
-        if (optionalTutor.isEmpty()) {
-            return false;
-        }
+        if (optionalTutor.isEmpty()) return false;
 
         Tutor tutor = optionalTutor.get();
-
-        // Проверить, не истёк ли токен
-        if (tutor.getResetTokenExpiry() == null ||
-                tutor.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
+        if (tutor.getResetTokenExpiry() == null || tutor.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
             return false;
         }
 
-        // Установить новый пароль
         tutor.setPasswordHash(passwordEncoder.encode(newPassword));
         tutor.setResetToken(null);
         tutor.setResetTokenExpiry(null);
         tutorRepository.save(tutor);
-
         return true;
     }
 
     public boolean isValidResetToken(String token) {
         Optional<Tutor> optionalTutor = tutorRepository.findByResetToken(token);
-
-        if (optionalTutor.isEmpty()) {
-            return false;
-        }
-
+        if (optionalTutor.isEmpty()) return false;
         Tutor tutor = optionalTutor.get();
-
-        return tutor.getResetTokenExpiry() != null &&
-                tutor.getResetTokenExpiry().isAfter(LocalDateTime.now());
+        return tutor.getResetTokenExpiry() != null && tutor.getResetTokenExpiry().isAfter(LocalDateTime.now());
     }
 
     public void changePassword(Long id, String currentPassword, String newPassword) {
         Tutor tutor = getTutorById(id);
-
         if (!passwordEncoder.matches(currentPassword, tutor.getPasswordHash())) {
             throw new BusinessException("Неверный текущий пароль");
         }
-
         if (newPassword == null || newPassword.length() < 6) {
             throw new BusinessException("Пароль должен быть не менее 6 символов");
         }
-
         tutor.setPasswordHash(passwordEncoder.encode(newPassword));
         tutorRepository.save(tutor);
     }
@@ -158,8 +159,6 @@ public class TutorService {
         tutorRepository.save(tutor);
     }
 
-    // ДОБАВИТЬ в TutorService.java перед последней закрывающей скобкой класса:
-
     public Tutor save(Tutor tutor) {
         return tutorRepository.save(tutor);
     }
@@ -168,4 +167,126 @@ public class TutorService {
         return tutorRepository.findByReferralCode(referralCode).orElse(null);
     }
 
+    public Map<String, Object> exportUserData(Long tutorId) {
+        Tutor tutor = getTutorById(tutorId);
+        Map<String, Object> data = new HashMap<>();
+
+        data.put("fullName", tutor.getFullName());
+        data.put("email", tutor.getEmail());
+        data.put("phone", tutor.getPhone());
+        data.put("birthday", tutor.getBirthday() != null ? tutor.getBirthday().toString() : null);
+        data.put("city", tutor.getCity());
+        data.put("about", tutor.getAbout());
+        data.put("timezone", tutor.getTimezone());
+        data.put("referralCode", tutor.getReferralCode());
+
+        // Ученики
+        List<Map<String, Object>> studentsList = new ArrayList<>();
+        for (Student s : studentRepository.findByTutorId(tutorId)) {
+            Map<String, Object> sm = new HashMap<>();
+            sm.put("id", s.getId());
+            sm.put("fullName", s.getFullName());
+            sm.put("email", s.getEmail());
+            sm.put("paymentType", s.getPaymentTypeForTutor(tutorId));
+            sm.put("ratePerLesson", s.getRateForTutor(tutorId));
+            sm.put("discount", s.getDiscount());
+            studentsList.add(sm);
+        }
+        data.put("students", studentsList);
+
+        // Уроки (последние 100)
+        List<Map<String, Object>> lessonsList = new ArrayList<>();
+        List<Lesson> lessons = lessonRepository.findAllByTutorId(tutorId);
+        for (Lesson l : lessons.stream().limit(100).toList()) {
+            Map<String, Object> lm = new HashMap<>();
+            lm.put("id", l.getId());
+            lm.put("date", l.getLessonDate().toString());
+            lm.put("time", l.getStartTime().toString() + "-" + l.getEndTime().toString());
+            lm.put("status", l.getStatus());
+            lm.put("student", l.getStudent().getFullName());
+            lm.put("notes", l.getNotes());
+            lm.put("nextLessonPlan", l.getNextLessonPlan());
+            lessonsList.add(lm);
+        }
+        data.put("lessons", lessonsList);
+        data.put("lessonsCount", lessons.size());
+
+        // Платежи
+        List<Map<String, Object>> paymentsList = new ArrayList<>();
+        List<Payment> payments = paymentRepository.findByTutorId(tutorId);
+        for (Payment p : payments) {
+            Map<String, Object> pm = new HashMap<>();
+            pm.put("id", p.getId());
+            pm.put("amount", p.getAmount());
+            pm.put("date", p.getPaymentDate().toString());
+            pm.put("type", p.getPaymentType());
+            pm.put("status", p.getStatus());
+            pm.put("student", p.getStudent().getFullName());
+            paymentsList.add(pm);
+        }
+        data.put("payments", paymentsList);
+        data.put("paymentsCount", payments.size());
+        data.put("totalIncome", payments.stream().filter(p -> "PAID".equals(p.getStatus())).mapToDouble(Payment::getAmount).sum());
+
+        // Абонементы
+        List<Map<String, Object>> subsList = new ArrayList<>();
+        List<Subscription> subs = subscriptionRepository.findAllByTutorId(tutorId);
+        for (Subscription sub : subs) {
+            Map<String, Object> sm = new HashMap<>();
+            sm.put("id", sub.getId());
+            sm.put("student", sub.getStudent().getFullName());
+            sm.put("lessonsCount", sub.getLessonsCount());
+            sm.put("lessonsUsed", sub.getLessonsUsed());
+            sm.put("debtLessons", sub.getDebtLessons());
+            sm.put("price", sub.getPrice());
+            sm.put("status", sub.getStatus());
+            sm.put("startDate", sub.getStartDate().toString());
+            sm.put("endDate", sub.getEndDate().toString());
+            subsList.add(sm);
+        }
+        data.put("subscriptions", subsList);
+        data.put("exportDate", LocalDateTime.now().toString());
+
+        return data;
+    }
+
+    @Transactional
+    public void deleteTutor(Long tutorId) {
+        Tutor tutor = getTutorById(tutorId);
+
+        // Удаляем уроки
+        List<Lesson> lessons = lessonRepository.findByStudentIdOrderByLessonDateAscStartTimeAsc(tutorId);
+        for (Lesson l : lessons) {
+            lessonRepository.delete(l);
+        }
+
+        // Удаляем платежи
+        List<Payment> payments = paymentRepository.findByTutorId(tutorId);
+        paymentRepository.deleteAll(payments);
+
+        // Удаляем абонементы
+        List<Subscription> subs = subscriptionRepository.findAllByTutorId(tutorId);
+        subscriptionRepository.deleteAll(subs);
+
+        // Удаляем шаблоны
+        List<WeeklyTemplate> templates = weeklyTemplateRepository.findByTutorId(tutorId);
+        if (templates != null && !templates.isEmpty()) {
+            weeklyTemplateRepository.deleteAll(templates);
+        }
+
+        // Удаляем приглашения
+        invitationTokenRepository.deleteByStudentId(tutorId);
+
+        // Удаляем учеников
+        List<Student> students = studentRepository.findByTutorId(tutorId);
+        for (Student s : students) {
+            if (s.getTutors().size() <= 1) {
+                studentRepository.delete(s);
+            }
+        }
+
+        // Удаляем репетитора
+        tutorRepository.delete(tutor);
+        log.info("🗑️ Репетитор id={} полностью удалён", tutorId);
+    }
 }

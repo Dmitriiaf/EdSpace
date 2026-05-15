@@ -344,6 +344,8 @@ public class StudentController {
                 student.setRateForTutor(tutor,
                         currentRate != null ? currentRate : BigDecimal.ZERO,
                         newPaymentType);
+                // ✅ Обновляем paymentType в самом студенте
+                student.setPaymentType(newPaymentType);
             }
 
             if ("ROLE_TUTOR".equals(userRole) && request.containsKey("parentEmail")) {

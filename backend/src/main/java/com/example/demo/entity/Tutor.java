@@ -66,6 +66,21 @@ public class Tutor {
     @Column(name = "failed_login_attempts")
     private Integer failedLoginAttempts = 0;
 
+    @Column(name = "subjects", length = 500)
+    private String subjects;
+
+    @Column(name = "students_count")
+    private String studentsCount;
+
+    @Column(name = "experience")
+    private String experience;
+
+    @Column(name = "source")
+    private String source;
+
+    @Column(name = "onboarding_completed")
+    private Boolean onboardingCompleted = false;
+
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
@@ -94,6 +109,16 @@ public class Tutor {
     }
 
     // Геттеры
+    public String getSubjects() { return subjects; }
+    public void setSubjects(String subjects) { this.subjects = subjects; }
+    public String getStudentsCount() { return studentsCount; }
+    public void setStudentsCount(String studentsCount) { this.studentsCount = studentsCount; }
+    public String getExperience() { return experience; }
+    public void setExperience(String experience) { this.experience = experience; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
+    public Boolean getOnboardingCompleted() { return onboardingCompleted; }
+    public void setOnboardingCompleted(Boolean onboardingCompleted) { this.onboardingCompleted = onboardingCompleted; }
     public String getTimezone() { return timezone; }
     public Long getId() { return id; }
     public String getEmail() { return email; }

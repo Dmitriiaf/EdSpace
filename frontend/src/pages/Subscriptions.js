@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Subscriptions.js (РЕДИЗАЙН v2) ==========
+// ========== frontend/src/pages/Subscriptions.js (v4 — с кнопкой Активировать) ==========
 import React, { useState, useEffect } from 'react';
 import {
     Box, Button, Dialog, DialogTitle, DialogContent,
@@ -17,7 +17,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import ruLocale from 'date-fns/locale/ru';
 import {
-    Add, Edit, Delete, Refresh,
+    Edit, Delete, Refresh,
     AttachMoney as MoneyIcon,
     School as SchoolIcon,
     Person as PersonIcon,
@@ -29,7 +29,8 @@ import {
     Warning as WarningIcon,
     Timeline as TimelineIcon,
     CardGiftcard as SubscriptionIcon,
-    Clear as ClearIcon
+    Clear as ClearIcon,
+    PlayCircle as ActivateIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
@@ -37,8 +38,7 @@ import { format, startOfMonth, endOfMonth, differenceInDays, addDays } from 'dat
 import { ru } from 'date-fns/locale';
 import axiosInstance, { getAllLessons } from '../services/api';
 
-// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
-
+// ========== СТИЛИ ==========
 
 const SubscriptionCard = styled(Card)({
     borderRadius: '12px',
@@ -51,7 +51,6 @@ const SubscriptionCard = styled(Card)({
         boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
     },
 });
-
 
 const ExpiringBadge = styled(Box)({
     position: 'absolute',
@@ -111,16 +110,8 @@ function Subscriptions() {
     const [allLessons, setAllLessons] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [selectedStudent, setSelectedStudent] = useState('');
     const [viewMode, setViewMode] = useState('active');
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-    const [formData, setFormData] = useState({
-        lessonsCount: '',
-        price: '',
-        startDate: '',
-        endDate: ''
-    });
 
     useEffect(() => {
         if (user && user.id) fetchData();
@@ -164,6 +155,18 @@ function Subscriptions() {
         }
     };
 
+    // ✅ НОВОЕ: Активация абонемента
+    const handleActivate = async (subscriptionId) => {
+        if (!window.confirm('Активировать абонемент? Будет создан платёж на полную стоимость.')) return;
+        try {
+            await axiosInstance.patch(`/subscriptions/${subscriptionId}/activate`);
+            showSnackbar('✅ Абонемент активирован, платёж создан', 'success');
+            fetchData();
+        } catch (err) {
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        }
+    };
+
     const handleEditSubscription = (subscription) => {
         setEditingSubscription(subscription);
         setEditFormData({ 
@@ -186,26 +189,6 @@ function Subscriptions() {
             fetchData();
         } catch (err) {
             showSnackbar(err.response?.data?.error || 'Ошибка обновления', 'error');
-        }
-    };
-
-    const handleCreateSubscription = async () => {
-        try {
-            await axiosInstance.post('/subscriptions', {
-                tutorId: user.id,
-                studentId: selectedStudent,
-                lessonsCount: parseInt(formData.lessonsCount),
-                price: parseFloat(formData.price),
-                startDate: formData.startDate,
-                endDate: formData.endDate
-            });
-            showSnackbar('Абонемент создан', 'success');
-            setOpenDialog(false);
-            setSelectedStudent('');
-            setFormData({ lessonsCount: '', price: '', startDate: '', endDate: '' });
-            fetchData();
-        } catch (err) {
-            showSnackbar('Ошибка при создании абонемента', 'error');
         }
     };
 
@@ -245,8 +228,7 @@ function Subscriptions() {
             case 'COMPLETED':
             case 'EXPIRED':
                 return (
-                    <Box classNa
-                    me="badge badge-neutral">
+                    <Box className="badge badge-neutral">
                         Завершён
                     </Box>
                 );
@@ -306,35 +288,22 @@ function Subscriptions() {
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
             <Box sx={{ width: '100%' }}>
-                {/* ========== СТАТИСТИКА ========== */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     {statItems.map((item, idx) => (
                         <Grid item xs={6} sm={3} key={idx}>
                             <StatCard>
                                 <CardContent sx={{ textAlign: 'center', py: 2, '&:last-child': { pb: 2 } }}>
-                                    <Box sx={{
-                                        width: 40, height: 40, borderRadius: '10px',
-                                        backgroundColor: item.bg, display: 'flex',
-                                        alignItems: 'center', justifyContent: 'center',
-                                        margin: '0 auto 8px',
-                                    }}>
-                                        <Typography sx={{ fontSize: 18, fontWeight: 700, color: item.color }}>
-                                            {item.value}
-                                        </Typography>
+                                    <Box sx={{ width: 40, height: 40, borderRadius: '10px', backgroundColor: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                                        <Typography sx={{ fontSize: 18, fontWeight: 700, color: item.color }}>{item.value}</Typography>
                                     </Box>
-                                    <Typography sx={{ fontSize: '22px', fontWeight: 700, color: '#1F2937' }}>
-                                        {item.value}
-                                    </Typography>
-                                    <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>
-                                        {item.label}
-                                    </Typography>
+                                    <Typography sx={{ fontSize: '22px', fontWeight: 700, color: '#1F2937' }}>{item.value}</Typography>
+                                    <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>{item.label}</Typography>
                                 </CardContent>
                             </StatCard>
                         </Grid>
                     ))}
                 </Grid>
 
-                {/* ========== ВКЛАДКИ ========== */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                     <Box sx={{ display: 'inline-flex', backgroundColor: '#F3F4F6', borderRadius: '10px', p: '3px' }}>
                         {[
@@ -342,63 +311,26 @@ function Subscriptions() {
                             { value: 'history', label: 'История' },
                             { value: 'all', label: 'Все' },
                         ].map(t => (
-                            <Button
-                                key={t.value}
-                                onClick={() => setViewMode(t.value)}
-                                sx={{
-                                    py: 1, px: 2, borderRadius: '8px', border: 'none',
-                                    backgroundColor: viewMode === t.value ? '#FFFFFF' : 'transparent',
-                                    color: viewMode === t.value ? '#1F2937' : '#6B7280',
-                                    fontSize: '14px', fontWeight: 500, textTransform: 'none',
-                                    boxShadow: viewMode === t.value ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                                    minWidth: 'auto',
-                                    '&:hover': { backgroundColor: viewMode === t.value ? '#FFFFFF' : '#F9FAFB' },
-                                }}
-                            >
+                            <Button key={t.value} onClick={() => setViewMode(t.value)}
+                                sx={{ py: 1, px: 2, borderRadius: '8px', border: 'none', backgroundColor: viewMode === t.value ? '#FFFFFF' : 'transparent', color: viewMode === t.value ? '#1F2937' : '#6B7280', fontSize: '14px', fontWeight: 500, textTransform: 'none', boxShadow: viewMode === t.value ? '0 1px 3px rgba(0,0,0,0.08)' : 'none', minWidth: 'auto', '&:hover': { backgroundColor: viewMode === t.value ? '#FFFFFF' : '#F9FAFB' } }}>
                                 {t.label}
                             </Button>
                         ))}
                     </Box>
-                    
-                    <StyledButton
-                        variant="contained"
-                        startIcon={<Add sx={{ fontSize: 18 }} />}
-                        onClick={() => setOpenDialog(true)}
-                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}
-                    >
-                        Создать абонемент
-                    </StyledButton>
                 </Box>
 
                 {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>}
 
-                {/* ========== КАРТОЧКИ АБОНЕМЕНТОВ ========== */}
                 {filteredSubscriptions.length === 0 ? (
                     <Paper sx={{ borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                         <EmptyStateContainer>
-                            <EmptyStateIcon>
-                                <SubscriptionIcon sx={{ fontSize: 40, color: '#9CA3AF' }} />
-                            </EmptyStateIcon>
+                            <EmptyStateIcon><SubscriptionIcon sx={{ fontSize: 40, color: '#9CA3AF' }} /></EmptyStateIcon>
                             <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>
-                                {viewMode === 'active' ? 'Нет активных абонементов' : 
-                                 viewMode === 'history' ? 'Нет завершённых абонементов' : 
-                                 'Нет абонементов'}
+                                {viewMode === 'active' ? 'Нет активных абонементов' : viewMode === 'history' ? 'Нет завершённых абонементов' : 'Нет абонементов'}
                             </Typography>
                             <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 3 }}>
-                                {viewMode === 'active' ? 
-                                    'Создайте абонемент для ученика с типом оплаты "Абонемент"' : 
-                                    'Здесь будут отображаться завершённые абонементы'}
+                                {viewMode === 'active' ? 'Абонементы появятся после создания ученика с типом оплаты "Абонемент"' : 'Здесь будут отображаться завершённые абонементы'}
                             </Typography>
-                            {viewMode === 'active' && (
-                                <StyledButton
-                                    variant="contained"
-                                    startIcon={<Add />}
-                                    onClick={() => setOpenDialog(true)}
-                                    sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}
-                                >
-                                    Создать абонемент
-                                </StyledButton>
-                            )}
                         </EmptyStateContainer>
                     </Paper>
                 ) : (
@@ -408,43 +340,24 @@ function Subscriptions() {
                             const progress = getProgress(sub.lessonsUsed || 0, sub.lessonsCount);
                             const isExpiring = remainingDays <= 7 && remainingDays > 0 && (sub.status === 'ACTIVE' || sub.status === 'active');
                             const isOverdue = remainingDays === 0 && (sub.status === 'ACTIVE' || sub.status === 'active');
+                            const isPending = sub.status === 'PENDING' || sub.status === 'pending';
                             const studentName = sub.studentName || 'Неизвестно';
                             const avatarColor = getAvatarColor(studentName);
                             
                             return (
                                 <Grid item xs={12} md={6} key={sub.id}>
                                     <SubscriptionCard>
-                                        {/* Бейдж "Заканчивается" или "Просрочен" */}
-                                        {isExpiring && (
-                                            <ExpiringBadge sx={{ bgcolor: '#F59E0B' }}>
-                                                Заканчивается через {remainingDays} дн.
-                                            </ExpiringBadge>
-                                        )}
-                                        {isOverdue && (
-                                            <ExpiringBadge sx={{ bgcolor: '#EF4444' }}>
-                                                Срок истёк
-                                            </ExpiringBadge>
-                                        )}
+                                        {isExpiring && <ExpiringBadge sx={{ bgcolor: '#F59E0B' }}>Заканчивается через {remainingDays} дн.</ExpiringBadge>}
+                                        {isOverdue && <ExpiringBadge sx={{ bgcolor: '#EF4444' }}>Срок истёк</ExpiringBadge>}
                                         
                                         <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                                            {/* Шапка */}
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                    <Avatar sx={{ bgcolor: avatarColor, width: 44, height: 44, fontSize: 16, fontWeight: 600 }}>
-                                                        {getInitials(studentName)}
-                                                    </Avatar>
+                                                    <Avatar sx={{ bgcolor: avatarColor, width: 44, height: 44, fontSize: 16, fontWeight: 600 }}>{getInitials(studentName)}</Avatar>
                                                     <Box>
-                                                        <Typography sx={{ fontWeight: 600, fontSize: '16px', color: '#1F2937' }}>
-                                                            {studentName}
-                                                        </Typography>
-                                                        <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>
-                                                            Ставка: {sub.ratePerLesson?.toLocaleString() || 0} ₽/занятие
-                                                        </Typography>
-                                                        {sub.debtLessons > 0 && (
-                                                            <Typography sx={{ fontSize: '13px', color: '#EF4444', fontWeight: 500 }}>
-                                                                Пропущено: {sub.debtLessons}
-                                                            </Typography>
-                                                        )}
+                                                        <Typography sx={{ fontWeight: 600, fontSize: '16px', color: '#1F2937' }}>{studentName}</Typography>
+                                                        <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>Ставка: {sub.ratePerLesson?.toLocaleString() || 0} ₽/занятие</Typography>
+                                                        {sub.debtLessons > 0 && <Typography sx={{ fontSize: '13px', color: '#EF4444', fontWeight: 500 }}>Пропущено: {sub.debtLessons}</Typography>}
                                                     </Box>
                                                 </Box>
                                                 {getStatusBadge(sub.status)}
@@ -452,7 +365,6 @@ function Subscriptions() {
 
                                             <Divider sx={{ my: 1.5, borderColor: '#F3F4F6' }} />
 
-                                            {/* Счётчики */}
                                             <Grid container spacing={2} sx={{ mb: 2 }}>
                                                 {[
                                                     { label: 'Всего', value: sub.lessonsCount, color: '#3B82F6' },
@@ -461,34 +373,23 @@ function Subscriptions() {
                                                 ].map((item, idx) => (
                                                     <Grid item xs={4} key={idx}>
                                                         <Box sx={{ textAlign: 'center' }}>
-                                                            <Typography sx={{ fontSize: '20px', fontWeight: 600, color: item.color }}>
-                                                                {item.value}
-                                                            </Typography>
-                                                            <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>
-                                                                {item.label}
-                                                            </Typography>
+                                                            <Typography sx={{ fontSize: '20px', fontWeight: 600, color: item.color }}>{item.value}</Typography>
+                                                            <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{item.label}</Typography>
                                                         </Box>
                                                     </Grid>
                                                 ))}
                                             </Grid>
 
-                                            {/* Прогресс-бар */}
                                             <Box sx={{ mb: 2 }}>
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                                                     <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>Прогресс</Typography>
-                                                    <Typography sx={{ fontSize: '12px', fontWeight: 500, color: '#1F2937' }}>
-                                                        {Math.round(progress)}%
-                                                    </Typography>
+                                                    <Typography sx={{ fontSize: '12px', fontWeight: 500, color: '#1F2937' }}>{Math.round(progress)}%</Typography>
                                                 </Box>
                                                 <ProgressBar>
-                                                    <ProgressFill 
-                                                        width={progress} 
-                                                        color={progress >= 80 ? '#10B981' : progress >= 50 ? '#4F46E5' : '#F59E0B'} 
-                                                    />
+                                                    <ProgressFill width={progress} color={progress >= 80 ? '#10B981' : progress >= 50 ? '#4F46E5' : '#F59E0B'} />
                                                 </ProgressBar>
                                             </Box>
 
-                                            {/* Даты + сумма */}
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                     <CalendarIcon sx={{ fontSize: 14, color: '#9CA3AF' }} />
@@ -496,23 +397,14 @@ function Subscriptions() {
                                                         {sub.startDate ? format(new Date(sub.startDate), 'd MMM yyyy', { locale: ru }) : '-'} — {sub.endDate ? format(new Date(sub.endDate), 'd MMM yyyy', { locale: ru }) : '-'}
                                                     </Typography>
                                                 </Box>
-                                                <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '16px' }}>
-                                                    {parseFloat(sub.price || 0).toLocaleString()} ₽
-                                                </Typography>
+                                                <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '16px' }}>{parseFloat(sub.price || 0).toLocaleString()} ₽</Typography>
                                             </Box>
 
-                                            {/* Предупреждение */}
                                             {(sub.status === 'ACTIVE' || sub.status === 'active') && (
-                                                <Box sx={{ 
-                                                    display: 'flex', alignItems: 'center', gap: 1, 
-                                                    p: 1.5, borderRadius: '8px',
-                                                    bgcolor: isOverdue ? '#FEF2F2' : isExpiring ? '#FFFBEB' : '#F3F4F6',
-                                                }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.5, borderRadius: '8px', bgcolor: isOverdue ? '#FEF2F2' : isExpiring ? '#FFFBEB' : '#F3F4F6' }}>
                                                     <WarningIcon sx={{ fontSize: 16, color: isOverdue ? '#EF4444' : isExpiring ? '#F59E0B' : '#9CA3AF' }} />
                                                     <Typography sx={{ fontSize: '12px', color: isOverdue ? '#991B1B' : isExpiring ? '#92400E' : '#6B7280' }}>
-                                                        {isOverdue ? 'Абонемент просрочен' : 
-                                                         isExpiring ? `Осталось ${remainingDays} дн.` : 
-                                                         `Действует до ${sub.endDate ? format(new Date(sub.endDate), 'd MMM yyyy', { locale: ru }) : '-'}`}
+                                                        {isOverdue ? 'Абонемент просрочен' : isExpiring ? `Осталось ${remainingDays} дн.` : `Действует до ${sub.endDate ? format(new Date(sub.endDate), 'd MMM yyyy', { locale: ru }) : '-'}`}
                                                     </Typography>
                                                 </Box>
                                             )}
@@ -521,7 +413,16 @@ function Subscriptions() {
                                         <Divider sx={{ borderColor: '#F3F4F6' }} />
                                         
                                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                            {(sub.status === 'PENDING' || sub.status === 'pending' || sub.status === 'ACTIVE' || sub.status === 'active') && (
+                                            {/* ✅ КНОПКА АКТИВИРОВАТЬ — только для PENDING */}
+                                            {isPending && (
+                                                <Tooltip title="Активировать (создаст платёж)">
+                                                    <IconButton size="small" onClick={() => handleActivate(sub.id)} sx={{ color: '#10B981', '&:hover': { color: '#059669', bgcolor: '#ECFDF5' } }}>
+                                                        <ActivateIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
+                                            
+                                            {(isPending || sub.status === 'ACTIVE' || sub.status === 'active') && (
                                                 <>
                                                     <Tooltip title="Пересчитать занятия">
                                                         <IconButton size="small" onClick={async () => {
@@ -557,118 +458,23 @@ function Subscriptions() {
                     </Grid>
                 )}
 
-                {/* ========== ДИАЛОГ СОЗДАНИЯ ========== */}
-                <StyledDialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-                    <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
-                        Создать абонемент
-                    </DialogTitle>
-                    <DialogContent sx={{ px: 3 }}>
-                        <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <FormControl fullWidth>
-                                <InputLabel sx={{ fontSize: '14px' }}>Ученик</InputLabel>
-                                <Select
-                                    value={selectedStudent}
-                                    onChange={(e) => setSelectedStudent(e.target.value)}
-                                    label="Ученик"
-                                    sx={{
-                                        borderRadius: '8px',
-                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' },
-                                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' },
-                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' },
-                                    }}
-                                >
-                                    {students.filter(s => s.paymentType === 'subscription').map(s => {
-                                        const rate = getStudentRateForTutor(s, user?.id);
-                                        return (
-                                            <MenuItem key={s.id} value={s.id}>
-                                                {s.fullName} ({rate || '—'} ₽/занятие)
-                                            </MenuItem>
-                                        );
-                                    })}
-                                </Select>
-                            </FormControl>
-                            <TextField
-                                fullWidth label="Количество занятий" type="number"
-                                value={formData.lessonsCount}
-                                onChange={(e) => setFormData({...formData, lessonsCount: e.target.value})}
-                                required
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }}
-                            />
-                            <TextField
-                                fullWidth label="Сумма (₽)" type="number"
-                                value={formData.price}
-                                onChange={(e) => setFormData({...formData, price: e.target.value})}
-                                required
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }}
-                            />
-                            <TextField
-                                fullWidth label="Дата начала" type="date"
-                                value={formData.startDate}
-                                onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                                InputLabelProps={{ shrink: true }} required
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }}
-                            />
-                            <TextField
-                                fullWidth label="Дата окончания" type="date"
-                                value={formData.endDate}
-                                onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                                InputLabelProps={{ shrink: true }} required
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }}
-                            />
-                            <Alert severity="info" sx={{ borderRadius: '8px', fontSize: '13px' }}>
-                                Абонемент будет создан со статусом "Ожидает оплаты". После оплаты родителем, занятия будут списываться из абонемента.
-                            </Alert>
-                        </Box>
-                    </DialogContent>
-                    <DialogActions sx={{ px: 3, pb: 3 }}>
-                        <StyledButton onClick={() => setOpenDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
-                        <StyledButton onClick={handleCreateSubscription} variant="contained" disabled={!selectedStudent || !formData.lessonsCount || !formData.price}
-                            sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
-                            Создать
-                        </StyledButton>
-                    </DialogActions>
-                </StyledDialog>
-
-                {/* ========== ДИАЛОГ РЕДАКТИРОВАНИЯ ========== */}
                 <StyledDialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-                    <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
-                        Редактировать абонемент
-                    </DialogTitle>
+                    <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>Редактировать абонемент</DialogTitle>
                     <DialogContent sx={{ px: 3 }}>
                         <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <Alert severity="info" sx={{ borderRadius: '8px', fontSize: '13px' }}>
-                                Изменение количества занятий или цены абонемента.
-                            </Alert>
-                            <TextField
-                                fullWidth label="Количество занятий" type="number"
-                                value={editFormData.lessonsCount}
-                                onChange={(e) => setEditFormData({...editFormData, lessonsCount: e.target.value})}
-                                required
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }}
-                            />
-                            <TextField
-                                fullWidth label="Сумма (₽)" type="number"
-                                value={editFormData.price}
-                                onChange={(e) => setEditFormData({...editFormData, price: e.target.value})}
-                                required
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }}
-                            />
-                            <TextField
-                                fullWidth label="Пропущено занятий" type="number"
-                                value={editFormData.debtLessons}
-                                onChange={(e) => setEditFormData({...editFormData, debtLessons: e.target.value})}
-                                helperText="Количество неиспользованных занятий по вине ученика"
-                                inputProps={{ min: 0 }}
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }}
-                            />
+                            <Alert severity="info" sx={{ borderRadius: '8px', fontSize: '13px' }}>Изменение количества занятий или цены абонемента.</Alert>
+                            <TextField fullWidth label="Количество занятий" type="number" value={editFormData.lessonsCount} onChange={(e) => setEditFormData({...editFormData, lessonsCount: e.target.value})} required
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            <TextField fullWidth label="Сумма (₽)" type="number" value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: e.target.value})} required
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                            <TextField fullWidth label="Пропущено занятий" type="number" value={editFormData.debtLessons} onChange={(e) => setEditFormData({...editFormData, debtLessons: e.target.value})}
+                                helperText="Количество неиспользованных занятий по вине ученика" inputProps={{ min: 0 }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
                         </Box>
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 3 }}>
                         <StyledButton onClick={() => setEditDialogOpen(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
-                        <StyledButton onClick={handleUpdateSubscription} variant="contained"
-                            sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
-                            Сохранить
-                        </StyledButton>
+                        <StyledButton onClick={handleUpdateSubscription} variant="contained" sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>Сохранить</StyledButton>
                     </DialogActions>
                 </StyledDialog>
 

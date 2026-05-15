@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Payments.js (РЕДИЗАЙН v2) ==========
+// ========== frontend/src/pages/Payments.js (v3 — единый источник: payment + непокрытые PAID уроки) ==========
 import React, { useState, useEffect } from 'react';
 import axiosInstance, { getAllLessons } from '../services/api';
 import {
@@ -10,7 +10,7 @@ import {
     Pagination, CircularProgress, Tabs, Tab,
     Divider
 } from '@mui/material';
-import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
+import { StatCard, StyledButton, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
 import { styled } from '@mui/material/styles';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -40,7 +40,7 @@ import { useStudentRate } from '../hooks/useStudentRate';
 import { format, startOfMonth, endOfMonth, subMonths, eachMonthOfInterval } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
-// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+// ========== СТИЛИ ==========
 
 const StyledTableContainer = styled(TableContainer)({
     borderRadius: '12px',
@@ -55,7 +55,6 @@ const StyledTableRow = styled(TableRow)({
     '&:hover': { backgroundColor: '#EEF2FF !important' },
     '&:last-child td': { borderBottom: 0 },
 });
-
 
 const UnpaidBanner = styled(Paper)({
     padding: '16px 20px',
@@ -110,7 +109,7 @@ function Payments() {
 
     useEffect(() => {
         calculateMonthlyData();
-    }, [payments]);
+    }, [payments, allLessons]);
 
     const fetchData = async () => {
         if (!user || !user.id) return;
@@ -140,17 +139,17 @@ function Payments() {
             const monthStart = startOfMonth(month);
             const monthEnd = endOfMonth(month);
             
-            // Платежи из таблицы payments
+            // Платежи из таблицы payment
             const monthPayments = payments.filter(p => {
                 const paymentDate = new Date(p.paymentDate);
                 return paymentDate >= monthStart && paymentDate <= monthEnd &&
-                    (p.status === 'PAID' || p.status === 'paid');
+                    (p.status === 'PAID' || p.status === 'paid' || p.status === 'CONFIRMED');
             });
             
-            // ID занятий, уже учтённых в платежах
+            // ID уроков, уже учтённых в платежах
             const paidLessonIds = new Set(monthPayments.map(p => p.lesson?.id).filter(id => id));
             
-            // Оплаченные занятия, не учтённые в платежах
+            // PAID уроки, не учтённые в платежах
             const paidLessonsIncome = Array.isArray(allLessons)
                 ? allLessons
                     .filter(l => {
@@ -173,7 +172,6 @@ function Payments() {
         });
         setMonthlyData(data);
     };
-
 
     const handleRequestSort = (property) => {
         const isAsc = orderBy === property && order === 'asc';
@@ -200,35 +198,10 @@ function Payments() {
     };
 
     const getFilteredPayments = () => {
+        // Только реальные платежи
         let filtered = payments.filter(p =>
-            p.status === 'PAID' || p.status === 'paid' || p.status === 'REJECTED' || p.status === 'rejected'
+            p.status === 'PAID' || p.status === 'paid' || p.status === 'CONFIRMED'
         );
-
-        const paidLessonPayments = Array.isArray(allLessons)
-            ? allLessons
-                .filter(l => l.status === 'PAID')
-                .filter(l => {
-                    // Исключаем уже учтённые в таблице payments
-                    const alreadyInPayments = payments.some(p => p.lesson?.id === l.id);
-                    return !alreadyInPayments;
-                })
-                .map(l => ({
-                    id: `lesson-${l.id}`,
-                    paymentDate: l.lessonDate,
-                    lessonDate: l.lessonDate,
-                    student: l.student,
-                    courseName: l.course?.name || 'Занятие',
-                    amount: (() => {
-                        const student = students.find(s => s.id === l.student?.id);
-                        return getStudentRateForTutor(student, user?.id) || 0;
-                    })(),
-                    paymentType: l.student?.paymentType || 'single',
-                    status: 'PAID',
-                    isManual: true,
-                }))
-            : [];
-
-        filtered = [...filtered, ...paidLessonPayments];
 
         if (searchTerm) {
             filtered = filtered.filter(p => {
@@ -258,23 +231,27 @@ function Payments() {
         const now = new Date();
         const startOfMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
         const endOfMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        const monthLessons = Array.isArray(allLessons) ? allLessons.filter(l => {
-            const lessonDate = new Date(l.lessonDate);
-            return lessonDate >= startOfMonthDate && lessonDate <= endOfMonthDate;
-        }) : [];
-        return monthLessons.filter(l => l.status === 'COMPLETED').map(lesson => {
-            const student = students.find(s => s.id === lesson.student?.id);
-            const correctRate = getStudentRateForTutor(student, lesson.tutor?.id);
-            return {
-                id: lesson.id,
-                studentName: student?.fullName || 'Неизвестно',
-                studentId: student?.id,
-                date: lesson.lessonDate,
-                time: lesson.startTime?.slice(0, 5),
-                amount: correctRate || 0,
-                course: lesson.course?.name
-            };
-        });
+        
+        return Array.isArray(allLessons) 
+            ? allLessons
+                .filter(l => {
+                    const lessonDate = new Date(l.lessonDate);
+                    return lessonDate >= startOfMonthDate && lessonDate <= endOfMonthDate &&
+                        l.status === 'COMPLETED';
+                })
+                .map(lesson => {
+                    const student = students.find(s => s.id === lesson.student?.id);
+                    return {
+                        id: lesson.id,
+                        studentName: student?.fullName || 'Неизвестно',
+                        studentId: student?.id,
+                        date: lesson.lessonDate,
+                        time: lesson.startTime?.slice(0, 5),
+                        amount: getStudentRateForTutor(student, user?.id) || 0,
+                        course: lesson.course?.name
+                    };
+                })
+            : [];
     };
 
     const filteredPayments = getFilteredPayments();
@@ -320,11 +297,6 @@ function Payments() {
         return format(new Date(dateStr), 'd MMMM yyyy', { locale: ru });
     };
 
-    const formatDateTime = (dateStr) => {
-        if (!dateStr) return '-';
-        return format(new Date(dateStr), 'd MMM yyyy, HH:mm', { locale: ru });
-    };
-
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
             <CircularProgress sx={{ color: '#4F46E5' }} />
@@ -334,7 +306,7 @@ function Payments() {
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
             <Box sx={{ width: '100%' }}>
-                {/* ========== ПЕРЕКЛЮЧАТЕЛЬ ВИДА ========== */}
+                {/* Переключатель вида */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                     <ViewToggle>
                         <ViewToggleBtn active={viewMode === 'table'} onClick={() => setViewMode('table')} startIcon={<ReceiptIcon sx={{ fontSize: 18 }} />}>
@@ -347,7 +319,6 @@ function Payments() {
                             Чеки
                         </ViewToggleBtn>
                     </ViewToggle>
-
                     <Tooltip title="Обновить">
                         <IconButton size="small" onClick={fetchData} sx={{ color: '#6B7280', '&:hover': { color: '#4F46E5', bgcolor: '#EEF2FF' } }}>
                             <RefreshIcon />
@@ -355,25 +326,18 @@ function Payments() {
                     </Tooltip>
                 </Box>
 
-                {/* ==================== ВКЛАДКА ЧЕКИ ==================== */}
+                {/* Чеки */}
                 {viewMode === 'receipts' && (
                     <>
                         <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 2 }}>
                             📄 Чеки об оплате
                         </Typography>
-
                         {payments.filter(p => p.receiptPath).length === 0 ? (
                             <Paper sx={{ borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                                 <EmptyStateContainer>
-                                    <EmptyStateIcon>
-                                        <ReceiptIcon sx={{ fontSize: 40, color: '#9CA3AF' }} />
-                                    </EmptyStateIcon>
-                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>
-                                        Нет загруженных чеков
-                                    </Typography>
-                                    <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
-                                        Здесь будут отображаться чеки, загруженные учениками
-                                    </Typography>
+                                    <EmptyStateIcon><ReceiptIcon sx={{ fontSize: 40, color: '#9CA3AF' }} /></EmptyStateIcon>
+                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>Нет загруженных чеков</Typography>
+                                    <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>Здесь будут отображаться чеки, загруженные учениками</Typography>
                                 </EmptyStateContainer>
                             </Paper>
                         ) : (
@@ -381,93 +345,63 @@ function Payments() {
                                 <Table stickyHeader>
                                     <TableHead>
                                         <TableRow>
-                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Дата</TableCell>
-                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Ученик</TableCell>
-                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Сумма</TableCell>
-                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Статус</TableCell>
-                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Чек</TableCell>
-                                            <TableCell align="center" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Действия</TableCell>
+                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Дата</TableCell>
+                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Ученик</TableCell>
+                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Сумма</TableCell>
+                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Статус</TableCell>
+                                            <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Чек</TableCell>
+                                            <TableCell align="center" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Действия</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {payments
-                                            .filter(p => p.receiptPath)
-                                            .sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate))
-                                            .map(payment => {
-                                                const studentName = getStudentName(payment.student?.id);
-                                                const isPending = payment.status === 'PAID' || payment.status === 'paid';
-                                                return (
-                                                    <StyledTableRow key={payment.id}>
-                                                        <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            <Typography sx={{ fontSize: '14px', color: '#1F2937' }}>
-                                                                {formatDate(payment.paymentDate)}
-                                                            </Typography>
-                                                        </TableCell>
-                                                        <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                                <Avatar sx={{ width: 32, height: 32, bgcolor: getAvatarColor(studentName), fontSize: 12, fontWeight: 600 }}>
-                                                                    {getInitials(studentName)}
-                                                                </Avatar>
-                                                                <Typography sx={{ fontSize: '14px', fontWeight: 500, color: '#1F2937' }}>
-                                                                    {studentName}
-                                                                </Typography>
+                                        {payments.filter(p => p.receiptPath).sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate)).map(payment => {
+                                            const studentName = getStudentName(payment.student?.id);
+                                            const isPending = payment.status === 'PAID' || payment.status === 'paid';
+                                            return (
+                                                <StyledTableRow key={payment.id}>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Typography sx={{ fontSize: '14px', color: '#1F2937' }}>{formatDate(payment.paymentDate)}</Typography>
+                                                    </TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                            <Avatar sx={{ width: 32, height: 32, bgcolor: getAvatarColor(studentName), fontSize: 12, fontWeight: 600 }}>
+                                                                {getInitials(studentName)}
+                                                            </Avatar>
+                                                            <Typography sx={{ fontSize: '14px', fontWeight: 500, color: '#1F2937' }}>{studentName}</Typography>
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '14px' }}>{payment.amount?.toLocaleString()} ₽</Typography>
+                                                    </TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>{getStatusBadge(payment.status)}</TableCell>
+                                                    <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        <StyledButton variant="outlined" size="small" href={`https://ed-space.ru${payment.receiptPath}`} target="_blank" startIcon={<ReceiptIcon sx={{ fontSize: 14 }} />}
+                                                            sx={{ borderColor: '#D1D5DB', color: '#374151', '&:hover': { bgcolor: '#F9FAFB' } }}>Открыть</StyledButton>
+                                                    </TableCell>
+                                                    <TableCell align="center" sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                        {isPending && (
+                                                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                                                                <StyledButton variant="contained" size="small"
+                                                                    onClick={async () => {
+                                                                        await axiosInstance.patch(`/payments/${payment.id}/status`, { status: 'PAID' });
+                                                                        setSnackbar({ open: true, message: '✅ Платёж подтверждён', severity: 'success' });
+                                                                        fetchData();
+                                                                    }}
+                                                                    sx={{ bgcolor: '#10B981', '&:hover': { bgcolor: '#059669' } }}>✅ Подтвердить</StyledButton>
+                                                                <StyledButton variant="outlined" size="small" color="error"
+                                                                    onClick={async () => {
+                                                                        if (!window.confirm('Отклонить платёж?')) return;
+                                                                        await axiosInstance.patch(`/payments/${payment.id}/status`, { status: 'REJECTED' });
+                                                                        setSnackbar({ open: true, message: '❌ Платёж отклонён', severity: 'warning' });
+                                                                        fetchData();
+                                                                    }}
+                                                                    sx={{ borderColor: '#FECACA', color: '#DC2626', '&:hover': { bgcolor: '#FEF2F2' } }}>❌ Отклонить</StyledButton>
                                                             </Box>
-                                                        </TableCell>
-                                                        <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '14px' }}>
-                                                                {payment.amount?.toLocaleString()} ₽
-                                                            </Typography>
-                                                        </TableCell>
-                                                        <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            {getStatusBadge(payment.status)}
-                                                        </TableCell>
-                                                        <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            <StyledButton 
-                                                                variant="outlined" 
-                                                                size="small"
-                                                                href={`https://ed-space.ru${payment.receiptPath}`} 
-                                                                target="_blank" 
-                                                                startIcon={<ReceiptIcon sx={{ fontSize: 14 }} />}
-                                                                sx={{ borderColor: '#D1D5DB', color: '#374151', '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' } }}
-                                                            >
-                                                                Открыть
-                                                            </StyledButton>
-                                                        </TableCell>
-                                                        <TableCell align="center" sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            {isPending && (
-                                                                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                                                                    <StyledButton
-                                                                        variant="contained"
-                                                                        size="small"
-                                                                        onClick={async () => {
-                                                                            await axiosInstance.patch(`/payments/${payment.id}/status`, { status: 'PAID' });
-                                                                            setSnackbar({ open: true, message: '✅ Платёж подтверждён', severity: 'success' });
-                                                                            fetchData();
-                                                                        }}
-                                                                        sx={{ bgcolor: '#10B981', '&:hover': { bgcolor: '#059669' }, color: '#fff' }}
-                                                                    >
-                                                                        ✅ Подтвердить
-                                                                    </StyledButton>
-                                                                    <StyledButton
-                                                                        variant="outlined"
-                                                                        size="small"
-                                                                        color="error"
-                                                                        onClick={async () => {
-                                                                            if (!window.confirm('Отклонить платёж?')) return;
-                                                                            await axiosInstance.patch(`/payments/${payment.id}/status`, { status: 'REJECTED' });
-                                                                            setSnackbar({ open: true, message: '❌ Платёж отклонён', severity: 'warning' });
-                                                                            fetchData();
-                                                                        }}
-                                                                        sx={{ borderColor: '#FECACA', color: '#DC2626', '&:hover': { bgcolor: '#FEF2F2', borderColor: '#EF4444' } }}
-                                                                    >
-                                                                        ❌ Отклонить
-                                                                    </StyledButton>
-                                                                </Box>
-                                                            )}
-                                                        </TableCell>
-                                                    </StyledTableRow>
-                                                );
-                                            })}
+                                                        )}
+                                                    </TableCell>
+                                                </StyledTableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             </StyledTableContainer>
@@ -475,7 +409,7 @@ function Payments() {
                     </>
                 )}
 
-                {/* ==================== ВКЛАДКА АНАЛИТИКА ==================== */}
+                {/* Аналитика */}
                 {viewMode === 'chart' && (
                     <>
                         {unpaidLessons.length > 0 && (
@@ -489,32 +423,22 @@ function Payments() {
                                         <Grid item xs={12} sm={6} md={3} key={lesson.id}>
                                             <Card sx={{ borderRadius: '8px', border: '1px solid #FDE68A', boxShadow: 'none' }}>
                                                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                                    <Typography sx={{ fontWeight: 500, fontSize: '14px', color: '#1F2937' }}>
-                                                        {lesson.studentName}
-                                                    </Typography>
-                                                    <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>
-                                                        {formatDate(lesson.date)} в {lesson.time}
-                                                    </Typography>
-                                                    <Typography sx={{ fontWeight: 600, color: '#D97706', fontSize: '14px', mt: 0.5 }}>
-                                                        {lesson.amount} ₽
-                                                    </Typography>
+                                                    <Typography sx={{ fontWeight: 500, fontSize: '14px', color: '#1F2937' }}>{lesson.studentName}</Typography>
+                                                    <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{formatDate(lesson.date)} в {lesson.time}</Typography>
+                                                    <Typography sx={{ fontWeight: 600, color: '#D97706', fontSize: '14px', mt: 0.5 }}>{lesson.amount} ₽</Typography>
                                                 </CardContent>
                                             </Card>
                                         </Grid>
                                     ))}
                                 </Grid>
                                 {unpaidLessons.length > 4 && (
-                                    <Typography sx={{ fontSize: '12px', color: '#6B7280', mt: 1 }}>
-                                        и ещё {unpaidLessons.length - 4} занятий
-                                    </Typography>
+                                    <Typography sx={{ fontSize: '12px', color: '#6B7280', mt: 1 }}>и ещё {unpaidLessons.length - 4} занятий</Typography>
                                 )}
                             </UnpaidBanner>
                         )}
 
                         <Paper sx={{ p: 3, borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                            <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 3 }}>
-                                Динамика платежей
-                            </Typography>
+                            <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 3 }}>Динамика платежей</Typography>
                             <Box sx={{ height: 200, mb: 3 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: '2%', height: '100%', px: 1 }}>
                                     {monthlyData.map((item, idx) => {
@@ -523,19 +447,8 @@ function Payments() {
                                         return (
                                             <Tooltip key={idx} title={`${item.fullMonth}: ${item.total.toLocaleString()} ₽ (${item.count} платежей)`} arrow>
                                                 <Box sx={{ flex: 1, textAlign: 'center' }}>
-                                                    <Box sx={{
-                                                        height: Math.max(height, 4),
-                                                        background: isHighest
-                                                            ? 'linear-gradient(180deg, #4F46E5 0%, #7C3AED 100%)'
-                                                            : 'linear-gradient(180deg, #A5B4FC 0%, #C7D2FE 100%)',
-                                                        borderRadius: '8px 8px 4px 4px',
-                                                        transition: 'all 0.3s ease',
-                                                        cursor: 'pointer',
-                                                        '&:hover': { opacity: 0.85, transform: 'scaleY(1.05)', transformOrigin: 'bottom' }
-                                                    }} />
-                                                    <Typography sx={{ fontSize: '11px', mt: 1, display: 'block', fontWeight: isHighest ? 600 : 400, color: isHighest ? '#4F46E5' : '#6B7280' }}>
-                                                        {item.month}
-                                                    </Typography>
+                                                    <Box sx={{ height: Math.max(height, 4), background: isHighest ? 'linear-gradient(180deg, #4F46E5 0%, #7C3AED 100%)' : 'linear-gradient(180deg, #A5B4FC 0%, #C7D2FE 100%)', borderRadius: '8px 8px 4px 4px', transition: 'all 0.3s ease', cursor: 'pointer', '&:hover': { opacity: 0.85, transform: 'scaleY(1.05)', transformOrigin: 'bottom' } }} />
+                                                    <Typography sx={{ fontSize: '11px', mt: 1, display: 'block', fontWeight: isHighest ? 600 : 400, color: isHighest ? '#4F46E5' : '#6B7280' }}>{item.month}</Typography>
                                                 </Box>
                                             </Tooltip>
                                         );
@@ -547,12 +460,8 @@ function Payments() {
                                 <Grid item xs={6}>
                                     <StatCard elevation={0}>
                                         <CardContent sx={{ textAlign: 'center', py: 2, '&:last-child': { pb: 2 } }}>
-                                            <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#10B981' }}>
-                                                {monthlyData[monthlyData.length - 1]?.total.toLocaleString() || 0} ₽
-                                            </Typography>
-                                            <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>
-                                                {monthlyData[monthlyData.length - 1]?.fullMonth || '-'}
-                                            </Typography>
+                                            <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#10B981' }}>{monthlyData[monthlyData.length - 1]?.total.toLocaleString() || 0} ₽</Typography>
+                                            <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>{monthlyData[monthlyData.length - 1]?.fullMonth || '-'}</Typography>
                                         </CardContent>
                                     </StatCard>
                                 </Grid>
@@ -560,13 +469,9 @@ function Payments() {
                                     <StatCard elevation={0}>
                                         <CardContent sx={{ textAlign: 'center', py: 2, '&:last-child': { pb: 2 } }}>
                                             <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#F59E0B' }}>
-                                                {monthlyData.length > 0
-                                                    ? Math.round(monthlyData.reduce((sum, d) => sum + d.total, 0) / monthlyData.length).toLocaleString()
-                                                    : 0} ₽
+                                                {monthlyData.length > 0 ? Math.round(monthlyData.reduce((sum, d) => sum + d.total, 0) / monthlyData.length).toLocaleString() : 0} ₽
                                             </Typography>
-                                            <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>
-                                                Средний доход за месяц
-                                            </Typography>
+                                            <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>Средний доход за месяц</Typography>
                                         </CardContent>
                                     </StatCard>
                                 </Grid>
@@ -575,89 +480,29 @@ function Payments() {
                     </>
                 )}
 
-                {/* ==================== ВКЛАДКА СПИСОК ==================== */}
+                {/* Список */}
                 {viewMode === 'table' && (
                     <>
-                        {/* Фильтры */}
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 3, alignItems: 'center' }}>
-                            <TextField
-                                placeholder="Поиск по ученику, предмету, сумме..."
-                                size="small"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                sx={{ 
-                                    width: 280,
-                                    '& .MuiOutlinedInput-root': {
-                                        borderRadius: '8px',
-                                        backgroundColor: '#FFFFFF',
-                                        '& fieldset': { borderColor: '#E5E7EB' },
-                                        '&:hover fieldset': { borderColor: '#D1D5DB' },
-                                        '&.Mui-focused fieldset': { borderColor: '#4F46E5', boxShadow: '0 0 0 3px rgba(79,70,229,0.1)' },
-                                    },
-                                }}
+                            <TextField placeholder="Поиск..." size="small" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                                sx={{ width: 280, '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#FFFFFF' } }}
                                 InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
-                                        </InputAdornment>
-                                    ),
-                                    endAdornment: searchTerm && (
-                                        <InputAdornment position="end">
-                                            <IconButton size="small" onClick={() => setSearchTerm('')}>
-                                                <ClearIcon sx={{ fontSize: 16 }} />
-                                            </IconButton>
-                                        </InputAdornment>
-                                    ),
-                                }}
-                            />
+                                    startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} /></InputAdornment>,
+                                    endAdornment: searchTerm && <InputAdornment position="end"><IconButton size="small" onClick={() => setSearchTerm('')}><ClearIcon sx={{ fontSize: 16 }} /></IconButton></InputAdornment>,
+                                }} />
                             <FormControl size="small" sx={{ minWidth: 140 }}>
-                                <InputLabel sx={{ fontSize: '13px' }}>Тип</InputLabel>
-                                <Select 
-                                    value={filterType} 
-                                    onChange={(e) => setFilterType(e.target.value)} 
-                                    label="Тип"
-                                    sx={{
-                                        borderRadius: '8px',
-                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' },
-                                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' },
-                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' },
-                                    }}
-                                >
+                                <InputLabel>Тип</InputLabel>
+                                <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} label="Тип" sx={{ borderRadius: '8px' }}>
                                     <MenuItem value="all">Все</MenuItem>
                                     <MenuItem value="subscription">Абонементы</MenuItem>
                                     <MenuItem value="single">Поурочные</MenuItem>
                                 </Select>
                             </FormControl>
-                            <DatePicker
-                                label="Месяц"
-                                value={filterMonth}
-                                onChange={setFilterMonth}
-                                views={['year', 'month']}
-                                format="LLLL yyyy"
-                                slotProps={{ 
-                                    textField: { 
-                                        size: 'small', 
-                                        sx: { 
-                                            width: 160,
-                                            '& .MuiOutlinedInput-root': {
-                                                borderRadius: '8px',
-                                                '& fieldset': { borderColor: '#E5E7EB' },
-                                                '&:hover fieldset': { borderColor: '#D1D5DB' },
-                                                '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
-                                            },
-                                        } 
-                                    } 
-                                }}
-                            />
+                            <DatePicker label="Месяц" value={filterMonth} onChange={setFilterMonth} views={['year', 'month']} format="LLLL yyyy"
+                                slotProps={{ textField: { size: 'small', sx: { width: 160, '& .MuiOutlinedInput-root': { borderRadius: '8px' } } } }} />
                             {(searchTerm || filterType !== 'all' || filterMonth) && (
-                                <StyledButton 
-                                    size="small" 
-                                    onClick={() => { setSearchTerm(''); setFilterType('all'); setFilterMonth(null); }}
-                                    startIcon={<ClearIcon sx={{ fontSize: 14 }} />}
-                                    sx={{ color: '#6B7280', '&:hover': { bgcolor: '#F3F4F6' } }}
-                                >
-                                    Сбросить
-                                </StyledButton>
+                                <StyledButton size="small" onClick={() => { setSearchTerm(''); setFilterType('all'); setFilterMonth(null); }} startIcon={<ClearIcon sx={{ fontSize: 14 }} />}
+                                    sx={{ color: '#6B7280', '&:hover': { bgcolor: '#F3F4F6' } }}>Сбросить</StyledButton>
                             )}
                         </Box>
 
@@ -666,16 +511,10 @@ function Payments() {
                         ) : filteredPayments.length === 0 ? (
                             <Paper sx={{ borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                                 <EmptyStateContainer>
-                                    <EmptyStateIcon>
-                                        <ReceiptIcon sx={{ fontSize: 40, color: '#9CA3AF' }} />
-                                    </EmptyStateIcon>
-                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>
-                                        Нет платежей
-                                    </Typography>
+                                    <EmptyStateIcon><ReceiptIcon sx={{ fontSize: 40, color: '#9CA3AF' }} /></EmptyStateIcon>
+                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>Нет платежей</Typography>
                                     <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
-                                        {searchTerm || filterType !== 'all' || filterMonth
-                                            ? 'Попробуйте изменить параметры фильтрации'
-                                            : 'Здесь будут отображаться подтверждённые платежи'}
+                                        {searchTerm || filterType !== 'all' || filterMonth ? 'Попробуйте изменить параметры фильтрации' : 'Здесь будут отображаться подтверждённые платежи'}
                                     </Typography>
                                 </EmptyStateContainer>
                             </Paper>
@@ -685,24 +524,18 @@ function Payments() {
                                     <Table stickyHeader>
                                         <TableHead>
                                             <TableRow>
-                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                                    <TableSortLabel active={orderBy === 'paymentDate'} direction={orderBy === 'paymentDate' ? order : 'asc'} onClick={() => handleRequestSort('paymentDate')}>
-                                                        Дата
-                                                    </TableSortLabel>
+                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>
+                                                    <TableSortLabel active={orderBy === 'paymentDate'} direction={orderBy === 'paymentDate' ? order : 'asc'} onClick={() => handleRequestSort('paymentDate')}>Дата</TableSortLabel>
                                                 </TableCell>
-                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                                    <TableSortLabel active={orderBy === 'studentName'} direction={orderBy === 'studentName' ? order : 'asc'} onClick={() => handleRequestSort('studentName')}>
-                                                        Ученик
-                                                    </TableSortLabel>
+                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>
+                                                    <TableSortLabel active={orderBy === 'studentName'} direction={orderBy === 'studentName' ? order : 'asc'} onClick={() => handleRequestSort('studentName')}>Ученик</TableSortLabel>
                                                 </TableCell>
-                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Предмет</TableCell>
-                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Тип</TableCell>
-                                                <TableCell align="right" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                                    <TableSortLabel active={orderBy === 'amount'} direction={orderBy === 'amount' ? order : 'asc'} onClick={() => handleRequestSort('amount')}>
-                                                        Сумма
-                                                    </TableSortLabel>
+                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Предмет</TableCell>
+                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Тип</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>
+                                                    <TableSortLabel active={orderBy === 'amount'} direction={orderBy === 'amount' ? order : 'asc'} onClick={() => handleRequestSort('amount')}>Сумма</TableSortLabel>
                                                 </TableCell>
-                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>Дата занятия</TableCell>
+                                                <TableCell sx={{ fontWeight: 600, fontSize: '12px', color: '#6B7280', backgroundColor: '#F9FAFB' }}>Дата занятия</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -714,52 +547,28 @@ function Payments() {
                                                         <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
                                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                                 <CalendarIcon sx={{ fontSize: 14, color: '#9CA3AF' }} />
-                                                                <Typography sx={{ fontSize: '14px', color: '#1F2937' }}>
-                                                                    {formatDate(payment.paymentDate)}
-                                                                </Typography>
+                                                                <Typography sx={{ fontSize: '14px', color: '#1F2937' }}>{formatDate(payment.paymentDate)}</Typography>
                                                             </Box>
                                                         </TableCell>
                                                         <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
                                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                                <Avatar sx={{ width: 32, height: 32, bgcolor: getAvatarColor(studentName), fontSize: 12, fontWeight: 600 }}>
-                                                                    {getInitials(studentName)}
-                                                                </Avatar>
-                                                                <Typography sx={{ fontSize: '14px', fontWeight: 500, color: '#1F2937' }}>
-                                                                    {studentName}
-                                                                </Typography>
+                                                                <Avatar sx={{ width: 32, height: 32, bgcolor: getAvatarColor(studentName), fontSize: 12, fontWeight: 600 }}>{getInitials(studentName)}</Avatar>
+                                                                <Typography sx={{ fontSize: '14px', fontWeight: 500, color: '#1F2937' }}>{studentName}</Typography>
                                                             </Box>
                                                         </TableCell>
                                                         <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            <Chip 
-                                                                icon={<SchoolIcon sx={{ fontSize: 12, color: '#6B7280 !important' }} />}
-                                                                label={payment.courseName || payment.lesson?.course?.name || 'Занятие'} 
-                                                                size="small" 
-                                                                variant="outlined" 
-                                                                sx={{ borderRadius: '6px', borderColor: '#E5E7EB', color: '#6B7280', fontSize: '12px' }}
-                                                            />
+                                                            <Chip icon={<SchoolIcon sx={{ fontSize: 12, color: '#6B7280 !important' }} />} label={payment.courseName || payment.lesson?.course?.name || 'Занятие'} size="small" variant="outlined"
+                                                                sx={{ borderRadius: '6px', borderColor: '#E5E7EB', color: '#6B7280', fontSize: '12px' }} />
                                                         </TableCell>
                                                         <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            <Chip
-                                                                label={isSubscription ? 'Абонемент' : 'Поурочно'}
-                                                                size="small"
-                                                                sx={{
-                                                                    bgcolor: isSubscription ? '#EEF2FF' : '#F3F4F6',
-                                                                    color: isSubscription ? '#4F46E5' : '#374151',
-                                                                    fontWeight: 500,
-                                                                    fontSize: '11px',
-                                                                    borderRadius: '100px',
-                                                                }}
-                                                            />
+                                                            <Chip label={isSubscription ? 'Абонемент' : 'Поурочно'} size="small"
+                                                                sx={{ bgcolor: isSubscription ? '#EEF2FF' : '#F3F4F6', color: isSubscription ? '#4F46E5' : '#374151', fontWeight: 500, fontSize: '11px', borderRadius: '100px' }} />
                                                         </TableCell>
                                                         <TableCell align="right" sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '14px' }}>
-                                                                {(payment.amount || 0).toLocaleString()} ₽
-                                                            </Typography>
+                                                            <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '14px' }}>{(payment.amount || 0).toLocaleString()} ₽</Typography>
                                                         </TableCell>
                                                         <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                            <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
-                                                                {payment.lessonDate ? formatDate(payment.lessonDate) : '-'}
-                                                            </Typography>
+                                                            <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>{payment.lessonDate ? formatDate(payment.lessonDate) : '-'}</Typography>
                                                         </TableCell>
                                                     </StyledTableRow>
                                                 );
@@ -769,16 +578,8 @@ function Payments() {
                                 </StyledTableContainer>
                                 {filteredPayments.length > rowsPerPage && (
                                     <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                                        <Pagination 
-                                            count={Math.ceil(filteredPayments.length / rowsPerPage)} 
-                                            page={page + 1} 
-                                            onChange={(e, newPage) => setPage(newPage - 1)} 
-                                            size="small"
-                                            sx={{
-                                                '& .MuiPaginationItem-root': { borderRadius: '8px', color: '#6B7280' },
-                                                '& .Mui-selected': { backgroundColor: '#4F46E5 !important', color: '#FFFFFF' },
-                                            }}
-                                        />
+                                        <Pagination count={Math.ceil(filteredPayments.length / rowsPerPage)} page={page + 1} onChange={(e, newPage) => setPage(newPage - 1)} size="small"
+                                            sx={{ '& .MuiPaginationItem-root': { borderRadius: '8px', color: '#6B7280' }, '& .Mui-selected': { backgroundColor: '#4F46E5 !important', color: '#FFFFFF' } }} />
                                     </Box>
                                 )}
                             </>
@@ -786,12 +587,7 @@ function Payments() {
                     </>
                 )}
 
-                <Snackbar 
-                    open={snackbar.open} 
-                    autoHideDuration={4000} 
-                    onClose={() => setSnackbar({ ...snackbar, open: false })} 
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                >
+                <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
                     <Alert severity={snackbar.severity} sx={{ borderRadius: '8px' }}>{snackbar.message}</Alert>
                 </Snackbar>
             </Box>

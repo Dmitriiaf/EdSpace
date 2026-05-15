@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
 import { Delete, Edit, Refresh as RefreshIcon, ViewList as ListIcon, CalendarToday as CalendarIcon, Work as WorkIcon, Event as EventIcon, Add as AddIcon } from '@mui/icons-material';
+import { Checkbox, FormControlLabel } from '@mui/material';
 import {
     Box, Paper, Typography, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Button,
@@ -44,8 +45,26 @@ const STATUS_COLORS = {
     PAID:           { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'Оплачено' },
     RESCHEDULED:    { bg: '#EFF6FF', text: '#1E40AF', dot: '#3B82F6', label: 'Перенесено' },
     CANCELLED:      { bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444', label: 'Отменено' },
-    // Разовое занятие — использует SCHEDULED, но можно добавить отдельный статус если нужно
     SINGLE:         { bg: '#F5F3FF', text: '#5B21B6', dot: '#8B5CF6', label: 'Разовое' },
+    TRIAL:          { bg: '#F5F3FF', text: '#5B21B6', dot: '#8B5CF6', label: 'Пробное' },
+};
+
+// Функция получения статуса с проверкой отработки
+const getLessonStatusStyle = (lesson, allLessons) => {
+    if (lesson.isTrial) {
+        return STATUS_COLORS.TRIAL;
+    }
+    if (lesson.status === 'CANCELLED') {
+        const hasResurrected = allLessons.some(l => 
+            l.student?.id === lesson.student?.id && 
+            l.lessonDate === lesson.lessonDate && 
+            (l.status === 'PAID' || l.status === 'COMPLETED')
+        );
+        if (hasResurrected) {
+            return { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'Отработано' };
+        }
+    }
+    return STATUS_COLORS[lesson.status] || STATUS_COLORS.SCHEDULED;
 };
 
 // ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
@@ -147,7 +166,8 @@ function WeeklySchedule() {
 
     const [openSingleLesson, setOpenSingleLesson] = useState(false);
     const [singleLesson, setSingleLesson] = useState({
-        studentId: '', courseId: '', date: new Date(), time: '10:00'
+        studentId: '', courseId: '', date: new Date(), time: '10:00',
+        isTrial: false, trialName: '', trialEmail: '', trialPrice: 0
     });
 
     useEffect(() => {
@@ -298,24 +318,38 @@ function WeeklySchedule() {
         }
     };
 
-    const handleCreateSingleLesson = async () => {
-        if (!singleLesson.studentId || !singleLesson.time) return;
-        try {
-            await axiosInstance.post('/lessons', {
-                tutorId: user.id,
-                studentId: parseInt(singleLesson.studentId),
-                courseId: singleLesson.courseId ? parseInt(singleLesson.courseId) : null,
-                lessonDate: format(singleLesson.date, 'yyyy-MM-dd'),
-                startTime: singleLesson.time + ':00',
-                endTime: (parseInt(singleLesson.time.split(':')[0]) + 1).toString().padStart(2, '0') + ':00:00'
-            });
-            setOpenSingleLesson(false);
-            setSingleLesson({ studentId: '', courseId: '', date: new Date(), time: '10:00' });
-            fetchData();
-            showSnackbar('✅ Разовое занятие создано', 'success');
-        } catch (err) {
-            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
-        }
+        const handleCreateSingleLesson = async () => {
+            if (!singleLesson.time) return;
+            if (!singleLesson.isTrial && !singleLesson.studentId) return;
+            if (singleLesson.isTrial && !singleLesson.trialName) return;
+            
+            try {
+                const payload = {
+                    tutorId: user.id,
+                    lessonDate: format(singleLesson.date, 'yyyy-MM-dd'),
+                    startTime: singleLesson.time + ':00',
+                    endTime: (parseInt(singleLesson.time.split(':')[0]) + 1).toString().padStart(2, '0') + ':00:00'
+                };
+
+                if (singleLesson.isTrial) {
+                    // Создаём пробного ученика и урок
+                    payload.trialName = singleLesson.trialName;
+                    payload.trialEmail = singleLesson.trialEmail || '';
+                    payload.trialPrice = singleLesson.trialPrice || 0;
+                    payload.isTrial = true;
+                } else {
+                    payload.studentId = parseInt(singleLesson.studentId);
+                    payload.courseId = singleLesson.courseId ? parseInt(singleLesson.courseId) : null;
+                }
+
+                await axiosInstance.post('/lessons', payload);
+                setOpenSingleLesson(false);
+                setSingleLesson({ studentId: '', courseId: '', date: new Date(), time: '10:00', isTrial: false, trialName: '', trialEmail: '', trialPrice: 0 });
+                fetchData();
+                showSnackbar(singleLesson.isTrial ? '✅ Пробное занятие создано' : '✅ Разовое занятие создано', 'success');
+            } catch (err) {
+                showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+            }
     };
 
     const showSnackbar = (message, severity) => setSnackbar({ open: true, message, severity });
@@ -358,11 +392,11 @@ function WeeklySchedule() {
                                 Календарь
                             </ViewToggleBtn>
                         </ViewToggleContainer>
-                        <StyledButton variant="outlined" startIcon={<AddIcon sx={{ fontSize: 18 }} />} onClick={() => setOpenSingleLesson(true)}
+                        <StyledButton data-tour="add-template-btn" variant="outlined" startIcon={<AddIcon sx={{ fontSize: 18 }} />} onClick={() => setOpenSingleLesson(true)}
                             sx={{ color: '#374151', borderColor: '#D1D5DB', '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' } }}>
                             + Разовое
                         </StyledButton>
-                        <StyledButton variant="contained" startIcon={<RefreshIcon sx={{ fontSize: 18 }} />} onClick={handleGenerateLessons}
+                        <StyledButton data-tour="generate-lessons" variant="contained" startIcon={<RefreshIcon sx={{ fontSize: 18 }} />} onClick={handleGenerateLessons}
                             sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
                             Создать занятия на месяц
                         </StyledButton>
@@ -459,7 +493,7 @@ function WeeklySchedule() {
                         )}
 
                         {/* ========== ТАБЛИЦА РАСПИСАНИЯ ========== */}
-                        <ScheduleTableContainer elevation={0}>
+                        <ScheduleTableContainer data-tour="template-list" elevation={0}>
                             <TableContainer sx={{ overflowX: 'auto' }}>
                                 <Table stickyHeader size="small">
                                     <TableHead>
@@ -523,8 +557,7 @@ function WeeklySchedule() {
                                                         if (lesson) {
                                                             const isFirstSlot = formatLessonTime(lesson.lessonDate, lesson.startTime) === timeSlot;
                                                             if (!isFirstSlot) return <TableCell key={day.id} sx={{ display: 'none' }} />;
-                                                            
-                                                            const statusStyle = STATUS_COLORS[lesson.status] || STATUS_COLORS.SCHEDULED;
+                                                            const statusStyle = getLessonStatusStyle(lesson, lessons);
                                                             const hasTemplate = template !== null;
                                                             const studentRate = getStudentRateForTutor(lesson.student, user?.id);
                                                             const rowSpan = (lesson.duration || 60) / 60;
@@ -737,25 +770,49 @@ function WeeklySchedule() {
                 {/* ========== ДИАЛОГ РАЗОВОГО ЗАНЯТИЯ ========== */}
                 <StyledDialog open={openSingleLesson} onClose={() => setOpenSingleLesson(false)} maxWidth="sm" fullWidth>
                     <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
-                        Разовое занятие
+                        {singleLesson.isTrial ? '🎯 Пробное занятие' : 'Разовое занятие'}
                     </DialogTitle>
                     <DialogContent sx={{ px: 3 }}>
                         <Box sx={{ pt: 2 }}>
-                            <FormControl fullWidth sx={{ mb: 2 }}>
-                                <InputLabel sx={{ fontSize: '14px' }}>Ученик</InputLabel>
-                                <Select value={singleLesson.studentId} onChange={(e) => setSingleLesson({ ...singleLesson, studentId: e.target.value })} label="Ученик"
-                                    sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
-                                    {students.map(s => <MenuItem key={s.id} value={s.id}>{s.fullName}</MenuItem>)}
-                                </Select>
-                            </FormControl>
-                            <FormControl fullWidth sx={{ mb: 2 }}>
-                                <InputLabel sx={{ fontSize: '14px' }}>Предмет</InputLabel>
-                                <Select value={singleLesson.courseId} onChange={(e) => setSingleLesson({ ...singleLesson, courseId: e.target.value })} label="Предмет"
-                                    sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
-                                    <MenuItem value="">Без предмета</MenuItem>
-                                    {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
-                                </Select>
-                            </FormControl>
+                            {/* Чекбокс пробного */}
+                            <FormControlLabel
+                                control={<Checkbox checked={singleLesson.isTrial || false} onChange={(e) => setSingleLesson({ ...singleLesson, isTrial: e.target.checked })} />}
+                                label="Пробное занятие (новый ученик)"
+                                sx={{ mb: 2 }}
+                            />
+
+                            {singleLesson.isTrial ? (
+                                <>
+                                    <TextField fullWidth label="Имя ученика" value={singleLesson.trialName || ''}
+                                        onChange={(e) => setSingleLesson({ ...singleLesson, trialName: e.target.value })}
+                                        sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                                    <TextField fullWidth label="Email ученика" value={singleLesson.trialEmail || ''}
+                                        onChange={(e) => setSingleLesson({ ...singleLesson, trialEmail: e.target.value })}
+                                        sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                                    <TextField fullWidth label="Стоимость (₽, 0 = бесплатно)" type="number" value={singleLesson.trialPrice || 0}
+                                        onChange={(e) => setSingleLesson({ ...singleLesson, trialPrice: e.target.value })}
+                                        sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                        helperText="0 — бесплатное пробное занятие" />
+                                </>
+                            ) : (
+                                <>
+                                    <FormControl fullWidth sx={{ mb: 2 }}>
+                                        <InputLabel sx={{ fontSize: '14px' }}>Ученик</InputLabel>
+                                        <Select value={singleLesson.studentId} onChange={(e) => setSingleLesson({ ...singleLesson, studentId: e.target.value })} label="Ученик"
+                                            sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
+                                            {students.map(s => <MenuItem key={s.id} value={s.id}>{s.fullName}</MenuItem>)}
+                                        </Select>
+                                    </FormControl>
+                                    <FormControl fullWidth sx={{ mb: 2 }}>
+                                        <InputLabel sx={{ fontSize: '14px' }}>Предмет</InputLabel>
+                                        <Select value={singleLesson.courseId} onChange={(e) => setSingleLesson({ ...singleLesson, courseId: e.target.value })} label="Предмет"
+                                            sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
+                                            <MenuItem value="">Без предмета</MenuItem>
+                                            {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                                        </Select>
+                                    </FormControl>
+                                </>
+                            )}
                             <DatePicker label="Дата" value={singleLesson.date} onChange={(d) => setSingleLesson({ ...singleLesson, date: d })} minDate={new Date()}
                                 slotProps={{ textField: { fullWidth: true, sx: { mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } } } }} />
                             <TextField fullWidth label="Время" type="time" value={singleLesson.time}
@@ -766,9 +823,10 @@ function WeeklySchedule() {
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 3 }}>
                         <StyledButton onClick={() => setOpenSingleLesson(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
-                        <StyledButton onClick={handleCreateSingleLesson} variant="contained" disabled={!singleLesson.studentId || !singleLesson.time}
-                            sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
-                            Создать
+                        <StyledButton onClick={handleCreateSingleLesson} variant="contained" 
+                            disabled={singleLesson.isTrial ? (!singleLesson.trialName || !singleLesson.time) : (!singleLesson.studentId || !singleLesson.time)}
+                            sx={{ bgcolor: singleLesson.isTrial ? '#7C3AED' : '#4F46E5', '&:hover': { bgcolor: singleLesson.isTrial ? '#6D28D9' : '#4338CA' } }}>
+                            {singleLesson.isTrial ? 'Создать пробное' : 'Создать'}
                         </StyledButton>
                     </DialogActions>
                 </StyledDialog>

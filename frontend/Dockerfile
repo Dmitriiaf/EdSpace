@@ -1,30 +1,18 @@
 # Этап 1: Сборка React-приложения
 FROM node:18-alpine AS build
 WORKDIR /app
-
-# Копируем package.json и package-lock.json
 COPY package*.json ./
-
-# Устанавливаем зависимости
-RUN npm install --legacy-peer-deps
-
-# Копируем исходный код
+RUN npm ci --only=production
 COPY . .
-
-# Собираем приложение
 RUN npm run build
 
-# Этап 2: Настройка Nginx для раздачи статики
+# Этап 2: Nginx
 FROM nginx:alpine
-
-# Копируем собранные файлы в папку Nginx
 COPY --from=build /app/build /usr/share/nginx/html
-
-# Копируем нашу конфигурацию Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Открываем порт 80
 EXPOSE 80
 
-# Запускаем Nginx
+# Права на папки Nginx
+RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx
+
 CMD ["nginx", "-g", "daemon off;"]

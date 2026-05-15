@@ -5,6 +5,8 @@ import com.example.demo.entity.Lesson;
 import com.example.demo.entity.Parent;
 import com.example.demo.entity.Student;
 import com.example.demo.entity.Subscription;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import com.example.demo.entity.Tutor;
 import com.example.demo.service.LessonService;
 import com.example.demo.service.LessonGeneratorService;
@@ -22,6 +24,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
+import com.example.demo.entity.Payment;
+import com.example.demo.repository.PaymentRepository;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -51,6 +56,9 @@ public class LessonController {
 
     @Autowired
     private TutorRepository tutorRepository;
+
+    @Autowired
+    private PaymentRepository paymentRepository;
 
     @Autowired
     private LessonGeneratorService lessonGeneratorService;
@@ -117,6 +125,7 @@ public class LessonController {
         }
     }
 
+    @Cacheable(value = "lessons_date", key = "#tutorId + '_' + #date")
     @GetMapping("/tutor/{tutorId}/date/{date}")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getLessonsByTutorAndDate(
@@ -297,6 +306,7 @@ public class LessonController {
         }
     }
 
+    @Cacheable(value = "lessons", key = "#tutorId")
     @GetMapping("/all")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getAllLessons(@RequestParam Long tutorId,
@@ -405,7 +415,7 @@ public class LessonController {
             return ResponseEntity.notFound().build();
         }
     }
-
+    @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PostMapping
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createLesson(@RequestBody Map<String, Object> request,
@@ -442,14 +452,41 @@ public class LessonController {
             LocalTime utcStartTime = utcZonedDateTime.toLocalTime();
             LocalTime utcEndTime = utcStartTime.plusMinutes(duration);
 
+            // Получаем studentId
+            Long studentId = null;
+            if (request.get("studentId") != null) {
+                studentId = Long.parseLong(request.get("studentId").toString());
+            }            // Если пробное занятие — создаём временного ученика
+            if (Boolean.TRUE.equals(request.get("isTrial"))) {
+                String trialName = (String) request.get("trialName");
+                String trialEmail = (String) request.get("trialEmail");
+
+                Student trialStudent = new Student();
+                trialStudent.setFullName(trialName != null ? trialName : "Пробный ученик");
+                trialStudent.setEmail(trialEmail != null ? trialEmail : "trial_" + System.currentTimeMillis() + "@trial.ed-space.ru");
+                trialStudent.setRole("ROLE_STUDENT");
+                trialStudent.setPaymentType("single");
+                trialStudent.addTutor(tutor);
+                trialStudent = studentRepository.save(trialStudent);
+                studentId = trialStudent.getId();
+            }
+
             Lesson lesson = lessonService.createLesson(
                     tutorId,
-                    Long.parseLong(request.get("studentId").toString()),
+                    studentId,
                     request.get("courseId") != null ? Long.parseLong(request.get("courseId").toString()) : null,
                     utcLessonDate,
                     utcStartTime,
                     utcEndTime
             );
+
+            // ✅ Устанавливаем флаг пробного урока ПОСЛЕ создания lesson
+            if (Boolean.TRUE.equals(request.get("isTrial"))) {
+                lesson.setIsTrial(true);
+                if (request.get("trialPrice") != null) {
+                    lesson.setTrialPrice(new BigDecimal(request.get("trialPrice").toString()));
+                }
+            }
 
             lesson.setDuration(duration);
             if (lesson.getBoardRoomName() == null || lesson.getBoardRoomName().isEmpty()) {
@@ -460,12 +497,54 @@ public class LessonController {
             }
             lessonService.saveLesson(lesson);
 
+            // ✅ Если ученик на абонементе — обновляем количество занятий в абонементе
+            Student lessonStudent = studentRepository.findById(studentId).orElse(null);
+            if (lessonStudent != null && "subscription".equals(lessonStudent.getPaymentTypeForTutor(tutorId))) {
+                final Long finalStudentId = studentId;
+                final Long finalTutorId = tutorId;
+                final LocalDate finalUtcLessonDate = utcLessonDate;
+
+                subscriptionRepository.findByStudentIdAndTutorIdAndStatus(finalStudentId, finalTutorId, "ACTIVE")
+                        .ifPresent(sub -> {
+                            int currentMonth = finalUtcLessonDate.getMonthValue();
+                            int subMonth = sub.getStartDate().getMonthValue();
+                            if (currentMonth == subMonth || currentMonth == subMonth + 1) {
+                                sub.setLessonsCount(sub.getLessonsCount() + 1);
+                                // Обновляем цену
+                                BigDecimal rate = lessonStudent.getRateForTutor(finalTutorId);
+                                if (rate != null) {
+                                    sub.setPrice(sub.getPrice().add(rate));
+                                }
+                                subscriptionRepository.save(sub);
+                                log.info("📊 Абонемент #{} обновлён при создании урока: +1 урок, всего {} занятий, новая цена: {}",
+                                        sub.getId(), sub.getLessonsCount(), sub.getPrice());
+
+                                // Уведомление родителю о доплате
+                                if (lessonStudent.getParent() != null) {
+                                    String message = String.format(
+                                            "📢 В расписании %s добавлено новое занятие.\n" +
+                                                    "💰 Требуется доплата: %s ₽\n" +
+                                                    "Всего занятий в абонементе: %d",
+                                            lessonStudent.getFullName(),
+                                            rate != null ? rate.toString() : "0",
+                                            sub.getLessonsCount()
+                                    );
+                                    notificationService.createNotification(
+                                            lessonStudent.getParent().getId(),
+                                            lesson.getId(),
+                                            message
+                                    );
+                                }
+                            }
+                        });
+            }
+
             return ResponseEntity.ok(lesson);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
-
+    @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PostMapping("/{id}/complete")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> completeLesson(@PathVariable Long id,
@@ -536,26 +615,41 @@ public class LessonController {
                 }
             } else if ("ROLE_PARENT".equals(userRole)) {
                 Parent parent = lesson.getStudent().getParent();
-                if (parent == null) {
-                    return ResponseEntity.status(403).body(Map.of("error", "У ученика нет привязанного родителя"));
-                }
-                if (!parent.getId().equals(currentUserId)) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён — это не ваш ребёнок"));
-                }
-                boolean isChildLesson = parent.getChildren().stream()
-                        .anyMatch(child -> child.getId().equals(lesson.getStudent().getId()));
-                if (!isChildLesson) {
-                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён — урок не принадлежит вашему ребёнку"));
+                if (parent == null || !parent.getId().equals(currentUserId)) {
+                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
             }
 
+            // ✅ СОЗДАЁМ ЗАПИСЬ В PAYMENT
+            BigDecimal rate = lesson.getStudent().getRateForTutor(lesson.getTutor().getId());
+            double amount = rate != null ? rate.doubleValue() : 0;
+            String paymentType = lesson.getStudent().getPaymentTypeForTutor(lesson.getTutor().getId());
+
+            Payment payment = new Payment(
+                    lesson.getTutor(),
+                    lesson.getStudent(),
+                    amount,
+                    LocalDateTime.now(),
+                    paymentType != null ? paymentType : "single",
+                    "PAID"
+            );
+            payment.setLesson(lesson);
+            payment.setLessonDate(lesson.getLessonDate());
+            payment.setCourse(lesson.getCourse());
+            payment.setCourseName(lesson.getCourse() != null ? lesson.getCourse().getName() : null);
+            paymentRepository.save(payment);
+
+            log.info("✅ Платёж создан: lessonId={}, amount={}, student={}", id, amount, lesson.getStudent().getFullName());
+
+            // Меняем статус урока
             Lesson paidLesson = lessonService.confirmPayment(id);
-            return ResponseEntity.ok(Map.of("message", "Оплата подтверждена", "lesson", paidLesson));
+            return ResponseEntity.ok(Map.of("message", "Оплата подтверждена", "lesson", paidLesson, "payment", payment));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
+    @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
     public ResponseEntity<?> cancelLesson(@PathVariable Long id,
@@ -916,6 +1010,7 @@ public class LessonController {
         }
     }
 
+    @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> updateLessonStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String newStatus = body.get("status");
@@ -923,7 +1018,6 @@ public class LessonController {
             return ResponseEntity.badRequest().body(Map.of("error", "Статус не указан"));
         }
 
-        // Разрешённые статусы для ручного изменения
         if (!List.of("PAID", "COMPLETED", "CANCELLED").contains(newStatus)) {
             return ResponseEntity.badRequest().body(Map.of("error", "Недопустимый статус"));
         }
@@ -931,9 +1025,31 @@ public class LessonController {
         Lesson lesson = lessonRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Занятие не найдено"));
 
-        // Можно менять статус только у COMPLETED → PAID
         if ("PAID".equals(newStatus) && !"COMPLETED".equals(lesson.getStatus())) {
             return ResponseEntity.badRequest().body(Map.of("error", "Оплатить можно только проведённое занятие"));
+        }
+
+        // ✅ Если меняем на PAID — создаём запись в payment
+        if ("PAID".equals(newStatus)) {
+            BigDecimal rate = lesson.getStudent().getRateForTutor(lesson.getTutor().getId());
+            double amount = rate != null ? rate.doubleValue() : 0;
+            String paymentType = lesson.getStudent().getPaymentTypeForTutor(lesson.getTutor().getId());
+
+            Payment payment = new Payment(
+                    lesson.getTutor(),
+                    lesson.getStudent(),
+                    amount,
+                    LocalDateTime.now(),
+                    paymentType != null ? paymentType : "single",
+                    "PAID"
+            );
+            payment.setLesson(lesson);
+            payment.setLessonDate(lesson.getLessonDate());
+            payment.setCourse(lesson.getCourse());
+            payment.setCourseName(lesson.getCourse() != null ? lesson.getCourse().getName() : null);
+            paymentRepository.save(payment);
+
+            log.info("✅ Платёж создан через PATCH status: lessonId={}, amount={}", id, amount);
         }
 
         lesson.setStatus(newStatus);

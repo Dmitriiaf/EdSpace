@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "lesson")
@@ -48,6 +48,12 @@ public class Lesson {
 
     @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
+
+    @Column(name = "is_trial")
+    private Boolean isTrial = false;
+
+    @Column(name = "trial_price")
+    private BigDecimal trialPrice;
 
     @Column(nullable = false)
     private String status = STATUS_SCHEDULED;
@@ -105,6 +111,10 @@ public class Lesson {
     }
 
     // Геттеры
+    public Boolean getIsTrial() { return isTrial; }
+    public void setIsTrial(Boolean isTrial) { this.isTrial = isTrial; }
+    public BigDecimal getTrialPrice() { return trialPrice; }
+    public void setTrialPrice(BigDecimal trialPrice) { this.trialPrice = trialPrice; }
     public Integer getDuration() { return duration; }
     public Long getWeeklyTemplateId() { return weeklyTemplateId; }
     public Long getId() { return id; }

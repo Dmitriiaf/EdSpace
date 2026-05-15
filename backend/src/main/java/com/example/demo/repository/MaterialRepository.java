@@ -9,6 +9,7 @@ import java.util.List;
 
 @Repository
 public interface MaterialRepository extends JpaRepository<Material, Long> {
+    void deleteByStudentId(Long studentId);
 
     List<Material> findByTutorId(Long tutorId);
 

@@ -141,7 +141,7 @@ const Register = () => {
             const refCode = params.get('ref') || '';
             const result = await register(formData.fullName, formData.email, formData.password, timezone, refCode);
             if (result?.error) setError(result.error);
-            else navigate('/dashboard', { replace: true });
+            else navigate('/onboarding', { replace: true });
         } catch (err) {
             setError('Ошибка регистрации. Попробуйте позже.');
         } finally {
@@ -240,7 +240,14 @@ const Register = () => {
                         />
                         <FormControlLabel
                             control={<Checkbox checked={agree} onChange={(e) => setAgree(e.target.checked)} sx={{ color: ACCENT, '&.Mui-checked': { color: ACCENT } }} />}
-                            label={<Typography sx={{ fontSize: '0.85rem', color: TEXT_DIM }}>Принимаю условия использования</Typography>}
+                            label={
+                                <Typography sx={{ fontSize: '0.85rem', color: TEXT_DIM }}>
+                                    Я принимаю{' '}
+                                    <a href="/privacy" target="_blank" style={{ color: ACCENT, textDecoration: 'underline' }}>условия использования</a>
+                                    {' '}и соглашаюсь на{' '}
+                                    <a href="/privacy" target="_blank" style={{ color: ACCENT, textDecoration: 'underline' }}>обработку персональных данных</a>
+                                </Typography>
+                            }
                             sx={{ mb: 3 }}
                         />
                         <StyledButton

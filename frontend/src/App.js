@@ -7,6 +7,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import { Brightness4 as DarkIcon, Brightness7 as LightIcon } from '@mui/icons-material';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import OnboardingQuestions from './pages/OnboardingQuestions';
 import PrivateRoute from './components/PrivateRoute';
 import Sidebar from './components/Sidebar';
 import LandingPage from './pages/LandingPage';
@@ -49,7 +50,7 @@ const StepikPageWrapper = () => {
     return <StepikPage key={location.pathname + Date.now()} />;
 };
 
-// Фон с акцентными пятнами (как на лендинге, но приглушённый)
+// Фон с акцентными пятнами
 const BG_IMAGE = `
     linear-gradient(180deg, rgba(79, 70, 229, 0.04) 0%, transparent 300px),
     radial-gradient(circle at 15% 20%, rgba(79, 70, 229, 0.12) 0%, transparent 50%),
@@ -62,6 +63,7 @@ const BG_IMAGE = `
 
 const AppContent = () => {
     const { user } = useAuth();
+
     const [isSidebarHovered, setIsSidebarHovered] = useState(false);
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('darkMode');
@@ -122,6 +124,7 @@ const AppContent = () => {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/stepik/callback" element={<StepikCallback />} />
+            <Route path="/onboarding" element={<OnboardingQuestions />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/complete-registration" element={<CompleteRegistration />} />
@@ -210,6 +213,7 @@ const AppContent = () => {
                         <Route path="/parent/profile" element={<PrivateRoute requiredRole="parent"><ParentProfile /></PrivateRoute>} />
 
                         {/* Публичные страницы */}
+                        <Route path="/onboarding" element={<OnboardingQuestions />} />
                         <Route path="/forgot-password" element={<ForgotPassword />} />
                         <Route path="/reset-password" element={<ResetPassword />} />
                         <Route path="/complete-registration" element={<CompleteRegistration />} />

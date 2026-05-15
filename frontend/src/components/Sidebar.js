@@ -122,9 +122,9 @@ const Sidebar = () => {
 
     const menuGroups = isTutor ? [
         { title: 'Основное', items: [
-            { path: '/dashboard', label: 'Главная', icon: <DashboardIcon /> },
-            { path: '/weekly-schedule', label: 'Расписание', icon: <CalendarIcon /> },
-            { path: '/students', label: 'Ученики', icon: <PeopleIcon /> },
+            { path: '/dashboard', label: 'Главная', icon: <DashboardIcon />, tourId: 'dashboard-link' },
+            { path: '/weekly-schedule', label: 'Расписание', icon: <CalendarIcon />, tourId: 'schedule-link' },
+            { path: '/students', label: 'Ученики', icon: <PeopleIcon />, tourId: 'students-link' },
             { path: '/finance', label: 'Финансы', icon: <MoneyIcon /> },
         ]},
         { title: 'Обучение', items: [
@@ -201,6 +201,7 @@ const Sidebar = () => {
 
     return (
         <Box 
+            data-tour="sidebar"
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             sx={{
@@ -231,6 +232,7 @@ const Sidebar = () => {
                                 <ListItem key={item.path} disablePadding sx={{ px: 1 }}>
                                     <Tooltip title={collapsed ? item.label : ''} placement="right">
                                         <ListItemButton
+                                            data-tour={item.tourId}
                                             onClick={() => handleNavigation(item.path)}
                                             sx={{
                                                 borderRadius: 2, py: 1.2, px: collapsed ? 1.5 : 2,

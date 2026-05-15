@@ -76,6 +76,15 @@ public class TutorController {
                     request.get("about"),
                     request.get("city")
             );
+
+            // Новые поля анкеты
+            if (request.containsKey("subjects")) tutor.setSubjects(request.get("subjects"));
+            if (request.containsKey("studentsCount")) tutor.setStudentsCount(request.get("studentsCount"));
+            if (request.containsKey("experience")) tutor.setExperience(request.get("experience"));
+            if (request.containsKey("source")) tutor.setSource(request.get("source"));
+            if (request.containsKey("onboardingCompleted")) tutor.setOnboardingCompleted(Boolean.parseBoolean(request.get("onboardingCompleted")));
+            tutorService.save(tutor);
+
             tutor.setPasswordHash(null);
             return ResponseEntity.ok(tutor);
         } catch (RuntimeException e) {
@@ -93,6 +102,26 @@ public class TutorController {
             log.debug("Avatar в БД: {}", avatar != null ? "есть" : "нет");
             // ✅ Исправлено: если avatar == null, возвращаем пустую строку
             return ResponseEntity.ok(Map.of("avatar", avatar != null ? avatar : ""));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteTutor(@PathVariable Long id) {
+        try {
+            tutorService.deleteTutor(id);
+            return ResponseEntity.ok(Map.of("message", "Аккаунт успешно удалён"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/export-data")
+    public ResponseEntity<?> exportData(@PathVariable Long id) {
+        try {
+            Map<String, Object> data = tutorService.exportUserData(id);
+            return ResponseEntity.ok(data);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

@@ -2,8 +2,12 @@ package com.example.demo.service;
 
 import com.example.demo.repository.InvitationTokenRepository;
 import com.example.demo.entity.InvitationToken;
-import com.example.demo.service.EmailService;
 import com.example.demo.entity.*;
+import com.example.demo.repository.HomeworkRepository;
+import com.example.demo.repository.MaterialRepository;
+import com.example.demo.repository.BoardSessionRepository;
+import com.example.demo.repository.StudentBoardRepository;
+import com.example.demo.repository.NotificationRepository;
 import com.example.demo.exception.NotFoundException;
 import com.example.demo.repository.*;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +29,22 @@ public class StudentService {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private HomeworkRepository homeworkRepository;
+
+    @Autowired
+    private MaterialRepository materialRepository;
+
+    @Autowired
+    private BoardSessionRepository boardSessionRepository;
+
+    @Autowired
+    private StudentBoardRepository studentBoardRepository;
+
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     @Autowired
     private StudentRepository studentRepository;
@@ -98,6 +118,10 @@ public class StudentService {
 
         if (ratePerLesson != null) {
             student.setRateForTutor(tutor, ratePerLesson, paymentType);
+        }
+        // ✅ Сохраняем paymentType в Student
+        if (paymentType != null) {
+            student.setPaymentType(paymentType);
         }
 
         Student savedStudent = studentRepository.save(student);
@@ -217,54 +241,70 @@ public class StudentService {
     public void deleteStudent(Long id) {
         Student student = getStudentById(id);
 
-        // 1. Очистить связи с курсами
-        student.getCourses().clear();
-        studentRepository.save(student);
+        // 1. Удалить уведомления
+        notificationRepository.deleteByStudentId(id);
 
-        // 2. Удалить ставки
+        // 2. Удалить домашние задания
+        homeworkRepository.deleteByStudentId(id);
+
+        // 3. Удалить материалы
+        materialRepository.deleteByStudentId(id);
+
+        // 4. Удалить сессии досок
+        boardSessionRepository.deleteByStudentId(id);
+
+        // 5. Удалить заметки (student_board)
+        studentBoardRepository.deleteByStudentId(id);
+
+        // 6. Очистить связи с курсами
+        studentRepository.removeFromAllCourses(id);
+
+        // 7. Удалить ставки
         if (student.getRates() != null) {
             student.getRates().clear();
             studentRepository.save(student);
         }
 
-        // 3. Удалить заметки (student_board)
-        studentRepository.deleteBoardNotesByStudentId(id);
-
-        // 4. Удалить шаблоны
+        // 8. Удалить шаблоны
         List<WeeklyTemplate> templates = weeklyTemplateRepository.findByStudentId(id);
         if (!templates.isEmpty()) {
             weeklyTemplateRepository.deleteAll(templates);
         }
 
-        // 5. Удалить уроки
+        // 9. Удалить уроки
         List<Lesson> lessons = lessonRepository.findByStudentIdOrderByLessonDateAscStartTimeAsc(id);
         if (!lessons.isEmpty()) {
             lessonRepository.deleteAll(lessons);
         }
 
-        // 6. Удалить платежи
+        // 10. Удалить платежи
         List<Payment> payments = paymentRepository.findByStudentId(id);
         if (!payments.isEmpty()) {
             paymentRepository.deleteAll(payments);
         }
 
-        // 7. Удалить абонементы
+        // 11. Удалить абонементы
         List<Subscription> subscriptions = subscriptionRepository.findByStudentId(id);
         if (!subscriptions.isEmpty()) {
             subscriptionRepository.deleteAll(subscriptions);
         }
 
-        // 8. Удалить приглашения
+        // 12. Удалить приглашения
         invitationTokenRepository.deleteByStudentId(id);
 
-        // 9. Отвязать родителя
+        // 13. Отвязать родителя
         if (student.getParent() != null) {
             student.setParent(null);
             studentRepository.save(student);
         }
 
-        // 10. Удалить ученика
+        // 14. Удалить связи с репетиторами
+        student.getTutors().clear();
+        studentRepository.save(student);
+
+        // 15. Удалить ученика
         studentRepository.delete(student);
+        log.info("🗑️ Ученик id={} полностью удалён со всеми связанными записями", id);
     }
 
     public Parent findOrCreateParent(String email, String studentFullName) {

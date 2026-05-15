@@ -293,6 +293,15 @@ function Homework() {
             if (grade.returnForRevision) {
                 await axiosInstance.patch(`/homework/${selectedHomework.id}/revision`, { feedback: grade.feedback });
             } else {
+                // Если ASSIGNED (без ответа) — сначала меняем статус на SUBMITTED, потом оцениваем
+                const hwStatus = (selectedHomework.status || '').toUpperCase();
+                if (hwStatus === 'ASSIGNED') {
+                    await axiosInstance.patch(`/homework/${selectedHomework.id}/submit`, 
+                        new URLSearchParams({ answer: 'Оценено без отправки (разобрали на уроке)' }), {
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                        });
+                }
+                
                 if (selectedHomework.gradeType === 'GRADE_100' || selectedHomework.gradeType === 'GRADE_10') {
                     const maxScore = selectedHomework.gradeType === 'GRADE_100' ? 100 : 10;
                     await axiosInstance.patch(`/homework/${selectedHomework.id}/grade-with-score`, {
@@ -773,6 +782,13 @@ function Homework() {
                                                                 <CheckIcon sx={{ fontSize: 14, mr: 0.5 }} /> Проверить
                                                             </StyledButton>
                                                         )}
+                                                        {isTutor && (hw.status || '').toUpperCase() === 'ASSIGNED' && (
+                                                            <StyledButton variant="outlined" size="small"
+                                                                onClick={() => { setSelectedHomework(hw); setGrade({ grade: 0, feedback: '', returnForRevision: false }); setOpenCheck(true); }}
+                                                                sx={{ color: '#6B7280', borderColor: '#D1D5DB', borderRadius: '6px', fontSize: '12px', px: 1.5, py: 0.5, '&:hover': { bgcolor: '#F9FAFB' } }}>
+                                                                <ReviewIcon viewIcon sx={{ fontSize: 14, mr: 0.5 }} /> Проверить без ответа
+                                                            </StyledButton>
+                                                        )}
                                                         {isTutor && (hw.status || '').toUpperCase() === 'CHECKED' && (
                                                             <StyledButton variant="outlined" size="small"
                                                                 onClick={() => { setSelectedHomework(hw); setOpenCheck(true); }}
@@ -873,6 +889,13 @@ function Homework() {
                                                         <StyledButton variant="contained" startIcon={<CheckIcon sx={{ fontSize: 16 }} />}
                                                             onClick={() => { setSelectedHomework(hw); setGrade({ grade: 0, feedback: '', returnForRevision: false }); setOpenCheck(true); }}
                                                             sx={{ bgcolor: '#10B981', borderRadius: '8px', '&:hover': { bgcolor: '#059669' }, fontSize: '13px' }}>Проверить</StyledButton>
+                                                    )}
+                                                    {isTutor && (hw.status || '').toUpperCase() === 'ASSIGNED' && (
+                                                        <StyledButton variant="outlined" startIcon={<ReviewIcon sx={{ fontSize: 16 }} />}
+                                                            onClick={() => { setSelectedHomework(hw); setGrade({ grade: 0, feedback: '', returnForRevision: false }); setOpenCheck(true); }}
+                                                            sx={{ color: '#6B7280', borderColor: '#D1D5DB', borderRadius: '8px', fontSize: '13px', '&:hover': { bgcolor: '#F9FAFB' } }}>
+                                                            Проверить без ответа
+                                                        </StyledButton>
                                                     )}
                                                     {isTutor && (hw.status || '').toUpperCase() === 'CHECKED' && (
                                                         <StyledButton variant="outlined" startIcon={<ReviewIcon sx={{ fontSize: 16 }} />}

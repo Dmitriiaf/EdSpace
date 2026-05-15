@@ -458,7 +458,7 @@ function Students() {
             )}
 
             {/* ========== ПОИСК + ФИЛЬТРЫ + КНОПКА ========== */}
-            <Box sx={{ 
+            <Box data-tour="student-filters" sx={{ 
                 display: 'flex', 
                 justifyContent: 'space-between', 
                 alignItems: 'center', 
@@ -520,6 +520,7 @@ function Students() {
                 {tabValue === 0 && (
                     <>
                         <StyledButton 
+                            data-tour="add-student-btn"
                             variant="contained" 
                             startIcon={<Add sx={{ fontSize: 18 }} />} 
                             onClick={() => handleOpenDialog()}
@@ -568,7 +569,7 @@ function Students() {
                 </Paper>
             ) : (
                 <Grid container spacing={2}>
-                    {filteredStudents.map(student => {
+                    {filteredStudents.map((student, index) => {
                         const st = getStudentStats(student.email);
                         const next = getNextLesson(student.email);
                         const birthday = getBirthdayText(student.birthday);
@@ -578,7 +579,7 @@ function Students() {
                         const avatarColor = getAvatarColor(student.fullName);
 
                         return (
-                            <Grid item xs={12} sm={6} lg={4} key={student.id}>
+                            <Grid item xs={12} sm={6} lg={4} key={student.id} data-tour={index === 0 ? "student-card" : undefined}>
                                 <StudentCard>
                                     {/* Бейдж дня рождения */}
                                     {birthday && (

@@ -70,6 +70,11 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     @Query("DELETE FROM StudentBoard sb WHERE sb.student.id = :studentId")
     void deleteBoardNotesByStudentId(@Param("studentId") Long studentId);
 
+
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM course_student WHERE student_id = :studentId", nativeQuery = true)
+    void removeFromAllCourses(@Param("studentId") Long studentId);
     // Привязать ученика к репетитору
     @Modifying
     @Transactional

@@ -214,8 +214,16 @@ function Finance() {
             const paidLessonIds = new Set(monthPayments.map(p => p.lesson?.id).filter(id => id));
 
             // Оплаченные занятия, не учтённые в таблице payments
+            // НО только для поурочных учеников (НЕ абонементников)
             const paidLessonsIncome = monthLessons
-                .filter(l => l.status === 'PAID' && !paidLessonIds.has(l.id))
+                .filter(l => {
+                    if (l.status !== 'PAID') return false;
+                    if (paidLessonIds.has(l.id)) return false;
+                    // Пропускаем абонементников — их доход уже учтён в платеже за абонемент
+                    const student = studentsList.find(s => s.id === l.student?.id);
+                    if (student?.paymentType === 'subscription') return false;
+                    return true;
+                })
                 .reduce((sum, l) => {
                     const student = studentsList.find(s => s.id === l.student?.id);
                     return sum + (getStudentRateForTutor(student, user.id) || 0);
@@ -225,7 +233,7 @@ function Finance() {
             
             let subscriptionIncome = 0;
             let singleIncome = 0;
-            
+
             monthPayments.forEach(p => {
                 if (p.paymentType === 'subscription' || (p.courseName && p.courseName.includes('Абонемент'))) {
                     subscriptionIncome += p.amount || 0;
@@ -233,14 +241,13 @@ function Finance() {
                     singleIncome += p.amount || 0;
                 }
             });
-            
-            // Добавляем оплаченные занятия в соответствующий тип дохода
+
+            // Добавляем оплаченные занятия ТОЛЬКО для поурочных учеников
             monthLessons.filter(l => l.status === 'PAID' && !paidLessonIds.has(l.id)).forEach(l => {
                 const student = studentsList.find(s => s.id === l.student?.id);
                 const rate = getStudentRateForTutor(student, user.id) || 0;
-                if (student?.paymentType === 'subscription') {
-                    subscriptionIncome += rate;
-                } else {
+                // Для абонементников НЕ добавляем — их доход уже в платеже за абонемент
+                if (student?.paymentType !== 'subscription') {
                     singleIncome += rate;
                 }
             });
@@ -471,7 +478,7 @@ function Finance() {
                 </Box>
 
                 {/* ========== ВКЛАДКИ ========== */}
-                <TabsPaper elevation={0}>
+                <TabsPaper data-tour="finance-tabs" elevation={0}>
                     <Tabs 
                         value={tabValue} 
                         onChange={handleTabChange} 
@@ -547,7 +554,7 @@ function Finance() {
                     </Box>
 
                     {/* ========== HERO-СЕКЦИЯ ========== */}
-                    <HeroSection elevation={0}>
+                    <HeroSection data-tour="finance-overview" elevation={0}>
                         <Typography sx={{ 
                             fontSize: '13px', 
                             opacity: 0.8, 

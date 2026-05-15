@@ -186,6 +186,37 @@ const Profile = () => {
         finally { setLoading(false); }
     };
 
+    const handleExportData = async () => {
+        try {
+            const response = await axiosInstance.get(`/tutors/${user.id}/export-data`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `edspace_export_${user.id}_${format(new Date(), 'yyyy-MM-dd')}.json`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            showSnackbar('✅ Данные скачаны', 'success');
+        } catch (err) {
+            showSnackbar('Ошибка при экспорте данных', 'error');
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!window.confirm('Вы уверены? Все ваши данные будут безвозвратно удалены: ученики, уроки, платежи, абонементы.')) return;
+        if (!window.confirm('Подтвердите ещё раз. Это действие необратимо.')) return;
+        try {
+            await axiosInstance.delete(`/tutors/${user.id}`);
+            showSnackbar('Аккаунт удалён', 'success');
+            setTimeout(() => {
+                localStorage.clear();
+                window.location.href = '/';
+            }, 1500);
+        } catch (err) {
+            showSnackbar('Ошибка при удалении аккаунта', 'error');
+        }
+    };
     const handleChangePassword = async () => {
         if (passwordData.newPassword !== passwordData.confirmPassword) { setPasswordError('Пароли не совпадают'); return; }
         if (passwordData.newPassword.length < 6) { setPasswordError('Пароль должен быть не менее 6 символов'); return; }
@@ -254,6 +285,14 @@ const Profile = () => {
                         <StyledButton variant="outlined" startIcon={<LockIcon sx={{ fontSize: 16 }} />} fullWidth onClick={() => setPasswordDialog(true)}
                             sx={{ mt: 2, color: '#D97706', borderColor: '#FDE68A', '&:hover': { bgcolor: '#FFFBEB', borderColor: '#F59E0B' } }}>
                             Сменить пароль
+                        </StyledButton>
+                        <StyledButton variant="outlined" fullWidth onClick={handleExportData}
+                            sx={{ mt: 1.5, color: '#4F46E5', borderColor: '#C7D2FE', '&:hover': { bgcolor: '#EEF2FF', borderColor: '#4F46E5' } }}>
+                            📥 Скачать мои данные
+                        </StyledButton>
+                        <StyledButton variant="outlined" fullWidth onClick={handleDeleteAccount}
+                            sx={{ mt: 1.5, color: '#EF4444', borderColor: '#FECACA', '&:hover': { bgcolor: '#FEF2F2', borderColor: '#EF4444' } }}>
+                            🗑️ Удалить аккаунт
                         </StyledButton>
                     </StyledPaper>
                 </Grid>

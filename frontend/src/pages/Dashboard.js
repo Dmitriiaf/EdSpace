@@ -251,22 +251,21 @@ function Dashboard() {
     };
 
     const fetchPreviousCompletedLessons = async (lesson) => {
-        const key = `${lesson.student?.id}_${lesson.course?.id || 'no-course'}`;
+        const key = `${lesson.student?.id}`;
         if (previousLessonsCache[key]) return;
         
         setLoadingHistory(true);
         try {
             const courseId = lesson.course?.id;
-            if (!courseId) return;
+            const url = courseId 
+                ? `/lessons/student/${lesson.student?.id}/completed?tutorId=${user.id}&courseId=${courseId}&limit=3`
+                : `/lessons/student/${lesson.student?.id}/completed?tutorId=${user.id}&limit=3`;
             
-            const res = await axiosInstance.get(
-                `/lessons/student/${lesson.student?.id}/completed?tutorId=${user.id}&courseId=${courseId}&limit=3`
-            );
+            const res = await axiosInstance.get(url);
             setPreviousLessonsCache(prev => ({ ...prev, [key]: res.data }));
         } catch (err) { console.warn('Ошибка загрузки истории:', err); }
         finally { setLoadingHistory(false); }
     };
-
     const fetchPreviousLessons = async () => {
         try {
             const today = new Date();
@@ -279,7 +278,7 @@ function Dashboard() {
             
             const lessonsByStudentAndCourse = {};
             for (const lesson of allLessons) {
-                const key = `${lesson.student.id}_${lesson.course?.id || 'no-course'}`;
+                const key = `${lesson.student.id}`;
                 if (!lessonsByStudentAndCourse[key]) lessonsByStudentAndCourse[key] = [];
                 lessonsByStudentAndCourse[key].push(lesson);
             }
@@ -365,6 +364,7 @@ function Dashboard() {
             setLessonNotes(''); setNextLessonPlan('');
             setNewHomeworkForLesson({ studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5', customDueDate: '' });
             await loadAllData();
+            fetchDebtors();
             showSnackbar(newHomeworkForLesson.task ? '✅ Урок завершён и ДЗ назначено!' : '✅ Занятие завершено!', 'success');
         } catch (err) { showSnackbar('Ошибка при завершении урока', 'error'); }
     };
@@ -427,7 +427,14 @@ function Dashboard() {
     const handleReplaceClick = (lesson) => { setCancelledLesson(lesson); setSelectedDebtorId(''); setOpenReplaceDialog(true); };
     const handleConfirmReplace = async () => {
         if (!cancelledLesson || !selectedDebtorId) return;
-        try { await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId)); showSnackbar('✅ Урок заменён на отработку долга', 'success'); setOpenReplaceDialog(false); setCancelledLesson(null); await loadAllData(); }
+        try { 
+            await replaceCancelledWithResurrect(cancelledLesson.id, parseInt(selectedDebtorId)); 
+            showSnackbar('✅ Урок заменён на отработку долга', 'success'); 
+            setOpenReplaceDialog(false); 
+            setCancelledLesson(null); 
+            await loadAllData();
+            fetchDebtors();
+        }
         catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
 
@@ -436,7 +443,18 @@ function Dashboard() {
     const goToToday = () => setSelectedDate(new Date());
     const showSnackbar = (message, severity) => setSnackbar({ open: true, message, severity });
 
-    const getStatusConfig = (status) => {
+    const getStatusConfig = (status, lesson, todayLessons) => {
+        // Проверка: отменённый урок, у которого есть отработанный в тот же день
+        const isResurrected = status === 'CANCELLED' && todayLessons.some(l => 
+            l.student?.id === lesson?.student?.id && 
+            l.lessonDate === lesson?.lessonDate && 
+            (l.status === 'PAID' || l.status === 'COMPLETED')
+        );
+        
+        if (isResurrected) {
+            return { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'Отработано' };
+        }
+        
         const configs = {
             'SCHEDULED': { bg: '#EFF6FF', color: '#1E40AF', dot: '#3B82F6', label: 'Запланировано' },
             'IN_PROGRESS': { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'В процессе' },
@@ -463,14 +481,13 @@ function Dashboard() {
         const courseName = lesson.course?.name || 'Занятие';
         const studentName = lesson.student?.fullName || 'Ученик';
         const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
-        const statusConfig = getStatusConfig(lesson.status);
-        const isScheduled = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
+        const statusConfig = getStatusConfig(lesson.status, lesson, todayLessons);        const isScheduled = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
         const isInProgress = lesson.status === 'IN_PROGRESS';
         const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID';
         const isCancelled = lesson.status === 'CANCELLED';
         
         return (
-            <LessonCard key={lesson.id}>
+            <LessonCard key={lesson.id} data-tour="lesson-card">
                 <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                         <Box sx={{ 
@@ -479,7 +496,7 @@ function Dashboard() {
                         }} />
                         
                         <Box sx={{ flex: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                            <Box data-tour="date-nav" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                     <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '16px' }}>
                                         {startTime} – {endTime}
@@ -583,7 +600,7 @@ function Dashboard() {
                                             {loadingHistory ? (
                                                 <CircularProgress size={20} sx={{ color: '#4F46E5' }} />
                                             ) : (() => {
-                                                const key = `${lesson.student?.id}_${lesson.course?.id || 'no-course'}`;
+                                            const key = `${lesson.student?.id}`;
                                                 const history = previousLessonsCache[key] || [];
                                                 
                                                 if (history.length === 0) return (
@@ -619,7 +636,7 @@ function Dashboard() {
                         </Box>
                         
                         {/* Кнопки действий */}
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flexShrink: 0 }}>
+                        <Box data-tour="lesson-actions" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flexShrink: 0 }}>
                             {isScheduled && (
                                 <>
                                     <StyledButton variant="contained" startIcon={<VideocamIcon sx={{ fontSize: 16 }} />}
@@ -669,7 +686,7 @@ function Dashboard() {
                                     )}
                                 </>
                             )}
-                            {isCancelled && (
+                            {isCancelled && !todayLessons.some(l => l.student?.id === lesson.student?.id && l.lessonDate === lesson.lessonDate && (l.status === 'PAID' || l.status === 'COMPLETED')) && (
                                 <StyledButton variant="outlined" color="success" startIcon={<WorkIcon sx={{ fontSize: 16 }} />}
                                     onClick={() => handleReplaceClick(lesson)}
                                     sx={{ borderColor: '#A7F3D0', color: '#059669', '&:hover': { bgcolor: '#ECFDF5' } }}>
@@ -712,7 +729,7 @@ function Dashboard() {
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
             <PageContainer>
                 {/* ========== ОБЪЕДИНЁННАЯ ШАПКА ========== */}
-                <Paper sx={{ 
+                <Paper data-tour="hero" sx={{ 
                     mb: 3, borderRadius: '16px', p: 3,
                     background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
                     color: '#fff', position: 'relative', overflow: 'hidden',

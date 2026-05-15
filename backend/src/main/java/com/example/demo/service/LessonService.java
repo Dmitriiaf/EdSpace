@@ -209,6 +209,28 @@ public class LessonService {
             log.info("Занятие завершено, ожидает оплаты");
         }
 
+        // ✅ Если урок создан через «Отработать» — списываем долг
+        if (lesson.getOriginalLesson() != null && "CANCELLED".equals(lesson.getOriginalLesson().getStatus())) {
+            Student student = lesson.getStudent();
+            if ("subscription".equals(student.getPaymentTypeForTutor(lesson.getTutor().getId()))) {
+                subscriptionRepository
+                        .findByStudentIdAndTutorIdAndStatus(student.getId(), lesson.getTutor().getId(), "ACTIVE")
+                        .ifPresent(sub -> {
+                            if (sub.getDebtLessons() != null && sub.getDebtLessons() > 0) {
+                                sub.setDebtLessons(sub.getDebtLessons() - 1);
+                                subscriptionRepository.save(sub);
+                                log.info("✅ Долг списан при завершении отработанного урока: абонемент={}, долгов={}", sub.getId(), sub.getDebtLessons());
+                            }
+                        });
+            } else {
+                if (student.getMissedLessons() != null && student.getMissedLessons() > 0) {
+                    student.setMissedLessons(student.getMissedLessons() - 1);
+                    studentRepository.save(student);
+                    log.info("✅ Долг списан при завершении отработанного урока: ученик={}, пропусков={}", student.getId(), student.getMissedLessons());
+                }
+            }
+        }
+
         lesson.setCompletedAt(LocalDateTime.now());
 
         if (notes != null && !notes.isEmpty()) {
@@ -302,6 +324,14 @@ public class LessonService {
                     });
         } else {
             originalLesson.setStatus("COMPLETED");
+
+            // ✅ Если пробное занятие и цена 0 — сразу PAID
+            if (originalLesson.getIsTrial() != null && originalLesson.getIsTrial() &&
+                    (originalLesson.getTrialPrice() == null || originalLesson.getTrialPrice().compareTo(BigDecimal.ZERO) == 0)) {
+                originalLesson.setStatus("PAID");
+                originalLesson.setPaidAt(LocalDateTime.now());
+                log.info("Пробное занятие (бесплатное) автоматически оплачено");
+            }
         }
 
         originalLesson.setCompletedAt(LocalDateTime.now());
@@ -369,6 +399,19 @@ public class LessonService {
             }
             lesson.setUpdatedAt(LocalDateTime.now());
 
+            // ✅ Добавляем долг для оригинала, если он абонементный
+            Student originalStudent = originalLesson.getStudent();
+            if ("subscription".equals(originalStudent.getPaymentTypeForTutor(originalLesson.getTutor().getId()))) {
+                Optional<Subscription> activeSub = subscriptionRepository
+                        .findByStudentIdAndTutorIdAndStatus(originalStudent.getId(), originalLesson.getTutor().getId(), "ACTIVE");
+                if (activeSub.isPresent()) {
+                    Subscription sub = activeSub.get();
+                    sub.setDebtLessons((sub.getDebtLessons() != null ? sub.getDebtLessons() : 0) + 1);
+                    subscriptionRepository.save(sub);
+                    log.info("Долг добавлен в абонемент id={} при отмене перенесённого, долгов: {}", sub.getId(), sub.getDebtLessons());
+                }
+            }
+
             Lesson savedLesson = lessonRepository.save(lesson);
             log.info("✅ Перенесённое занятие и оригинал отменены: новое id={}, оригинал id={}", lessonId, originalLesson.getId());
 
@@ -434,6 +477,21 @@ public class LessonService {
                     lesson.setNotes(newNotes + "\n\n" + lesson.getNotes());
                 } else {
                     lesson.setNotes(newNotes);
+                }
+            }
+
+            // ✅ Если урок по абонементу — добавляем долг (для обычной отмены)
+            if (!isStudentNoShow) {
+                Student student = lesson.getStudent();
+                if ("subscription".equals(student.getPaymentTypeForTutor(lesson.getTutor().getId()))) {
+                    Optional<Subscription> activeSub = subscriptionRepository
+                            .findByStudentIdAndTutorIdAndStatus(student.getId(), lesson.getTutor().getId(), "ACTIVE");
+                    if (activeSub.isPresent()) {
+                        Subscription sub = activeSub.get();
+                        sub.setDebtLessons((sub.getDebtLessons() != null ? sub.getDebtLessons() : 0) + 1);
+                        subscriptionRepository.save(sub);
+                        log.info("Долг добавлен в абонемент id={} при отмене, долгов: {}", sub.getId(), sub.getDebtLessons());
+                    }
                 }
             }
         }

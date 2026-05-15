@@ -44,18 +44,49 @@ public class HomeworkController {
     @Autowired
     private VariantRepository variantRepository;
 
-    @PostMapping(consumes = {"multipart/form-data"})
+    @PostMapping(consumes = {"multipart/form-data", "application/json"})
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createHomework(
-            @RequestParam("tutorId") Long tutorId,
-            @RequestParam("studentId") Long studentId,
-            @RequestParam("task") String task,
-            @RequestParam(value = "dueDate", required = false) String dueDate,
-            @RequestParam(value = "status", defaultValue = "ASSIGNED") String status,
-            @RequestParam(value = "gradeType", defaultValue = "GRADE_5") String gradeType,
+            @RequestParam(value = "tutorId", required = false) Long tutorIdParam,
+            @RequestParam(value = "studentId", required = false) Long studentIdParam,
+            @RequestParam(value = "task", required = false) String taskParam,
+            @RequestParam(value = "dueDate", required = false) String dueDateParam,
+            @RequestParam(value = "status", defaultValue = "ASSIGNED") String statusParam,
+            @RequestParam(value = "gradeType", defaultValue = "GRADE_5") String gradeTypeParam,
             @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            @RequestBody(required = false) Map<String, Object> jsonBody,
             @RequestAttribute(name = "userId", required = false) Long currentUserId) throws Exception {
         try {
+            Long tutorId;
+            Long studentId;
+            String task;
+            String dueDate = null;
+            String status = "ASSIGNED";
+            String gradeType = "GRADE_5";
+
+            // Определяем источник данных: multipart или JSON
+            if (tutorIdParam != null) {
+                // Пришли как multipart/form-data
+                tutorId = tutorIdParam;
+                studentId = studentIdParam;
+                task = taskParam;
+                dueDate = dueDateParam;
+                status = statusParam;
+                gradeType = gradeTypeParam;
+            } else if (jsonBody != null) {
+                // Пришли как JSON
+                tutorId = Long.parseLong(jsonBody.get("tutorId").toString());
+                studentId = Long.parseLong(jsonBody.get("studentId").toString());
+                task = (String) jsonBody.get("task");
+                if (jsonBody.get("dueDate") != null) {
+                    dueDate = jsonBody.get("dueDate").toString();
+                }
+                status = jsonBody.get("status") != null ? (String) jsonBody.get("status") : "ASSIGNED";
+                gradeType = jsonBody.get("gradeType") != null ? (String) jsonBody.get("gradeType") : "GRADE_5";
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("error", "Нет данных"));
+            }
+
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
@@ -65,10 +96,14 @@ public class HomeworkController {
                 dueDateTime = LocalDateTime.parse(dueDate);
             }
 
-            Homework homework = homeworkService.createHomework(
-                    tutorId, studentId, task, dueDateTime, status, gradeType, null, null);
+            Long courseId = null;
+            if (jsonBody != null && jsonBody.get("courseId") != null) {
+                courseId = Long.parseLong(jsonBody.get("courseId").toString());
+            }
 
-            // Сохраняем прикреплённые файлы
+            Homework homework = homeworkService.createHomework(
+                    tutorId, studentId, task, dueDateTime, status, gradeType, null, courseId);
+
             if (files != null && !files.isEmpty()) {
                 StringBuilder attachments = new StringBuilder();
                 String uploadDir = "/opt/EdSpace/uploads/homework/";
@@ -77,9 +112,8 @@ public class HomeworkController {
 
                 for (MultipartFile file : files) {
                     if (file.isEmpty()) continue;
-
                     if (file.getSize() > 10 * 1024 * 1024) {
-                        return ResponseEntity.badRequest().body(Map.of("error", "Файл '" + file.getOriginalFilename() + "' слишком большой. Максимум 10MB"));
+                        return ResponseEntity.badRequest().body(Map.of("error", "Файл слишком большой. Максимум 10MB"));
                     }
 
                     String originalName = file.getOriginalFilename();

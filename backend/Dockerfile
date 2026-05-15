@@ -1,19 +1,13 @@
-# Этап 1: Сборка приложения с помощью Maven
-FROM maven:3.9-eclipse-temurin-17 AS build
-WORKDIR /app
-COPY pom.xml .
-# Копируем исходный код
-COPY src ./src
-# Собираем проект, пропуская тесты для ускорения
-RUN mvn clean package -DskipTests
-
-# Этап 2: Создание финального образа для запуска
-# Используем Eclipse Temurin (актуальный образ OpenJDK)
 FROM eclipse-temurin:17-jre
 WORKDIR /app
-# Копируем собранный JAR-файл из предыдущего этапа
-COPY --from=build /app/target/*.jar app.jar
-# Открываем порт 8080, на котором будет работать приложение
+COPY target/demo-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
-# Команда для запуска приложения
+
+# Создаём непривилегированного пользователя
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+# Даём права на папку app
+RUN chown -R appuser:appgroup /app
+# Переключаемся на пользователя
+USER appuser
+
 ENTRYPOINT ["java", "-jar", "app.jar"]

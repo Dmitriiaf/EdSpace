@@ -9,6 +9,7 @@ import java.util.Optional;
 @Repository
 public interface BoardSessionRepository extends JpaRepository<BoardSession, Long> {
     List<BoardSession> findByTutorIdAndStatusOrderByCreatedAtDesc(Long tutorId, String status);
+    void deleteByStudentId(Long studentId);
     List<BoardSession> findByStudentIdAndStatusOrderByCreatedAtDesc(Long studentId, String status);
     Optional<BoardSession> findByLessonIdAndStatus(Long lessonId, String status);
     Optional<BoardSession> findByRoomName(String roomName);

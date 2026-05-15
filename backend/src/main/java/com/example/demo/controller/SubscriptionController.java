@@ -121,6 +121,34 @@ public class SubscriptionController {
         }
     }
 
+    // ========== PATCH /{id}/activate ==========
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> activateSubscription(@PathVariable Long id,
+                                                  @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Subscription sub = subscriptionService.getSubscriptionById(id);
+
+            if (!sub.getTutor().getId().equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            if (!"PENDING".equalsIgnoreCase(sub.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Можно активировать только ожидающий абонемент"));
+            }
+
+            // Вызываем paySubscription — он создаст платёж и сменит статус на ACTIVE
+            Subscription activated = subscriptionService.paySubscription(id);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Абонемент активирован, платёж создан",
+                    "subscription", activated
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/{id}/recalculate")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> recalculateSubscription(@PathVariable Long id) {
