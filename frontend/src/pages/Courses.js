@@ -417,11 +417,11 @@ function Courses() {
     );
 
     return (
-        <PageContainer>
+                <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
             {/* ========== ЗАГОЛОВОК ========== */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
-                    <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
+                    <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
                         Аналитика курсов
                     </Typography>
                     <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
@@ -433,7 +433,6 @@ function Courses() {
                         variant="outlined"
                         startIcon={<GroupIcon sx={{ fontSize: 18 }} />}
                         onClick={() => {
-                            // Открыть первую карточку курса для создания группы
                             if (courses.length > 0) handleCreateGroup(courses[0].id);
                             else showSnackbar('Сначала создайте курс', 'warning');
                         }}
@@ -453,7 +452,7 @@ function Courses() {
             </Box>
 
             {/* ========== ОБЩАЯ СТАТИСТИКА ========== */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid container spacing={1.5} sx={{ mb: 3 }}>
                 {[
                     { label: 'Всего курсов', value: totalStats.coursesCount, icon: BookIcon, color: '#4F46E5', bg: '#EEF2FF' },
                     { label: 'Всего учеников', value: totalStats.totalStudents, icon: People, color: '#10B981', bg: '#ECFDF5' },
@@ -463,28 +462,30 @@ function Courses() {
                     const Icon = stat.icon;
                     return (
                         <Grid item xs={6} md={3} key={i}>
-                            <StatCard>
-                                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                        <Box sx={{
-                                            width: 44, height: 44, borderRadius: '10px',
-                                            backgroundColor: stat.bg,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            flexShrink: 0,
-                                        }}>
-                                            <Icon sx={{ fontSize: 22, color: stat.color }} />
-                                        </Box>
-                                        <Box>
-                                            <Typography sx={{ fontSize: '22px', fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>
-                                                {stat.value}
-                                            </Typography>
-                                            <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>
-                                                {stat.label}
-                                            </Typography>
-                                        </Box>
-                                    </Box>
-                                </CardContent>
-                            </StatCard>
+                            <Paper sx={{ 
+                                p: { xs: 1.5, sm: 2.5 }, 
+                                borderRadius: '12px',
+                                display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 },
+                                bgcolor: '#FFFFFF', border: '1px solid #F3F4F6',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                            }}>
+                                <Box sx={{
+                                    width: { xs: 36, sm: 44 }, height: { xs: 36, sm: 44 }, borderRadius: '10px',
+                                    backgroundColor: stat.bg,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}>
+                                    <Icon sx={{ fontSize: { xs: 18, sm: 22 }, color: stat.color }} />
+                                </Box>
+                                <Box>
+                                    <Typography sx={{ fontSize: { xs: '18px', sm: '22px' }, fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>
+                                        {stat.value}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: { xs: '11px', sm: '13px' }, color: '#6B7280' }}>
+                                        {stat.label}
+                                    </Typography>
+                                </Box>
+                            </Paper>
                         </Grid>
                     );
                 })}

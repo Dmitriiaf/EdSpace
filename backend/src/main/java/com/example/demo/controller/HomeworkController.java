@@ -372,7 +372,7 @@ public class HomeworkController {
         }
     }
 
-    @PatchMapping("/{id}/submit")
+    @PatchMapping(path = "/{id}/submit", consumes = {"multipart/form-data"})
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<?> submitHomework(@PathVariable Long id,
                                             @RequestParam(value = "answer", required = false) String answer,

@@ -385,6 +385,8 @@ public class LessonController {
         }
     }
 
+
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
     public ResponseEntity<?> getLessonById(@PathVariable Long id,
@@ -415,6 +417,38 @@ public class LessonController {
             return ResponseEntity.notFound().build();
         }
     }
+
+    @PostMapping("/{id}/select-room")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> selectRoom(@PathVariable Long id,
+                                        @RequestBody Map<String, Object> request,
+                                        @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Lesson lesson = lessonService.getLessonById(id);
+            boolean hasTutor = lesson.getStudent().getTutors().stream()
+                    .anyMatch(t -> t.getId().equals(currentUserId));
+            if (!hasTutor) return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+
+            // Сохраняем выбранную платформу и ссылку
+            if (request.get("videoPlatform") != null) {
+                lesson.setVideoPlatform(request.get("videoPlatform").toString());
+            }
+            if (request.get("videoPlatformLink") != null) {
+                lesson.setVideoPlatformLink(request.get("videoPlatformLink").toString());
+            }
+            lesson.setRoomSelected(true);
+            lessonService.saveLesson(lesson);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Комната выбрана",
+                    "lesson", lesson
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+
     @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PostMapping
     @PreAuthorize("hasRole('TUTOR')")
@@ -486,6 +520,14 @@ public class LessonController {
                 if (request.get("trialPrice") != null) {
                     lesson.setTrialPrice(new BigDecimal(request.get("trialPrice").toString()));
                 }
+            }
+
+            // ✅ VIDEO-1: Сохраняем платформу урока (если указана)
+            if (request.get("videoPlatform") != null) {
+                lesson.setVideoPlatform(request.get("videoPlatform").toString());
+            }
+            if (request.get("videoPlatformLink") != null) {
+                lesson.setVideoPlatformLink(request.get("videoPlatformLink").toString());
             }
 
             lesson.setDuration(duration);
@@ -1072,7 +1114,26 @@ public class LessonController {
             lesson.setStatus(Lesson.STATUS_IN_PROGRESS);
             lesson.setCallStartedAt(LocalDateTime.now());
             Lesson savedLesson = lessonService.saveLesson(lesson);
-            return ResponseEntity.ok(Map.of("message", "Урок начат", "lesson", savedLesson));
+
+            // ✅ VIDEO-1: Определяем URL видеоконференции
+            Tutor tutor = lesson.getTutor();
+            String videoUrl;
+            String videoPlatform;
+
+            if (tutor.getVideoPlatformLink() != null && !tutor.getVideoPlatformLink().isEmpty()) {
+                videoUrl = tutor.getVideoPlatformLink();
+                videoPlatform = tutor.getVideoPlatform() != null ? tutor.getVideoPlatform() : "ZOOM";
+            } else {
+                videoUrl = "https://meet.ed-space.ru/" + lesson.getJitsiRoomName();
+                videoPlatform = "JITSI";
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Урок начат",
+                    "lesson", savedLesson,
+                    "videoUrl", videoUrl,
+                    "videoPlatform", videoPlatform
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

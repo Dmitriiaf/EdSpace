@@ -161,6 +161,29 @@ public class TutorController {
         }
     }
 
+    // ✅ VIDEO-1: Обновление настроек видеоплатформы
+    @PutMapping("/{id}/video-settings")
+    public ResponseEntity<?> updateVideoSettings(@PathVariable Long id,
+                                                 @RequestBody Map<String, String> request) {
+        try {
+            Tutor tutor = tutorService.getTutorById(id);
+            if (request.containsKey("videoPlatform")) {
+                tutor.setVideoPlatform(request.get("videoPlatform"));
+            }
+            if (request.containsKey("videoPlatformLink")) {
+                tutor.setVideoPlatformLink(request.get("videoPlatformLink"));
+            }
+            tutorService.save(tutor);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Настройки видео обновлены",
+                    "videoPlatform", tutor.getVideoPlatform(),
+                    "videoPlatformLink", tutor.getVideoPlatformLink()
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping
     public ResponseEntity<List<Tutor>> getAllTutors() {
         List<Tutor> tutors = tutorService.getAllTutors();

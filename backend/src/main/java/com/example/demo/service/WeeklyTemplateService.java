@@ -46,7 +46,8 @@ public class WeeklyTemplateService {
 
     private String checkConflictsForWeeks(Long tutorId, String studentEmail, int dayOfWeek,
                                           LocalTime startTime, LocalTime endTime) {
-        LocalDate checkDate = LocalDate.now();
+        LocalDate checkDate = getNextDateWithDayOfWeek(dayOfWeek);
+        log.info("🔍 ПРОВЕРКА КОНФЛИКТОВ: стартовая дата = {}, день недели = {}", checkDate, dayOfWeek);
         int weeksChecked = 0;
 
         while (weeksChecked < WEEKS_TO_CHECK) {
@@ -72,7 +73,7 @@ public class WeeklyTemplateService {
     private String checkConflictsForWeeksExcludingTemplate(Long tutorId, String studentEmail,
                                                            int dayOfWeek, LocalTime startTime,
                                                            LocalTime endTime, Long excludeTemplateId) {
-        LocalDate checkDate = LocalDate.now();
+        LocalDate checkDate = getNextDateWithDayOfWeek(dayOfWeek);
         int weeksChecked = 0;
 
         while (weeksChecked < WEEKS_TO_CHECK) {
@@ -100,8 +101,10 @@ public class WeeklyTemplateService {
         int currentDayOfWeek = today.getDayOfWeek().getValue();
 
         int daysToAdd = dayOfWeek - currentDayOfWeek;
-        if (daysToAdd <= 0) {
+        if (daysToAdd < 0) {
             daysToAdd += 7;
+        } else if (daysToAdd == 0) {
+            daysToAdd = 7; // Сегодня — пропускаем, берём через неделю
         }
 
         return today.plusDays(daysToAdd);

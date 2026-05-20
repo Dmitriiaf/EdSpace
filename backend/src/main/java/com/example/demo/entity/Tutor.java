@@ -66,6 +66,13 @@ public class Tutor {
     @Column(name = "failed_login_attempts")
     private Integer failedLoginAttempts = 0;
 
+    // ✅ VIDEO-1: Настройки видеоплатформы
+    @Column(name = "video_platform", length = 50)
+    private String videoPlatform = "JITSI"; // JITSI, ZOOM, TELEMOST, SKYPE
+
+    @Column(name = "video_platform_link", length = 500)
+    private String videoPlatformLink; // Постоянная ссылка на конференцию
+
     @Column(name = "subjects", length = 500)
     private String subjects;
 
@@ -109,6 +116,10 @@ public class Tutor {
     }
 
     // Геттеры
+    public String getVideoPlatform() { return videoPlatform; }
+    public void setVideoPlatform(String videoPlatform) { this.videoPlatform = videoPlatform; }
+    public String getVideoPlatformLink() { return videoPlatformLink; }
+    public void setVideoPlatformLink(String videoPlatformLink) { this.videoPlatformLink = videoPlatformLink; }
     public String getSubjects() { return subjects; }
     public void setSubjects(String subjects) { this.subjects = subjects; }
     public String getStudentsCount() { return studentsCount; }

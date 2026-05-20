@@ -313,7 +313,7 @@ public class EmailService {
     /**
      * Отправить HTML-письмо
      */
-    private void sendHtmlEmail(String to, String subject, String htmlContent) {
+    public void sendHtmlEmail(String to, String subject, String htmlContent) {
         try {
             log.info("📧 Попытка отправки письма на {}", to);
             log.info("   SMTP host: {}, port: {}, username: {}", host, port, username);

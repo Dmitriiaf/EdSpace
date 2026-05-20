@@ -428,7 +428,7 @@ function Finance() {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
-            <PageContainer>
+            <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
                 {/* ========== ЗАГОЛОВОК ========== */}
                 <Box sx={{ 
                     display: 'flex', 
@@ -439,8 +439,7 @@ function Finance() {
                     gap: 2 
                 }}>
                     <Box>
-                        <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
-                            Финансы
+                        <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 600, color: '#1F2937', mb: 0.5 }}>                            Финансы
                         </Typography>
                         <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
                             Доходы, платежи и абонементы
@@ -554,8 +553,7 @@ function Finance() {
                     </Box>
 
                     {/* ========== HERO-СЕКЦИЯ ========== */}
-                    <HeroSection data-tour="finance-overview" elevation={0}>
-                        <Typography sx={{ 
+                    <HeroSection data-tour="finance-overview" elevation={0} sx={{ p: { xs: 2, sm: 4 } }}>                        <Typography sx={{ 
                             fontSize: '13px', 
                             opacity: 0.8, 
                             mb: 1, 
@@ -649,8 +647,7 @@ function Finance() {
                             />
                         </Box>
                         
-                        <Box sx={{ height: 240, position: 'relative', mb: 2 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: '2%', height: '100%', px: 1 }}>
+                            <Box sx={{ height: { xs: 180, sm: 240 }, position: 'relative', mb: 2 }}>                            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: '2%', height: '100%', px: 1 }}>
                                 {yearlyData.map((item, idx) => {
                                     const height = maxTrend > 0 ? (item.total / maxTrend) * 200 : 0;
                                     const isHighest = item.total === maxTrend && item.total > 0;

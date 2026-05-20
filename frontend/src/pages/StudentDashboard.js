@@ -191,7 +191,12 @@ function StudentDashboard() {
     const [stickyNotes, setStickyNotes] = useState([]);
     const [editingNote, setEditingNote] = useState(null);
     const [editText, setEditText] = useState('');
-
+    // Автосохранение стикеров при любом изменении
+    useEffect(() => {
+        if (stickyNotes.length > 0 && boardTutorId) {
+            saveBoard(stickyNotes);
+        }
+    }, [stickyNotes]);
     const handleEditNote = (note) => {
         setEditingNote(note.id);
         setEditText(note.text);
@@ -236,14 +241,15 @@ function StudentDashboard() {
         const onMouseUp = () => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
-            setStickyNotes(prev => {
-                saveBoard(prev);
-                return prev;
-            });
+            document.removeEventListener('touchmove', onMouseMove);
+            document.removeEventListener('touchend', onMouseUp);
+            // saveBoard вызовется через useEffect
         };
 
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('touchmove', onMouseMove);
+        document.addEventListener('touchend', onMouseUp);
     };
 
     useEffect(() => {
@@ -442,7 +448,24 @@ function StudentDashboard() {
             Object.keys(tutorCoursesMap).forEach(tid => { coursesMap[tid] = Array.from(tutorCoursesMap[tid]); });
             setCoursesByTutor(coursesMap);
             
-            const unique = allLessonsData.filter((l, i, self) => i === self.findIndex(ls => ls.id === l.id));
+            // Убираем дубликаты
+            let unique = allLessonsData.filter((l, i, self) => i === self.findIndex(ls => ls.id === l.id));
+
+            // ✅ Скрываем RESCHEDULED уроки, у которых есть другой урок с тем же студентом и датой
+            const rescheduledLessons = unique.filter(l => l.status === 'RESCHEDULED');
+            const idsToHide = new Set();
+
+            rescheduledLessons.forEach(rl => {
+                const hasReplacement = unique.some(l => 
+                    l.id !== rl.id &&
+                    l.student?.id === rl.student?.id &&
+                    l.lessonDate === rl.lessonDate &&
+                    (l.status === 'SCHEDULED' || l.status === 'IN_PROGRESS')
+                );
+                if (hasReplacement) idsToHide.add(rl.id);
+            });
+
+            unique = unique.filter(l => !idsToHide.has(l.id));
             setAllLessons(unique.sort((a, b) => new Date(a.lessonDate) - new Date(b.lessonDate)));
         } catch (err) {}
     };

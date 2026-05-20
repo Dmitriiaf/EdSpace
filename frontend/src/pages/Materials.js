@@ -470,20 +470,23 @@ function Materials() {
             )}
 
             {/* ========== STATS ========== */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid container spacing={1.5} sx={{ mb: 3 }}>
                 {statItems.map((stat, i) => {
                     const Icon = stat.icon;
                     return (
                         <Grid item xs={6} sm={3} key={i}>
-                            <StatCard>
-                                <CardContent sx={{ p: 2.5, textAlign: 'center', '&:last-child': { pb: 2.5 } }}>
-                                    <Box sx={{ width: 40, height: 40, borderRadius: '10px', bgcolor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
-                                        <Icon sx={{ fontSize: 20, color: stat.color }} />
-                                    </Box>
-                                    <Typography sx={{ fontSize: '22px', fontWeight: 700, color: '#1F2937' }}>{stat.value}</Typography>
-                                    <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>{stat.label}</Typography>
-                                </CardContent>
-                            </StatCard>
+                            <Paper sx={{ 
+                                p: { xs: 1.5, sm: 2.5 }, 
+                                borderRadius: '12px', textAlign: 'center',
+                                bgcolor: '#FFFFFF', border: '1px solid #F3F4F6',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                            }}>
+                                <Box sx={{ width: { xs: 36, sm: 40 }, height: { xs: 36, sm: 40 }, borderRadius: '10px', bgcolor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                                    <Icon sx={{ fontSize: { xs: 18, sm: 20 }, color: stat.color }} />
+                                </Box>
+                                <Typography sx={{ fontSize: { xs: '18px', sm: '22px' }, fontWeight: 700, color: '#1F2937' }}>{stat.value}</Typography>
+                                <Typography sx={{ fontSize: { xs: '11px', sm: '13px' }, color: '#6B7280' }}>{stat.label}</Typography>
+                            </Paper>
                         </Grid>
                     );
                 })}

@@ -244,8 +244,8 @@ const Profile = () => {
     ];
 
     return (
-        <PageContainer>
-            <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
+        <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
+            <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
                 Мой профиль
             </Typography>
             <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 3 }}>
@@ -362,20 +362,23 @@ const Profile = () => {
                         {/* Статистика */}
                         {tabValue === 1 && (
                             <Box sx={{ p: 3 }}>
-                                <Grid container spacing={2} sx={{ mb: 3 }}>
+                                <Grid container spacing={1.5} sx={{ mb: 3 }}>
                                     {statCards.map((stat, i) => {
                                         const Icon = stat.icon;
                                         return (
                                             <Grid item xs={6} sm={3} key={i}>
-                                                <StatCard>
-                                                    <CardContent sx={{ p: 2, textAlign: 'center', '&:last-child': { pb: 2 } }}>
-                                                        <Box sx={{ width: 36, height: 36, borderRadius: '8px', bgcolor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
-                                                            <Icon sx={{ fontSize: 18, color: stat.color }} />
-                                                        </Box>
-                                                        <Typography sx={{ fontSize: '18px', fontWeight: 700, color: '#1F2937' }}>{stat.value}</Typography>
-                                                        <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{stat.label}</Typography>
-                                                    </CardContent>
-                                                </StatCard>
+                                                <Paper sx={{ 
+                                                    p: { xs: 1.5, sm: 2 }, 
+                                                    borderRadius: '12px', textAlign: 'center',
+                                                    bgcolor: '#FFFFFF', border: '1px solid #F3F4F6',
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                                                }}>
+                                                    <Box sx={{ width: { xs: 32, sm: 36 }, height: { xs: 32, sm: 36 }, borderRadius: '8px', bgcolor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                                                        <Icon sx={{ fontSize: { xs: 16, sm: 18 }, color: stat.color }} />
+                                                    </Box>
+                                                    <Typography sx={{ fontSize: { xs: '16px', sm: '18px' }, fontWeight: 700, color: '#1F2937' }}>{stat.value}</Typography>
+                                                    <Typography sx={{ fontSize: { xs: '11px', sm: '12px' }, color: '#6B7280' }}>{stat.label}</Typography>
+                                                </Paper>
                                             </Grid>
                                         );
                                     })}

@@ -46,6 +46,9 @@ public class Lesson {
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
 
+    @Column(length = 50)
+    private String videoPlatform;
+
     @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
 
@@ -54,6 +57,9 @@ public class Lesson {
 
     @Column(name = "trial_price")
     private BigDecimal trialPrice;
+
+    @Column(length = 500)
+    private String videoPlatformLink;
 
     @Column(nullable = false)
     private String status = STATUS_SCHEDULED;
@@ -96,6 +102,9 @@ public class Lesson {
     @Column(name = "call_started_at")
     private LocalDateTime callStartedAt;
 
+    @Column(name = "room_selected")
+    private Boolean roomSelected = false;
+
     public Lesson() {}
 
     public Lesson(Tutor tutor, Student student, Course course,
@@ -111,6 +120,12 @@ public class Lesson {
     }
 
     // Геттеры
+    public Boolean getRoomSelected() { return roomSelected; }
+    public void setRoomSelected(Boolean roomSelected) { this.roomSelected = roomSelected; }
+    public String getVideoPlatform() { return videoPlatform; }
+    public void setVideoPlatform(String videoPlatform) { this.videoPlatform = videoPlatform; }
+    public String getVideoPlatformLink() { return videoPlatformLink; }
+    public void setVideoPlatformLink(String videoPlatformLink) { this.videoPlatformLink = videoPlatformLink; }
     public Boolean getIsTrial() { return isTrial; }
     public void setIsTrial(Boolean isTrial) { this.isTrial = isTrial; }
     public BigDecimal getTrialPrice() { return trialPrice; }

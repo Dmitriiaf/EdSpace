@@ -371,7 +371,7 @@ function Students() {
     ];
 
     if (loading) return (
-        <PageContainer>
+        <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
                 <EdSpaceLoader text="Загрузка..." />
             </Box>
@@ -379,7 +379,7 @@ function Students() {
     );
 
     return (
-        <PageContainer>
+        <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
             {/* ========== ЗАГОЛОВОК ========== */}
             <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
                 Мои ученики
@@ -426,32 +426,40 @@ function Students() {
 
             {/* ========== СТАТИСТИКА ========== */}
             {tabValue === 0 && (
-                <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid container spacing={1.5} sx={{ mb: 3 }}>
                     {statCards.map((s, i) => (
                         <Grid item xs={6} sm={3} key={i}>
-                            <StatCard>
-                                <CardContent sx={{ p: 2.5, display: 'flex', alignItems: 'center', gap: 2, '&:last-child': { pb: 2.5 } }}>
-                                    <Box sx={{ 
-                                        width: 44, height: 44, 
-                                        borderRadius: '10px', 
-                                        backgroundColor: s.bg, 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                    }}>
-                                        {s.icon}
-                                    </Box>
-                                    <Box>
-                                        <Typography sx={{ fontSize: '22px', fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>
-                                            {s.v}
-                                        </Typography>
-                                        <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>
-                                            {s.l}
-                                        </Typography>
-                                    </Box>
-                                </CardContent>
-                            </StatCard>
+                            <Paper sx={{ 
+                                p: { xs: 1.5, sm: 2.5 }, 
+                                borderRadius: '12px',
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: { xs: 1, sm: 2 },
+                                bgcolor: '#FFFFFF',
+                                border: '1px solid #F3F4F6',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                            }}>
+                                <Box sx={{ 
+                                    width: { xs: 36, sm: 44 }, 
+                                    height: { xs: 36, sm: 44 }, 
+                                    borderRadius: '10px', 
+                                    backgroundColor: s.bg, 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}>
+                                    {React.cloneElement(s.icon, { sx: { fontSize: { xs: 18, sm: 22 } } })}
+                                </Box>
+                                <Box>
+                                    <Typography sx={{ fontSize: { xs: '18px', sm: '22px' }, fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>
+                                        {s.v}
+                                    </Typography>
+                                    <Typography sx={{ fontSize: { xs: '11px', sm: '13px' }, color: '#6B7280' }}>
+                                        {s.l}
+                                    </Typography>
+                                </Box>
+                            </Paper>
                         </Grid>
                     ))}
                 </Grid>
@@ -463,7 +471,7 @@ function Students() {
                 justifyContent: 'space-between', 
                 alignItems: 'center', 
                 mb: 3, 
-                gap: 2, 
+                gap: { xs: 1, sm: 2 }, 
                 flexWrap: 'wrap' 
             }}>
                 <TextField 

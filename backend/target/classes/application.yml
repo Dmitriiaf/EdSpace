@@ -24,18 +24,18 @@ spring:
       max-request-size: 50MB
   mail:
     host: ${MAIL_HOST:smtp.timeweb.ru}
-    port: ${MAIL_PORT:465}
+    port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
-    protocol: ${MAIL_PROTOCOL:smtps}
+    protocol: smtp
     properties:
       mail:
         smtp:
           auth: true
-          ssl:
-            enable: true
           starttls:
-            enable: false
+            enable: true
+          ssl:
+            trust: smtp.timeweb.ru
 
 logging:
   level:
@@ -61,7 +61,7 @@ server:
 app:
   jwt:
     secret: ${JWT_SECRET}
-    expiration: ${JWT_EXPIRATION:86400000}
+    expiration: ${JWT_EXPIRATION:2592000000}
   base-url: ${APP_BASE_URL:http://localhost:3000}
 
 stepik:

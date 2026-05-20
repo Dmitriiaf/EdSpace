@@ -254,15 +254,28 @@ function Homework() {
     const handleAssign = async () => {
         if (!newHomework.studentId || !newHomework.task) return;
         try {
-            const formData = new FormData();
-            formData.append('tutorId', user.id);
-            formData.append('studentId', newHomework.studentId);
-            formData.append('task', newHomework.task);
-            if (newHomework.dueDate) formData.append('dueDate', newHomework.dueDate + 'T23:59:59');
-            formData.append('status', 'ASSIGNED');
-            formData.append('gradeType', newHomework.gradeType || 'GRADE_5');
-            assignFiles.forEach(file => formData.append('files', file));
-            await axiosInstance.post('/homework', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            if (assignFiles.length > 0) {
+                // С файлами — FormData
+                const formData = new FormData();
+                formData.append('tutorId', user.id);
+                formData.append('studentId', newHomework.studentId);
+                formData.append('task', newHomework.task);
+                if (newHomework.dueDate) formData.append('dueDate', newHomework.dueDate + 'T23:59:59');
+                formData.append('status', 'ASSIGNED');
+                formData.append('gradeType', newHomework.gradeType || 'GRADE_5');
+                assignFiles.forEach(file => formData.append('files', file));
+                await axiosInstance.post('/homework', formData);
+            } else {
+                // Без файлов — JSON
+                await axiosInstance.post('/homework', {
+                    tutorId: user.id,
+                    studentId: newHomework.studentId,
+                    task: newHomework.task,
+                    dueDate: newHomework.dueDate ? newHomework.dueDate + 'T23:59:59' : null,
+                    status: 'ASSIGNED',
+                    gradeType: newHomework.gradeType || 'GRADE_5'
+                });
+            }
             setOpenAssign(false); 
             setNewHomework({ studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5' }); 
             setAssignFiles([]);
@@ -276,9 +289,7 @@ function Homework() {
             const formData = new FormData(); 
             formData.append('answer', submission || '');
             filesToUpload.forEach(file => formData.append('files', file));
-            await axiosInstance.patch(`/homework/${selectedHomework.id}/submit`, formData, { 
-                headers: { 'Content-Type': 'multipart/form-data' } 
-            });
+            await axiosInstance.patch(`/homework/${selectedHomework.id}/submit`, formData);
             setOpenSubmit(false); 
             setSelectedHomework(null); 
             setSubmission(''); 
@@ -287,36 +298,30 @@ function Homework() {
         } catch (err) { setError('Ошибка отправки задания'); }
     };
 
-    const handleCheck = async () => {
-        if (!selectedHomework) return;
-        try {
-            if (grade.returnForRevision) {
-                await axiosInstance.patch(`/homework/${selectedHomework.id}/revision`, { feedback: grade.feedback });
-            } else {
-                // Если ASSIGNED (без ответа) — сначала меняем статус на SUBMITTED, потом оцениваем
-                const hwStatus = (selectedHomework.status || '').toUpperCase();
-                if (hwStatus === 'ASSIGNED') {
-                    await axiosInstance.patch(`/homework/${selectedHomework.id}/submit`, 
-                        new URLSearchParams({ answer: 'Оценено без отправки (разобрали на уроке)' }), {
-                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                        });
-                }
-                
-                if (selectedHomework.gradeType === 'GRADE_100' || selectedHomework.gradeType === 'GRADE_10') {
-                    const maxScore = selectedHomework.gradeType === 'GRADE_100' ? 100 : 10;
-                    await axiosInstance.patch(`/homework/${selectedHomework.id}/grade-with-score`, {
-                        score: grade.grade, maxScore: maxScore, feedback: grade.feedback
-                    });
+        const handleCheck = async () => {
+            if (!selectedHomework) return;
+            try {
+                if (grade.returnForRevision) {
+                    await axiosInstance.patch(`/homework/${selectedHomework.id}/revision`, { feedback: grade.feedback });
                 } else {
-                    await axiosInstance.patch(`/homework/${selectedHomework.id}/grade`, {
-                        grade: grade.grade, feedback: grade.feedback
-                    });
+                    // Если ASSIGNED (без ответа) — сразу оцениваем без отправки
+                    // Репетитор не может вызывать /submit (доступ только ученику)
+                    
+                    if (selectedHomework.gradeType === 'GRADE_100' || selectedHomework.gradeType === 'GRADE_10') {
+                        const maxScore = selectedHomework.gradeType === 'GRADE_100' ? 100 : 10;
+                        await axiosInstance.patch(`/homework/${selectedHomework.id}/grade-with-score`, {
+                            score: grade.grade, maxScore: maxScore, feedback: grade.feedback
+                        });
+                    } else {
+                        await axiosInstance.patch(`/homework/${selectedHomework.id}/grade`, {
+                            grade: grade.grade, feedback: grade.feedback
+                        });
+                    }
                 }
-            }
-            setOpenCheck(false); setSelectedHomework(null);
-            setGrade({ grade: 0, feedback: '', returnForRevision: false }); loadHomework();
-        } catch (err) { setError('Ошибка проверки задания'); }
-    };
+                setOpenCheck(false); setSelectedHomework(null);
+                setGrade({ grade: 0, feedback: '', returnForRevision: false }); loadHomework();
+            } catch (err) { setError('Ошибка проверки задания'); }
+        };
 
     const handleDelete = async (id) => {
         if (!window.confirm('Удалить задание?')) return;
@@ -527,11 +532,11 @@ function Homework() {
     );
 
     return (
-        <PageContainer>
+        <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
             {/* ========== ЗАГОЛОВОК ========== */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
-                    <Typography sx={{ fontSize: '28px', fontWeight: 700, color: '#1F2937', mb: 0.5 }}>
+                    <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 700, color: '#1F2937', mb: 0.5 }}>
                         {isTutor ? '📋 Домашние задания' : '📝 Мои задания'}
                     </Typography>
                     <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
@@ -556,7 +561,7 @@ function Homework() {
 
             {/* ========== СТАТИСТИКА (репетитор) ========== */}
             {isTutor && (
-                <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid container spacing={1.5} sx={{ mb: 3 }}>
                     {[
                         { label: 'Всего', value: stats.total, icon: AssignmentIcon, color: '#4F46E5', bg: '#EEF2FF' },
                         { label: 'На проверке', value: stats.submitted, icon: ReviewIcon, color: '#F59E0B', bg: '#FFFBEB' },
@@ -566,19 +571,21 @@ function Homework() {
                         const Icon = stat.icon;
                         return (
                             <Grid item xs={6} md={3} key={i}>
-                                <StatCard>
-                                    <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <Box>
-                                                <Typography sx={{ fontSize: '24px', fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>{stat.value}</Typography>
-                                                <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5 }}>{stat.label}</Typography>
-                                            </Box>
-                                            <Box sx={{ width: 42, height: 42, borderRadius: '12px', backgroundColor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Icon sx={{ fontSize: 20, color: stat.color }} />
-                                            </Box>
-                                        </Box>
-                                    </CardContent>
-                                </StatCard>
+                                <Paper sx={{ 
+                                    p: { xs: 1.5, sm: 2.5 }, 
+                                    borderRadius: '12px',
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                                    bgcolor: '#FFFFFF', border: '1px solid #F3F4F6',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                                }}>
+                                    <Box>
+                                        <Typography sx={{ fontSize: { xs: '18px', sm: '24px' }, fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>{stat.value}</Typography>
+                                        <Typography sx={{ fontSize: { xs: '11px', sm: '13px' }, color: '#6B7280', mt: 0.5 }}>{stat.label}</Typography>
+                                    </Box>
+                                    <Box sx={{ width: { xs: 36, sm: 42 }, height: { xs: 36, sm: 42 }, borderRadius: '12px', backgroundColor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Icon sx={{ fontSize: { xs: 18, sm: 20 }, color: stat.color }} />
+                                    </Box>
+                                </Paper>
                             </Grid>
                         );
                     })}

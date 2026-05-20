@@ -22,10 +22,14 @@ public class LessonDTO {
     private String nextLessonPlan;
     private LocalDateTime completedAt;
     private LocalDateTime paidAt;
+    private String videoUrl;
+    private String videoPlatform;
 
     public LessonDTO() {}
 
     // Геттеры
+    public String getVideoUrl() { return videoUrl; }
+    public String getVideoPlatform() { return videoPlatform; }
     public Integer getDuration() { return duration; }
     public Long getId() { return id; }
     public Long getTutorId() { return tutorId; }
@@ -45,6 +49,8 @@ public class LessonDTO {
     public LocalDateTime getPaidAt() { return paidAt; }
 
     // Сеттеры
+    public void setVideoUrl(String videoUrl) { this.videoUrl = videoUrl; }
+    public void setVideoPlatform(String videoPlatform) { this.videoPlatform = videoPlatform; }
     public void setDuration(Integer duration) { this.duration = duration; }
     public void setId(Long id) { this.id = id; }
     public void setTutorId(Long tutorId) { this.tutorId = tutorId; }

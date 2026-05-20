@@ -304,6 +304,14 @@ function Dashboard() {
                         lastPlan = null; 
                         lastPlanLesson = null;
                     }
+                    // ✅ Для перенесённых уроков тоже переносим план (если ещё не перенесли)
+                    if (lastPlan && lastPlanLesson && planTransferred && studentLessons[i].status === 'RESCHEDULED') {
+                        map[studentLessons[i].id] = { 
+                            ...lastPlanLesson, 
+                            nextLessonPlan: lastPlan, 
+                            courseName: lastPlanLesson.course?.name || 'Без предмета' 
+                        };
+                    }
                 }
             }
             setPreviousLessonsMap(map);
@@ -420,8 +428,20 @@ function Dashboard() {
         } catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
     const handleStartLesson = async (lesson) => {
-        try { await axiosInstance.post(`/lessons/${lesson.id}/start`); showSnackbar('✅ Урок начат!', 'success'); await loadAllData(); }
-        catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
+        // Если урок уже начат — не дёргаем API, просто открываем комнату
+        if (lesson.status === 'IN_PROGRESS') {
+            setSelectedLessonForRoom(lesson);
+            setLessonRoomOpen(true);
+            return;
+        }
+        try { 
+            await axiosInstance.post(`/lessons/${lesson.id}/start`); 
+            showSnackbar('✅ Урок начат!', 'success'); 
+            await loadAllData(); // Обновляем список, статус сменится на IN_PROGRESS
+        }
+        catch (err) { 
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); 
+        }
     };
     const handleStudentNoShow = (lesson) => { setSelectedLesson(lesson); setCancelReason('Ученик не пришёл'); setOpenCancelDialog(true); };
     const handleReplaceClick = (lesson) => { setCancelledLesson(lesson); setSelectedDebtorId(''); setOpenReplaceDialog(true); };
@@ -475,30 +495,100 @@ function Dashboard() {
         return 'Ночь';
     };
 
-    const renderLessonCard = (lesson) => {
-        const startTime = formatLessonTime(lesson.lessonDate, lesson.startTime);
-        const endTime = formatLessonTime(lesson.lessonDate, lesson.endTime);
-        const courseName = lesson.course?.name || 'Занятие';
-        const studentName = lesson.student?.fullName || 'Ученик';
-        const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
-        const statusConfig = getStatusConfig(lesson.status, lesson, todayLessons);        const isScheduled = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
-        const isInProgress = lesson.status === 'IN_PROGRESS';
-        const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID';
-        const isCancelled = lesson.status === 'CANCELLED';
-        
-        return (
+        const renderLessonCard = (lesson) => {
+            const startTime = formatLessonTime(lesson.lessonDate, lesson.startTime);
+            const endTime = formatLessonTime(lesson.lessonDate, lesson.endTime);
+            const courseName = lesson.course?.name || 'Занятие';
+            const studentName = lesson.student?.fullName || 'Ученик';
+            const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
+            const statusConfig = getStatusConfig(lesson.status, lesson, todayLessons);
+            const isScheduled = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
+            const isInProgress = lesson.status === 'IN_PROGRESS';
+            const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID';
+            const isCancelled = lesson.status === 'CANCELLED';
+            const isMobile = window.innerWidth < 900;
+
+            // Мобильный вид — компактная строка
+            if (isMobile) {
+                return (
+                    <Paper key={lesson.id} sx={{ mb: 1, borderRadius: '10px', borderLeft: `4px solid ${statusConfig.dot}`, overflow: 'hidden' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5, gap: 1.5 }}>
+                            <Box sx={{ textAlign: 'center', minWidth: 50 }}>
+                                <Typography sx={{ fontWeight: 700, fontSize: '14px', color: '#1F2937', lineHeight: 1.2 }}>
+                                    {startTime}
+                                </Typography>
+                                <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
+                                    {endTime}
+                                </Typography>
+                            </Box>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography sx={{ fontWeight: 600, fontSize: '14px', color: '#1F2937' }}>
+                                    {studentName}
+                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                    <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{courseName}</Typography>
+                                    {studentRate && lesson.status !== 'CANCELLED' && (
+                                        <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#10B981' }}>{studentRate}₽</Typography>
+                                    )}
+                                </Box>
+                            </Box>
+                            <Box sx={{ display: 'flex', gap: 0.3 }}>
+                                {isScheduled && (
+                                    <>
+                                        <IconButton size="small" onClick={async () => { setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); try { await axiosInstance.post(`/lessons/${lesson.id}/start`); await loadAllData(); } catch (err) {} }} sx={{ color: '#4F46E5', bgcolor: '#EEF2FF' }}><VideocamIcon sx={{ fontSize: 18 }} /></IconButton>
+                                        <IconButton size="small" onClick={() => handleRescheduleClick(lesson)} sx={{ color: '#6B7280' }}><EventIcon sx={{ fontSize: 18 }} /></IconButton>
+                                        <IconButton size="small" onClick={() => handleCancelClick(lesson)} sx={{ color: '#EF4444' }}><CancelIcon sx={{ fontSize: 18 }} /></IconButton>
+                                    </>
+                                )}
+                                {isInProgress && (
+                                    <>
+                                        <IconButton size="small" onClick={() => { setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); }} sx={{ color: '#4F46E5', bgcolor: '#EEF2FF' }}><VideocamIcon sx={{ fontSize: 18 }} /></IconButton>
+                                        <IconButton size="small" onClick={() => handleOpenComplete(lesson)} sx={{ color: '#10B981', bgcolor: '#ECFDF5' }}><CheckIcon sx={{ fontSize: 18 }} /></IconButton>
+                                        <IconButton size="small" onClick={() => handleStudentNoShow(lesson)} sx={{ color: '#D97706' }}><CancelIcon sx={{ fontSize: 18 }} /></IconButton>
+                                    </>
+                                )}
+                                {isCompleted && (
+                                    <>
+                                        <IconButton size="small" onClick={() => handleOpenNotes(lesson)} sx={{ color: '#6B7280' }}><EditIcon sx={{ fontSize: 18 }} /></IconButton>
+                                        {lesson.status !== 'PAID' && (
+                                            <IconButton size="small" onClick={() => handleManualPayment(lesson)} sx={{ color: '#059669', bgcolor: '#ECFDF5' }}><CheckIcon sx={{ fontSize: 18 }} /></IconButton>
+                                        )}
+                                    </>
+                                )}
+                                {isCancelled && !todayLessons.some(l => l.student?.id === lesson.student?.id && l.lessonDate === lesson.lessonDate && (l.status === 'PAID' || l.status === 'COMPLETED')) && (
+                                    <IconButton size="small" onClick={() => handleReplaceClick(lesson)} sx={{ color: '#059669', bgcolor: '#ECFDF5' }}><WorkIcon sx={{ fontSize: 18 }} /></IconButton>
+                                )}
+                            </Box>
+                        </Box>
+                        {/* Заметки */}
+                        {lesson.notes && (
+                            <Box sx={{ px: 1.5, pb: 1.5 }}>
+                                <Typography sx={{ fontSize: '11px', color: '#9CA3AF' }}>📝 {lesson.notes.substring(0, 60)}{lesson.notes.length > 60 ? '...' : ''}</Typography>
+                            </Box>
+                        )}
+                        {lesson.nextLessonPlan && (
+                            <Box sx={{ px: 1.5, pb: 1.5 }}>
+                                <Typography sx={{ fontSize: '11px', color: '#4F46E5' }}>🎯 {lesson.nextLessonPlan.substring(0, 60)}{lesson.nextLessonPlan.length > 60 ? '...' : ''}</Typography>
+                            </Box>
+                        )}
+                    </Paper>
+                );
+            }
+
+            // Десктоп — существующая карточка
+            return (
             <LessonCard key={lesson.id} data-tour="lesson-card">
-                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                <CardContent sx={{ p: { xs: 1.5, sm: 2.5 }, '&:last-child': { pb: { xs: 1.5, sm: 2.5 } } }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                         <Box sx={{ 
                             width: 4, minHeight: 70, borderRadius: 2,
                             bgcolor: statusConfig.dot, flexShrink: 0, mt: 0.5
                         }} />
                         
                         <Box sx={{ flex: 1 }}>
-                            <Box data-tour="date-nav" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
+                            <Box data-tour="date-nav" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: { xs: 1.5, sm: 2.5 } }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                    <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '16px' }}>
+                                    <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: { xs: '14px', sm: '16px' } }}>
                                         {startTime} – {endTime}
                                     </Typography>
                                     {isInProgress && (
@@ -560,6 +650,59 @@ function Dashboard() {
                                         {lesson.nextLessonPlan.length > 80 ? lesson.nextLessonPlan.substring(0, 80) + '...' : lesson.nextLessonPlan}
                                     </Typography>
                                 </Paper>
+                            )}
+
+                            {/* Заметки с прошлого урока для RESCHEDULED */}
+                            {lesson.status === 'RESCHEDULED' && !lesson.notes && !lesson.nextLessonPlan && !previousLessonsMap[lesson.id] && (
+                                <Box sx={{ mt: 1 }}>
+                                    <StyledButton 
+                                        variant="text" 
+                                        size="small"
+                                        onClick={() => {
+                                            if (expandedLessonId === lesson.id) {
+                                                setExpandedLessonId(null);
+                                            } else {
+                                                setExpandedLessonId(lesson.id);
+                                                fetchPreviousCompletedLessons(lesson);
+                                            }
+                                        }}
+                                        sx={{ color: '#6B7280', fontSize: '12px', textTransform: 'none', p: 0.5 }}
+                                    >
+                                        {expandedLessonId === lesson.id ? '▲ Скрыть историю' : '▼ История занятий'}
+                                    </StyledButton>
+                                    {expandedLessonId === lesson.id && (
+                                        <Box sx={{ mt: 1, pl: 1, borderLeft: '2px solid #E5E7EB' }}>
+                                            {loadingHistory ? (
+                                                <CircularProgress size={20} />
+                                            ) : (() => {
+                                                const key = `${lesson.student?.id}`;
+                                                const history = previousLessonsCache[key] || [];
+                                                if (history.length === 0) return (
+                                                    <Typography sx={{ fontSize: '13px', color: '#9CA3AF' }}>Нет завершённых уроков</Typography>
+                                                );
+                                                return history.map((pastLesson, idx) => (
+                                                    <Paper key={pastLesson.id} sx={{ p: 1.5, mb: 1, bgcolor: idx === 0 ? '#F0F9FF' : '#F9FAFB', borderRadius: '8px' }}>
+                                                        <Typography sx={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 500, mb: 0.5 }}>
+                                                            {format(new Date(pastLesson.lessonDate), 'd MMMM', { locale: ru })} • {formatLessonTime(pastLesson.lessonDate, pastLesson.startTime)}
+                                                        </Typography>
+                                                        {pastLesson.notes && (
+                                                            <Box sx={{ mb: 1 }}>
+                                                                <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>📝 Что делали:</Typography>
+                                                                <Typography sx={{ fontSize: '13px', color: '#374151' }}>{pastLesson.notes}</Typography>
+                                                            </Box>
+                                                        )}
+                                                        {pastLesson.nextLessonPlan && (
+                                                            <Box>
+                                                                <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>🎯 Что задано:</Typography>
+                                                                <Typography sx={{ fontSize: '13px', color: '#374151' }}>{pastLesson.nextLessonPlan}</Typography>
+                                                            </Box>
+                                                        )}
+                                                    </Paper>
+                                                ));
+                                            })()}
+                                        </Box>
+                                    )}
+                                </Box>
                             )}
 
                             {/* Заметки с прошлого урока */}
@@ -636,11 +779,27 @@ function Dashboard() {
                         </Box>
                         
                         {/* Кнопки действий */}
-                        <Box data-tour="lesson-actions" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flexShrink: 0 }}>
+                        <Box data-tour="lesson-actions" sx={{ display: 'flex', flexDirection: { xs: 'row', sm: 'column' }, gap: 0.5, flexShrink: 0, flexWrap: 'wrap', mt: { xs: 1, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
                             {isScheduled && (
                                 <>
                                     <StyledButton variant="contained" startIcon={<VideocamIcon sx={{ fontSize: 16 }} />}
-                                        onClick={async () => { await handleStartLesson(lesson); setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); }}
+                                        onClick={async () => { 
+                                            // Сразу открываем комнату
+                                            setSelectedLessonForRoom(lesson); 
+                                            setLessonRoomOpen(true);
+                                            // API вызываем в фоне, ошибки 400 игнорируем
+                                            try {
+                                                await axiosInstance.post(`/lessons/${lesson.id}/start`);
+                                                await loadAllData();
+                                            } catch (err) {
+                                                if (err.response?.status !== 400) {
+                                                    showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+                                                } else {
+                                                    // 400 — уже начат, просто обновляем список
+                                                    await loadAllData();
+                                                }
+                                            }
+                                        }}
                                         sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' }, color: '#fff' }}>
                                         Начать
                                     </StyledButton>
@@ -658,6 +817,17 @@ function Dashboard() {
                             )}
                             {isInProgress && (
                                 <>
+                                    <StyledButton 
+                                        variant="contained" 
+                                        startIcon={<VideocamIcon sx={{ fontSize: 16 }} />}
+                                        onClick={() => { 
+                                            setSelectedLessonForRoom(lesson); 
+                                            setLessonRoomOpen(true); 
+                                        }}
+                                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' }, color: '#fff' }}
+                                    >
+                                        Видео
+                                    </StyledButton>
                                     <StyledButton variant="contained" color="success" startIcon={<CheckIcon sx={{ fontSize: 16 }} />}
                                         onClick={() => handleOpenComplete(lesson)}
                                         sx={{ bgcolor: '#10B981', '&:hover': { bgcolor: '#059669' } }}>
@@ -727,10 +897,11 @@ function Dashboard() {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
-            <PageContainer>
+            <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
+
                 {/* ========== ОБЪЕДИНЁННАЯ ШАПКА ========== */}
                 <Paper data-tour="hero" sx={{ 
-                    mb: 3, borderRadius: '16px', p: 3,
+                    mb: 3, borderRadius: '16px', p: { xs: 2, sm: 3 },
                     background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
                     color: '#fff', position: 'relative', overflow: 'hidden',
                     boxShadow: '0 4px 20px rgba(79,70,229,0.3)'
@@ -745,7 +916,7 @@ function Dashboard() {
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                 {/* Мини-календарь */}
                                 <Box sx={{ 
-                                    width: 56, height: 56, borderRadius: '14px', bgcolor: 'rgba(255,255,255,0.2)',
+                                    width: { xs: 44, sm: 56 }, height: { xs: 44, sm: 56 }, borderRadius: '14px',
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                                     border: '2px solid rgba(255,255,255,0.3)', flexShrink: 0
                                 }}>
@@ -758,7 +929,7 @@ function Dashboard() {
                                 </Box>
                                 {/* Приветствие */}
                                 <Box>
-                                    <Typography sx={{ fontSize: '22px', fontWeight: 700, lineHeight: 1.2 }}>
+                                    <Typography sx={{ fontSize: { xs: '16px', sm: '22px' }, fontWeight: 700, lineHeight: 1.2 }}>
                                         {getGreeting()}, {user?.fullName?.split(' ')[0]}!
                                     </Typography>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 0.5 }}>
@@ -846,7 +1017,7 @@ function Dashboard() {
                                 ].map((stat, idx) => (
                                     <Grid item xs={4} key={idx}>
                                         <Box sx={{ textAlign: 'center' }}>
-                                            <Typography sx={{ fontSize: '28px', fontWeight: 700, color: stat.color }}>
+                                            <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 700, color: stat.color }}>
                                                 {stat.value}
                                             </Typography>
                                             <Typography sx={{ fontSize: '11px', opacity: 0.7 }}>
@@ -966,7 +1137,7 @@ function Dashboard() {
                 )}
 
                 {/* ========== ДИАЛОГ ЗАВЕРШЕНИЯ УРОКА ========== */}
-                <StyledDialog open={openCompleteDialog} onClose={() => setOpenCompleteDialog(false)} maxWidth="md" fullWidth>
+                <StyledDialog open={openCompleteDialog} onClose={() => setOpenCompleteDialog(false)} maxWidth="md" fullWidth fullScreen={window.innerWidth < 600}>
                     <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
                         Завершение урока
                     </DialogTitle>

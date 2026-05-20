@@ -4,7 +4,7 @@ import EdSpaceLoader from '../components/EdSpaceLoader';
 import { Delete, Edit, Refresh as RefreshIcon, ViewList as ListIcon, CalendarToday as CalendarIcon, Work as WorkIcon, Event as EventIcon, Add as AddIcon } from '@mui/icons-material';
 import { Checkbox, FormControlLabel } from '@mui/material';
 import {
-    Box, Paper, Typography, Table, TableBody, TableCell,
+    Box, Paper, Typography, Table, TableBody, TableCell, Drawer,
     TableContainer, TableHead, TableRow, Button,
     Dialog, DialogTitle, DialogContent, DialogActions,
     FormControl, InputLabel, Select, MenuItem,
@@ -105,14 +105,15 @@ const DebtorsBar = styled(Paper)({
 });
 
 const SlotCell = styled(TableCell)(({ isEmpty, isTemplate }) => ({
-    padding: '8px',
-    minWidth: 140,
+    padding: '6px',
+    minWidth: 120,
     border: '1px solid #F3F4F6',
     cursor: isEmpty ? 'pointer' : 'default',
     backgroundColor: isEmpty ? '#FFFFFF' : (isTemplate ? '#F9FAFB' : 'inherit'),
     transition: 'all 0.15s ease',
     verticalAlign: 'top',
     position: 'relative',
+    fontSize: '12px',
     '&:hover': {
         backgroundColor: isEmpty ? '#EEF2FF' : undefined,
     },
@@ -143,6 +144,15 @@ function WeeklySchedule() {
     const { getStudentRateForTutor } = useStudentRate();
     
     const [viewMode, setViewMode] = useState('table');
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 900);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+    const [mobileCalendarMonth, setMobileCalendarMonth] = useState(new Date());
+    const [mobileSelectedDay, setMobileSelectedDay] = useState(null);
     const [templates, setTemplates] = useState([]);
     const [lessons, setLessons] = useState([]);
     const [students, setStudents] = useState([]);
@@ -370,7 +380,7 @@ function WeeklySchedule() {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
-            <PageContainer>
+            <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
                 {/* ========== ЗАГОЛОВОК ========== */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                     <Box>
@@ -429,19 +439,113 @@ function WeeklySchedule() {
 
                 {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>}
 
-                {viewMode === 'calendar' ? (
-                    <WeekCalendar
-                        weekDates={weekDates}
-                        lessons={lessons}
-                        students={students}
-                        courses={courses}
-                        debtors={debtors}
-                        user={user}
-                        onRefresh={fetchData}
-                        onShowSnackbar={showSnackbar}
-                        onOpenResurrect={handleOpenResurrect}
-                    />
-                ) : (
+                                {/* ========== МОБИЛЬНЫЙ ВИД: КАЛЕНДАРЬ НА МЕСЯЦ ========== */}
+                {isMobile && viewMode !== 'calendar' && (() => {
+                    const year = mobileCalendarMonth.getFullYear();
+                    const month = mobileCalendarMonth.getMonth();
+                    const firstDay = new Date(year, month, 1);
+                    const lastDay = new Date(year, month + 1, 0);
+                    const startPad = (firstDay.getDay() + 6) % 7; // ПН=0
+                    const totalDays = lastDay.getDate();
+                    const today = format(new Date(), 'yyyy-MM-dd');
+                    const cells = [];
+                    for (let i = 0; i < startPad; i++) cells.push(null);
+                    for (let d = 1; d <= totalDays; d++) cells.push(new Date(year, month, d));
+
+                    return (
+                        <Box>
+                            {/* Навигация по месяцам */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <IconButton onClick={() => setMobileCalendarMonth(new Date(year, month - 1, 1))}>←</IconButton>
+                                <Typography sx={{ fontWeight: 700, fontSize: '16px' }}>
+                                    {format(mobileCalendarMonth, 'LLLL yyyy', { locale: ru })}
+                                </Typography>
+                                <IconButton onClick={() => setMobileCalendarMonth(new Date(year, month + 1, 1))}>→</IconButton>
+                            </Box>
+
+                            {/* Сетка 5×7 */}
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
+                                {['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'].map(d => (
+                                    <Typography key={d} sx={{ textAlign: 'center', fontSize: '11px', color: '#9CA3AF', fontWeight: 600, py: 0.5 }}>{d}</Typography>
+                                ))}
+                                {cells.map((date, idx) => {
+                                    if (!date) return <Box key={`empty-${idx}`} />;
+                                    const dateStr = format(date, 'yyyy-MM-dd');
+                                    const dayLessons = lessons.filter(l => l.lessonDate === dateStr);
+                                    const isToday = dateStr === today;
+                                    return (
+                                        <Box key={idx} onClick={() => setMobileSelectedDay({ date, lessons: dayLessons })}
+                                            sx={{
+                                                p: 0.5, textAlign: 'center', borderRadius: '8px', cursor: 'pointer',
+                                                bgcolor: isToday ? '#4F46E5' : dayLessons.length > 0 ? '#F9FAFB' : 'transparent',
+                                                color: isToday ? '#fff' : '#1F2937',
+                                                border: isToday ? 'none' : '1px solid #F3F4F6',
+                                                minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                                '&:active': { opacity: 0.7 }
+                                            }}>
+                                            <Typography sx={{ fontSize: '13px', fontWeight: isToday ? 700 : 500, lineHeight: 1 }}>
+                                                {format(date, 'd')}
+                                            </Typography>
+                                            {dayLessons.length > 0 && (
+                                                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.2, mt: 0.3 }}>
+                                                    {dayLessons.slice(0, 3).map((l, i) => {
+                                                        const s = getLessonStatusStyle(l, lessons);
+                                                        return <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: s.dot }} />;
+                                                    })}
+                                                </Box>
+                                            )}
+                                        </Box>
+                                    );
+                                })}
+                            </Box>
+
+                            {/* Bottom Sheet с карточками дня */}
+                            <Drawer anchor="bottom" open={!!mobileSelectedDay} onClose={() => setMobileSelectedDay(null)}
+                                PaperProps={{ sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70vh' } }}>
+                                <Box sx={{ p: 2 }}>
+                                    <Box sx={{ width: 40, height: 4, bgcolor: '#E5E7EB', borderRadius: 2, mx: 'auto', mb: 2 }} />
+                                    {mobileSelectedDay && (
+                                        <>
+                                            <Typography sx={{ fontWeight: 700, fontSize: '16px', mb: 2 }}>
+                                                {format(mobileSelectedDay.date, 'EEEE, d MMMM', { locale: ru })}
+                                            </Typography>
+                                            {mobileSelectedDay.lessons.length === 0 ? (
+                                                <Typography color="textSecondary">Нет занятий</Typography>
+                                            ) : (
+                                                mobileSelectedDay.lessons.sort((a, b) => a.startTime.localeCompare(b.startTime)).map(lesson => {
+                                                    const statusStyle = getLessonStatusStyle(lesson, lessons);
+                                                    const studentRate = getStudentRateForTutor(lesson.student, user?.id);
+                                                    return (
+                                                        <Paper key={lesson.id} sx={{ p: 2, mb: 1, borderRadius: '10px', borderLeft: `4px solid ${statusStyle.dot}`, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                                <Box sx={{ flex: 1 }}>
+                                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                                                                        <Typography sx={{ fontWeight: 600, fontSize: '15px' }}>
+                                                                            {formatLessonTime(lesson.lessonDate, lesson.startTime)} – {formatLessonTime(lesson.lessonDate, lesson.endTime)}
+                                                                        </Typography>
+                                                                        <Chip label={statusStyle.label} size="small"
+                                                                            sx={{ fontSize: '10px', height: 20, bgcolor: statusStyle.bg, color: statusStyle.text }} />
+                                                                    </Box>
+                                                                    <Typography sx={{ fontWeight: 500, fontSize: '14px' }}>{lesson.student?.fullName || '—'}</Typography>
+                                                                    {lesson.course && <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{lesson.course.name} • {lesson.duration || 60} мин</Typography>}
+                                                                    {studentRate && lesson.status !== 'CANCELLED' && <Typography sx={{ fontSize: '14px', fontWeight: 600, color: '#10B981', mt: 0.5 }}>{studentRate} ₽</Typography>}
+                                                                </Box>
+                                                                <IconButton size="small" onClick={() => { handleDeleteLesson(lesson.id); setMobileSelectedDay(null); }} sx={{ color: '#EF4444' }}><Delete sx={{ fontSize: 16 }} /></IconButton>
+                                                            </Box>
+                                                        </Paper>
+                                                    );
+                                                })
+                                            )}
+                                        </>
+                                    )}
+                                </Box>
+                            </Drawer>
+                        </Box>
+                    );
+                })()}
+
+                {/* ========== ДЕСКТОП: ТАБЛИЦА ========== */}
+                {!isMobile && viewMode !== 'calendar' && (
                     <>
                         {/* ========== ДОЛЖНИКИ ========== */}
                         {debtors.length > 0 && (
@@ -493,8 +597,11 @@ function WeeklySchedule() {
                         )}
 
                         {/* ========== ТАБЛИЦА РАСПИСАНИЯ ========== */}
-                        <ScheduleTableContainer data-tour="template-list" elevation={0}>
-                            <TableContainer sx={{ overflowX: 'auto' }}>
+                        <ScheduleTableContainer data-tour="template-list" elevation={0} sx={{ 
+                            mx: { xs: -2, sm: 0 },
+                            borderRadius: { xs: 0, sm: '12px' }
+                        }}>
+                            <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                                 <Table stickyHeader size="small">
                                     <TableHead>
                                         <TableRow>
@@ -513,7 +620,7 @@ function WeeklySchedule() {
                                                     <TableCell key={day.id} align="center" sx={{ 
                                                         fontWeight: 600, fontSize: '12px', color: '#6B7280',
                                                         backgroundColor: isToday ? '#EEF2FF' : '#F9FAFB',
-                                                        borderBottom: '1px solid #E5E7EB', minWidth: 140,
+                                                        borderBottom: '1px solid #E5E7EB', minWidth: 120,
                                                     }}>
                                                         <Box>
                                                             <Typography sx={{ fontWeight: 600, fontSize: '13px', color: '#1F2937' }}>

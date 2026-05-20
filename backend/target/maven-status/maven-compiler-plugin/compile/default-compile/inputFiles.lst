@@ -39,6 +39,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\SubscriptionRenewalController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\TutorController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\VariantController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\VideoRoomController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\WeeklyTemplateController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\DemoApplication.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\CreateHomeworkRequest.java
@@ -72,6 +73,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Sub
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\TaskBank.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Tutor.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Variant.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\VideoRoom.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\WeeklyTemplate.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\AccessDeniedException.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\BusinessException.java
@@ -101,6 +103,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\TaskBankRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\TutorRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\VariantRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\VideoRoomRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\WeeklyTemplateRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\scheduler\LessonGeneratorScheduler.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\AIGenerationService.java

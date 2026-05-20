@@ -300,10 +300,10 @@ function LessonsArchive() {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
-            <PageContainer>
+            <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
                     <Box>
-                        <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>Архив занятий</Typography>
+                        <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 600, color: '#1F2937', mb: 0.5 }}>Архив занятий</Typography>
                         <Typography sx={{ color: '#6B7280', fontSize: '14px' }}>История проведённых, оплаченных и отменённых занятий</Typography>
                     </Box>
                     <ViewToggle>
@@ -313,7 +313,7 @@ function LessonsArchive() {
                 </Box>
 
                 {/* Статистика */}
-                <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid container spacing={1.5} sx={{ mb: 3 }}>
                     {[
                         { label: 'Всего записей', value: stats.total, color: '#3B82F6', bg: '#EFF6FF' },
                         { label: 'Проведено', value: stats.completed, color: '#F59E0B', bg: '#FFFBEB' },
@@ -321,15 +321,18 @@ function LessonsArchive() {
                         { label: 'Отменено', value: stats.cancelled, color: '#EF4444', bg: '#FEF2F2' },
                     ].map((item) => (
                         <Grid item xs={6} sm={3} key={item.label}>
-                            <StatCard>
-                                <CardContent sx={{ textAlign: 'center', py: 2, '&:last-child': { pb: 2 } }}>
-                                    <Box sx={{ width: 40, height: 40, borderRadius: '10px', backgroundColor: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
-                                        <Typography sx={{ fontSize: 18, fontWeight: 700, color: item.color }}>{item.value}</Typography>
-                                    </Box>
-                                    <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '24px' }}>{item.value}</Typography>
-                                    <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>{item.label}</Typography>
-                                </CardContent>
-                            </StatCard>
+                            <Paper sx={{ 
+                                p: { xs: 1.5, sm: 2.5 }, 
+                                borderRadius: '12px', textAlign: 'center',
+                                bgcolor: '#FFFFFF', border: '1px solid #F3F4F6',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                            }}>
+                                <Box sx={{ width: { xs: 36, sm: 40 }, height: { xs: 36, sm: 40 }, borderRadius: '10px', backgroundColor: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                                    <Typography sx={{ fontSize: { xs: 16, sm: 18 }, fontWeight: 700, color: item.color }}>{item.value}</Typography>
+                                </Box>
+                                <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: { xs: '20px', sm: '24px' } }}>{item.value}</Typography>
+                                <Typography sx={{ color: '#6B7280', fontSize: { xs: '11px', sm: '13px' } }}>{item.label}</Typography>
+                            </Paper>
                         </Grid>
                     ))}
                 </Grid>

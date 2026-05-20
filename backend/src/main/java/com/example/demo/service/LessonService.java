@@ -165,7 +165,13 @@ public class LessonService {
             throw new BusinessException("Можно завершить только запланированное или начатое занятие");
         }
 
-        if (isSubscription) {
+        // ✅ Пробное занятие с ценой 0 — сразу PAID (проверяем ДО абонемента)
+        if (lesson.getIsTrial() != null && lesson.getIsTrial() &&
+                (lesson.getTrialPrice() == null || lesson.getTrialPrice().compareTo(BigDecimal.ZERO) == 0)) {
+            lesson.setStatus("PAID");
+            lesson.setPaidAt(LocalDateTime.now());
+            log.info("Пробное занятие (бесплатное) автоматически оплачено");
+        } else if (isSubscription) {
             lesson.setStatus("PAID");
             lesson.setPaidAt(LocalDateTime.now());
             log.info("Занятие по абонементу автоматически оплачено");
@@ -603,6 +609,11 @@ public class LessonService {
         newLesson.setNextLessonPlan(original.getNextLessonPlan());
         newLesson.setStatus("RESCHEDULED");
         newLesson.setWeeklyTemplateId(original.getWeeklyTemplateId());
+
+        // ✅ VIDEO-1: Копируем настройки видео при переносе
+        newLesson.setVideoPlatform(original.getVideoPlatform());
+        newLesson.setVideoPlatformLink(original.getVideoPlatformLink());
+        newLesson.setRoomSelected(original.getRoomSelected());
 
         original.setStatus("RESCHEDULED");
         original.setUpdatedAt(LocalDateTime.now());

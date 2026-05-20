@@ -5,10 +5,12 @@ com\example\demo\repository\ParentRepository.class
 com\example\demo\controller\SubjectController.class
 com\example\demo\controller\PaymentController.class
 com\example\demo\repository\WeeklyTemplateRepository.class
+com\example\demo\controller\VideoRoomController.class
 com\example\demo\controller\AuthController.class
 com\example\demo\service\SubscriptionService.class
 com\example\demo\service\SubjectService.class
 com\example\demo\controller\CourseController.class
+com\example\demo\repository\VideoRoomRepository.class
 com\example\demo\dto\CreateHomeworkRequest.class
 com\example\demo\repository\ProgressRecordRepository.class
 com\example\demo\controller\IntegrationController.class
@@ -29,6 +31,7 @@ com\example\demo\entity\Variant.class
 com\example\demo\service\WeeklyTemplateService.class
 com\example\demo\entity\BoardSession.class
 com\example\demo\service\StepikService.class
+com\example\demo\entity\VideoRoom.class
 com\example\demo\entity\Subscription.class
 com\example\demo\repository\InvitationTokenRepository.class
 com\example\demo\entity\MaterialFolder.class

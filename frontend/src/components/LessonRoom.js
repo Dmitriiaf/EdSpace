@@ -1,25 +1,17 @@
+// ========== frontend/src/components/LessonRoom.js ==========
 import React, { useState, useEffect } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, IconButton,
     Box, Typography, CircularProgress, Alert,
-    Button, Tabs, Tab
+    Button, Chip, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import {
     Close as CloseIcon,
-    Videocam as VideocamIcon,
-    HourglassEmpty as WaitingIcon,
-    Draw as DrawIcon
+    Videocam as VideocamIcon
 } from '@mui/icons-material';
 import axiosInstance from '../api/axiosConfig';
 import { useAuth } from '../context/AuthContext';
-
-function TabPanel({ children, value, index }) {
-    return (
-        <div hidden={value !== index}>
-            {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
-        </div>
-    );
-}
+import DinoGame from './DinoGame';
 
 function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
     const { user } = useAuth();
@@ -27,168 +19,197 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
     
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [jitsiInfo, setJitsiInfo] = useState(null);
-    const [tabValue, setTabValue] = useState(0);
-    const [boardRoomName, setBoardRoomName] = useState('');
+    const [lessonData, setLessonData] = useState(null);
+    const [videoRooms, setVideoRooms] = useState([]);
+    const [selectedRoomId, setSelectedRoomId] = useState('');
+    const [roomSelected, setRoomSelected] = useState(false);
+    const [videoUrl, setVideoUrl] = useState('');
 
     useEffect(() => {
         if (open && lessonId) {
-            fetchJitsi();
+            fetchLessonData();
+            // Автопроверка для ученика каждые 3 секунды
+            if (!isTutor) {
+                const interval = setInterval(checkRoomStatus, 3000);
+                return () => clearInterval(interval);
+            }
         }
     }, [open, lessonId]);
 
-    const fetchJitsi = async () => {
+    const fetchLessonData = async () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await axiosInstance.get(`/jitsi/room/${lessonId}`);
-            setJitsiInfo(res.data);
-            // Используем boardRoomName из урока для коллаборации
-            setBoardRoomName(res.data?.boardRoomName || `edspace-board-${lessonId}`);
+            const res = await axiosInstance.get(`/lessons/${lessonId}`);
+            setLessonData(res.data);
+            setRoomSelected(res.data.roomSelected || false);
+            
+            if (res.data.videoPlatformLink) {
+                setVideoUrl(res.data.videoPlatformLink);
+            }
+            
+            if (res.data.tutor?.id) {
+                const roomsRes = await axiosInstance.get(`/video-rooms/tutor/${res.data.tutor.id}`);
+                setVideoRooms(roomsRes.data || []);
+                const defaultRoom = roomsRes.data?.find(r => r.isDefault);
+                if (defaultRoom) setSelectedRoomId(defaultRoom.id);
+            }
         } catch (err) {
             console.error('Ошибка загрузки:', err);
-            setError('Ошибка при создании комнаты');
+            setError('Ошибка при загрузке данных урока');
         } finally {
             setLoading(false);
         }
     };
 
+    // Проверка статуса комнаты (для ученика)
+    const checkRoomStatus = async () => {
+        try {
+            const res = await axiosInstance.get(`/lessons/${lessonId}`);
+            if (res.data.roomSelected && !roomSelected) {
+                setRoomSelected(true);
+                setVideoUrl(res.data.videoPlatformLink || '');
+            }
+        } catch (err) {
+            // Тихо игнорируем ошибки polling
+        }
+    };
+
+    const getSelectedRoom = () => videoRooms.find(r => r.id === selectedRoomId);
+
+    const getVideoPlatformColor = () => {
+        const platform = getSelectedRoom()?.platform;
+        const colors = { JITSI: '#6366F1', ZOOM: '#2D8CFF', TELEMOST: '#FC3F1D', SKYPE: '#00AFF0', OTHER: '#6366F1' };
+        return colors[platform] || '#6366F1';
+    };
+
+    const handleSelectAndStart = async () => {
+        if (!selectedRoomId) return;
+        const room = getSelectedRoom();
+        if (!room) return;
+
+        try {
+            await axiosInstance.post(`/lessons/${lessonId}/select-room`, {
+                videoPlatform: room.platform,
+                videoPlatformLink: room.url
+            });
+            setRoomSelected(true);
+            setVideoUrl(room.url);
+            window.open(room.url, '_blank');
+        } catch (err) {
+            setError('Ошибка при запуске видео');
+        }
+    };
+
     const handleJoinVideo = () => {
-        if (jitsiInfo?.roomUrl) {
-            window.open(jitsiInfo.roomUrl, '_blank', 'width=1200,height=800');
+        if (videoUrl) {
+            window.open(videoUrl, '_blank');
         }
     };
 
     return (
-        <Dialog 
-            open={open} 
-            onClose={onClose}
-            maxWidth="md"
-            fullWidth
-            PaperProps={{ sx: { borderRadius: 4 } }}
-        >
-            <DialogTitle sx={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                pb: 1
-            }}>
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
+            PaperProps={{ sx: { borderRadius: 4 } }}>
+            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <VideocamIcon sx={{ color: '#6366F1' }} />
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        Урок
-                    </Typography>
+                    <VideocamIcon sx={{ color: getVideoPlatformColor() }} />
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>Видеозвонок</Typography>
                 </Box>
-                <IconButton onClick={onClose} size="small">
-                    <CloseIcon />
-                </IconButton>
+                <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
             </DialogTitle>
 
-            <DialogContent sx={{ pt: 1, pb: 3, minHeight: '70vh' }}>
+            <DialogContent sx={{ pt: 1, pb: 3, minHeight: '40vh' }}>
                 {loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
-                        <CircularProgress />
-                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
                 ) : error ? (
                     <Box sx={{ py: 3 }}>
                         <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
-                        <Button variant="outlined" onClick={fetchJitsi}>
-                            Попробовать снова
-                        </Button>
+                        <Button variant="outlined" onClick={fetchLessonData}>Попробовать снова</Button>
                     </Box>
                 ) : (
                     <Box>
-                        {/* Информация о занятии */}
-                        <Box sx={{ 
-                            p: 2, 
-                            bgcolor: '#F9FAFB', 
-                            borderRadius: 2,
-                            mb: 2
-                        }}>
-                            <Typography variant="body2" color="textSecondary" gutterBottom>
-                                Занятие
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                                {jitsiInfo?.courseName || 'Занятие'}
+                        <Box sx={{ p: 2.5, bgcolor: '#F9FAFB', borderRadius: 2, mb: 3 }}>
+                            <Typography variant="body2" color="textSecondary" gutterBottom>Занятие</Typography>
+                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                {lessonData?.course?.name || 'Занятие'}
                             </Typography>
                             {lessonInfo && (
-                                <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
-                                    {lessonInfo.startTime} - {lessonInfo.endTime}
+                                <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
+                                    {lessonInfo.studentName || lessonInfo.tutorName} • {lessonInfo.startTime?.slice(0, 5)} - {lessonInfo.endTime?.slice(0, 5)}
                                 </Typography>
                             )}
                         </Box>
 
-                        {/* Вкладки: Видео и Доска */}
-                        <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)} sx={{ mb: 2 }}>
-                            <Tab icon={<VideocamIcon />} label="Видео" />
-                            <Tab icon={<DrawIcon />} label="Доска" />
-                        </Tabs>
-
-                        <TabPanel value={tabValue} index={0}>
-                            {!isTutor && jitsiInfo?.waitingRoom && (
-                                <Box sx={{ 
-                                    textAlign: 'center', 
-                                    py: 3,
-                                    bgcolor: '#FEF3C7',
-                                    borderRadius: 2,
-                                    mb: 3
-                                }}>
-                                    <WaitingIcon sx={{ fontSize: 48, color: '#F59E0B', mb: 2 }} />
-                                    <Typography variant="h6" gutterBottom sx={{ color: '#92400E' }}>
-                                        Ожидание репетитора
-                                    </Typography>
-                                    <Typography variant="body2" color="textSecondary">
-                                        Репетитор ещё не начал урок. Как только он начнёт, появится кнопка для входа.
-                                    </Typography>
-                                </Box>
-                            )}
-
-                            {(!jitsiInfo?.waitingRoom || isTutor) && (
-                                <Box sx={{ textAlign: 'center', mb: 3 }}>
-                                    <Button
-                                        variant="contained"
-                                        size="large"
-                                        startIcon={<VideocamIcon />}
-                                        onClick={handleJoinVideo}
-                                        sx={{
-                                            bgcolor: '#6366F1',
-                                            '&:hover': { bgcolor: '#4F46E5' },
-                                            px: 6,
-                                            py: 2,
-                                            borderRadius: 3,
-                                            fontSize: '1.1rem'
-                                        }}
-                                    >
-                                        Подключиться к видеовстрече
-                                    </Button>
-                                    <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
-                                        Откроется в новом окне
-                                    </Typography>
-                                </Box>
-                            )}
-                            <Typography variant="caption" color="textSecondary" sx={{ textAlign: 'center', display: 'block' }}>
-                                Видеосвязь через Jitsi Meet
-                            </Typography>
-                        </TabPanel>
-
-                        <TabPanel value={tabValue} index={1}>
-                            <Box sx={{ 
-                                height: '60vh', 
-                                borderRadius: 2, 
-                                overflow: 'hidden', 
-                                border: '1px solid #E5E7EB',
-                                bgcolor: '#fff'
-                            }}>
-                                <iframe
-                                    src={`https://excalidraw.com/#room=${boardRoomName}`}
-                                    style={{ width: '100%', height: '100%', border: 'none' }}
-                                    title="Совместная доска"
-                                />
+                        {/* Репетитор */}
+                        {isTutor && (
+                            <Box sx={{ textAlign: 'center', py: 3 }}>
+                                {!roomSelected ? (
+                                    <>
+                                        <Typography variant="h6" sx={{ mb: 2 }}>Выберите комнату для урока</Typography>
+                                        <FormControl fullWidth sx={{ mb: 3, maxWidth: 400 }}>
+                                            <InputLabel>Комната</InputLabel>
+                                            <Select value={selectedRoomId} onChange={e => setSelectedRoomId(e.target.value)}
+                                                label="Комната" sx={{ borderRadius: '8px' }}>
+                                                {videoRooms.map(room => (
+                                                    <MenuItem key={room.id} value={room.id}>{room.name} ({room.platform})</MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                        <Button variant="contained" size="large" startIcon={<VideocamIcon />}
+                                            onClick={handleSelectAndStart} disabled={!selectedRoomId}
+                                            sx={{ bgcolor: '#4F46E5', px: 6, py: 2, borderRadius: 3, fontSize: '1.1rem' }}>
+                                            Начать видеовстречу
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Typography variant="h6" sx={{ mb: 2, color: '#065F46' }}>✅ Урок начат</Typography>
+                                        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                                            Если вы случайно вышли — нажмите кнопку ниже, чтобы вернуться
+                                        </Typography>
+                                        <Button variant="contained" size="large" startIcon={<VideocamIcon />}
+                                            onClick={handleJoinVideo}
+                                            sx={{ bgcolor: '#4F46E5', px: 6, py: 2, borderRadius: 3, fontSize: '1.1rem' }}>
+                                            Вернуться в конференцию
+                                        </Button>
+                                    </>
+                                )}
+                                <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
+                                    Откроется в новой вкладке
+                                </Typography>
                             </Box>
-                            <Typography variant="caption" color="textSecondary" sx={{ textAlign: 'center', display: 'block', mt: 1 }}>
-                                Совместная доска — репетитор и ученик видят изменения друг друга
-                            </Typography>
-                        </TabPanel>
+                        )}
+
+                        {/* Ученик */}
+                        {!isTutor && (
+                            <Box sx={{ textAlign: 'center', py: 2 }}>
+                                {!roomSelected ? (
+                                    <>
+                                        <Typography variant="h6" sx={{ mb: 2, color: '#92400E' }}>
+                                            ⏳ Ожидание репетитора...
+                                        </Typography>
+                                        <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                                            Репетитор ещё не начал урок. Пока можно поиграть:
+                                        </Typography>
+                                        <DinoGame />
+                                    </>
+                                ) : (
+                                    <>
+                                        <Typography variant="h6" sx={{ mb: 2, color: '#065F46' }}>
+                                            ✅ Репетитор начал урок!
+                                        </Typography>
+                                        <Button variant="contained" size="large" startIcon={<VideocamIcon />}
+                                            onClick={handleJoinVideo}
+                                            sx={{ bgcolor: '#10B981', px: 6, py: 2, borderRadius: 3, fontSize: '1.1rem', mb: 1 }}>
+                                            Подключиться к видеовстрече
+                                        </Button>
+                                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
+                                            Если не получилось — нажмите ещё раз
+                                        </Typography>
+                                    </>
+                                )}
+                            </Box>
+                        )}
                     </Box>
                 )}
             </DialogContent>
