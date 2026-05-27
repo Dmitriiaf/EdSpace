@@ -1,4 +1,3 @@
-// ========== backend/src/main/java/com/example/demo/service/WeeklyTemplateService.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
@@ -12,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -42,60 +42,83 @@ public class WeeklyTemplateService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private LessonRepository lessonRepository;
+
     private static final int WEEKS_TO_CHECK = 4;
 
+    /**
+     * Проверяет конфликты на 4 недели вперёд ТОЛЬКО для указанного дня недели.
+     * Блокирует только если ЗАНЯТЫ ВСЕ 4 недели.
+     */
     private String checkConflictsForWeeks(Long tutorId, String studentEmail, int dayOfWeek,
                                           LocalTime startTime, LocalTime endTime) {
         LocalDate checkDate = getNextDateWithDayOfWeek(dayOfWeek);
         log.info("🔍 ПРОВЕРКА КОНФЛИКТОВ: стартовая дата = {}, день недели = {}", checkDate, dayOfWeek);
-        int weeksChecked = 0;
 
-        while (weeksChecked < WEEKS_TO_CHECK) {
-            while (checkDate.getDayOfWeek().getValue() != dayOfWeek) {
-                checkDate = checkDate.plusDays(1);
-            }
+        int conflictsFound = 0;
+        List<String> conflictDetails = new ArrayList<>();
+
+        for (int week = 0; week < WEEKS_TO_CHECK; week++) {
+            log.info("  Проверяем дату: {} (день недели: {})", checkDate, checkDate.getDayOfWeek());
 
             String conflict = conflictChecker.checkConflicts(
                     tutorId, studentEmail, checkDate, startTime, endTime);
 
             if (conflict != null) {
-                log.warn("Конфликт найден на дату {}: {}", checkDate, conflict);
-                return String.format("%s (на дату %s)", conflict, checkDate);
+                conflictsFound++;
+                conflictDetails.add(String.format("%s: %s", checkDate, conflict));
+                log.warn("  ⚠️ Конфликт на дату {}: {}", checkDate, conflict);
+            } else {
+                log.info("  ✅ Дата {} свободна", checkDate);
             }
 
-            checkDate = checkDate.plusDays(1);
-            weeksChecked++;
+            checkDate = checkDate.plusWeeks(1);
         }
 
+        if (conflictsFound == WEEKS_TO_CHECK) {
+            log.error("❌ ВСЕ 4 недели заняты! Шаблон создать нельзя.");
+            return String.format("Все 4 недели заняты. Конфликты: %s", String.join("; ", conflictDetails));
+        }
+
+        log.info("✅ Найдено {} конфликтов из {} — шаблон разрешён (свободных слотов: {})",
+                conflictsFound, WEEKS_TO_CHECK, WEEKS_TO_CHECK - conflictsFound);
         return null;
     }
 
+    /**
+     * Проверяет конфликты при обновлении шаблона
+     */
     private String checkConflictsForWeeksExcludingTemplate(Long tutorId, String studentEmail,
                                                            int dayOfWeek, LocalTime startTime,
                                                            LocalTime endTime, Long excludeTemplateId) {
         LocalDate checkDate = getNextDateWithDayOfWeek(dayOfWeek);
-        int weeksChecked = 0;
 
-        while (weeksChecked < WEEKS_TO_CHECK) {
-            while (checkDate.getDayOfWeek().getValue() != dayOfWeek) {
-                checkDate = checkDate.plusDays(1);
-            }
+        int conflictsFound = 0;
+        List<String> conflictDetails = new ArrayList<>();
 
+        for (int week = 0; week < WEEKS_TO_CHECK; week++) {
             String conflict = conflictChecker.checkConflicts(
                     tutorId, studentEmail, checkDate, startTime, endTime);
 
             if (conflict != null) {
-                log.warn("Конфликт найден на дату {}: {}", checkDate, conflict);
-                return String.format("%s (на дату %s)", conflict, checkDate);
+                conflictsFound++;
+                conflictDetails.add(String.format("%s: %s", checkDate, conflict));
             }
 
-            checkDate = checkDate.plusDays(1);
-            weeksChecked++;
+            checkDate = checkDate.plusWeeks(1);
+        }
+
+        if (conflictsFound == WEEKS_TO_CHECK) {
+            return String.format("Все 4 недели заняты. Конфликты: %s", String.join("; ", conflictDetails));
         }
 
         return null;
     }
 
+    /**
+     * Возвращает дату следующего вхождения указанного дня недели.
+     */
     private LocalDate getNextDateWithDayOfWeek(int dayOfWeek) {
         LocalDate today = LocalDate.now();
         int currentDayOfWeek = today.getDayOfWeek().getValue();
@@ -104,10 +127,48 @@ public class WeeklyTemplateService {
         if (daysToAdd < 0) {
             daysToAdd += 7;
         } else if (daysToAdd == 0) {
-            daysToAdd = 7; // Сегодня — пропускаем, берём через неделю
+            daysToAdd = 7;
         }
 
         return today.plusDays(daysToAdd);
+    }
+
+    /**
+     * Удаляет разовые занятия (без шаблона) ТОЛЬКО для ученика шаблона,
+     * которые пересекаются с новым шаблоном
+     */
+    private void deleteConflictingSingleLessons(Long tutorId, int dayOfWeek,
+                                                LocalTime startTime, LocalTime endTime, Long studentId) {
+        LocalDate checkDate = getNextDateWithDayOfWeek(dayOfWeek);
+        int deleted = 0;
+
+        for (int week = 0; week < WEEKS_TO_CHECK; week++) {
+            List<Lesson> lessons = lessonRepository.findByTutorIdAndLessonDate(tutorId, checkDate);
+
+            for (Lesson lesson : lessons) {
+                boolean overlaps = lesson.getStartTime().isBefore(endTime)
+                        && lesson.getEndTime().isAfter(startTime);
+
+                // ✅ Удаляем только разовые занятия ТОГО ЖЕ ученика
+                if (overlaps
+                        && lesson.getWeeklyTemplateId() == null
+                        && lesson.getStudent().getId().equals(studentId)
+                        && !"CANCELLED".equals(lesson.getStatus())
+                        && !"PAID".equals(lesson.getStatus())) {
+                    lessonRepository.delete(lesson);
+                    deleted++;
+                    log.info("  🗑️ Удалено разовое занятие ID={} на дату {} ({} {}-{})",
+                            lesson.getId(), checkDate,
+                            lesson.getStudent().getFullName(),
+                            lesson.getStartTime(), lesson.getEndTime());
+                }
+            }
+            checkDate = checkDate.plusWeeks(1);
+        }
+
+        if (deleted > 0) {
+            log.info("🧹 Удалено {} разовых занятий, заменённых шаблоном", deleted);
+        }
     }
 
     @Transactional
@@ -132,13 +193,6 @@ public class WeeklyTemplateService {
             }
         }
 
-        boolean exists = templateRepository.existsByTutorIdAndDayOfWeekAndStartTime(
-                tutorId, dayOfWeek, startTime);
-
-        if (exists) {
-            throw new RuntimeException("На это время уже есть шаблон занятия");
-        }
-
         String conflict = checkConflictsForWeeks(
                 tutorId,
                 student.getEmail(),
@@ -155,6 +209,9 @@ public class WeeklyTemplateService {
         template.setStatus("SCHEDULED");
 
         WeeklyTemplate savedTemplate = templateRepository.save(template);
+
+        // Удаляем разовые занятия на 4 недели вперёд
+        deleteConflictingSingleLessons(tutorId, dayOfWeek, startTime, endTime, studentId);
 
         recalculateSubscriptionsForStudent(studentId);
 
@@ -190,13 +247,6 @@ public class WeeklyTemplateService {
                 courseRepository.save(course);
                 log.info("✅ Ученик {} автоматически записан на курс {}", student.getFullName(), course.getName());
             }
-        }
-
-        boolean exists = templateRepository.existsByTutorIdAndDayOfWeekAndStartTime(
-                template.getTutor().getId(), dayOfWeek, startTime);
-
-        if (exists && (template.getDayOfWeek() != dayOfWeek || !template.getStartTime().equals(startTime))) {
-            throw new RuntimeException("На это время уже есть шаблон занятия");
         }
 
         String conflict = checkConflictsForWeeksExcludingTemplate(
@@ -253,9 +303,7 @@ public class WeeklyTemplateService {
         }
 
         log.info("🔄 Пересчёт абонементов для ученика: {}", student.getFullName());
-
         YearMonth currentMonth = YearMonth.now();
-
         recalculateSubscriptionForMonth(studentId, currentMonth);
     }
 

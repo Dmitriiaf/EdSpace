@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/scheduler/LessonGeneratorScheduler.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.scheduler;
 
 import com.example.demo.service.LessonGeneratorService;

@@ -360,27 +360,69 @@ public class MaterialService {
         MaterialFolder folder = folderRepository.findById(folderId)
                 .orElseThrow(() -> new RuntimeException("Папка не найдена"));
 
-        if (!hasAccessToFolder(folder, studentId)) {
-            throw new RuntimeException("У вас нет доступа к этой папке");
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Ученик не найден"));
+
+        // Проверяем доступ к папке: либо через курс, либо у ученика есть материалы в этой папке
+        boolean hasAccess = hasAccessToFolder(folder, studentId);
+        if (!hasAccess) {
+            List<Material> studentMaterialsInFolder = materialRepository.findByFolderId(folderId).stream()
+                    .filter(m -> m.getStudent() != null && m.getStudent().getId().equals(studentId))
+                    .collect(Collectors.toList());
+            if (studentMaterialsInFolder.isEmpty()) {
+                throw new RuntimeException("У вас нет доступа к этой папке");
+            }
         }
 
-        List<Material> materials = materialRepository.findByFolderId(folderId);
+        // Получаем ВСЕ материалы в папке и фильтруем доступные ученику
+        List<Material> allMaterials = materialRepository.findByFolderId(folderId);
+        List<Material> accessibleMaterials = allMaterials.stream()
+                .filter(m -> isMaterialAccessibleForStudent(m, studentId))
+                .collect(Collectors.toList());
+
         List<MaterialFolder> subFolders = folderRepository.findByParentFolderId(folderId).stream()
-                .filter(f -> hasAccessToFolder(f, studentId))
+                .filter(f -> hasAccessToFolder(f, studentId) || hasStudentMaterialsInFolder(f, studentId))
                 .collect(Collectors.toList());
 
         Map<String, Object> result = new HashMap<>();
-        result.put("materials", materials);
+        result.put("materials", accessibleMaterials);
         result.put("folders", subFolders);
         return result;
     }
 
     private boolean hasAccessToFolder(MaterialFolder folder, Long studentId) {
-        if (folder.getCourse() == null) return false;
-
+        // Если папка не привязана к курсу — проверяем, есть ли в ней файлы ученика
+        if (folder.getCourse() == null) {
+            return hasStudentMaterialsInFolder(folder, studentId);
+        }
+        // Если привязана к курсу — проверяем, записан ли ученик на этот курс
         List<Course> enrolledCourses = courseRepository.findCoursesByStudentId(studentId);
         return enrolledCourses.stream()
                 .anyMatch(c -> c.getId().equals(folder.getCourse().getId()));
+    }
+
+    /**
+     * Проверяет, доступен ли материал ученику
+     */
+    private boolean isMaterialAccessibleForStudent(Material material, Long studentId) {
+        if (material.getStudent() != null && material.getStudent().getId().equals(studentId)) {
+            return true;
+        }
+        if (material.getCourse() != null) {
+            List<Course> enrolledCourses = courseRepository.findCoursesByStudentId(studentId);
+            return enrolledCourses.stream()
+                    .anyMatch(c -> c.getId().equals(material.getCourse().getId()));
+        }
+        return material.getStudent() == null && material.getCourse() == null;
+    }
+
+    /**
+     * Проверяет, есть ли в папке файлы, привязанные лично к ученику
+     */
+    private boolean hasStudentMaterialsInFolder(MaterialFolder folder, Long studentId) {
+        List<Material> materials = materialRepository.findByFolderId(folder.getId());
+        return materials.stream()
+                .anyMatch(m -> m.getStudent() != null && m.getStudent().getId().equals(studentId));
     }
 
     public Map<String, Object> getAllMaterialsForStudent(Long studentId) {

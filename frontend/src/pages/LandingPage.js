@@ -1,429 +1,577 @@
-// ========== frontend/src/pages/LandingPage.js (v3 — С ТАРИФАМИ) ==========
-import React, { useState, useEffect, useRef } from 'react';
+// ========== frontend/src/pages/LandingPage.js (v3 — DEEP PURPLE + FAQ) ==========
+import React, { useState, useEffect } from 'react';
 import {
-    Box, Button, Typography, Container, Grid,
-    AppBar, Toolbar, IconButton, Drawer, List, ListItem, ListItemText,
-    useMediaQuery, useTheme, Stack, TextField, Snackbar, Alert,
-    Avatar, AvatarGroup
+    Box, Button, Typography, Container, Grid, AppBar, Toolbar,
+    IconButton, Drawer, List, ListItem, ListItemText,
+    useMediaQuery, useTheme, Stack, Avatar, AvatarGroup,
+    Chip, Divider, Dialog, DialogContent, Accordion, AccordionSummary, AccordionDetails,
+    TextField, InputAdornment
 } from '@mui/material';
 import { styled, keyframes } from '@mui/material/styles';
 import {
-    Menu as MenuIcon, ArrowForward, Star, Send,
-    Close, Bolt, VerifiedUser, SupportAgent, AutoAwesome,
-    CheckCircle as CheckIcon
+    Menu as MenuIcon, ArrowForward, Close, Bolt, VerifiedUser,
+    SupportAgent, AutoAwesome, CheckCircle, PlayArrow,
+    CalendarMonth, Payments, Videocam, BarChart,
+    TrendingUp, School, Groups, Grade, Stars,
+    RocketLaunch, Psychology, Speed, EmojiEvents,
+    ExpandMore, Telegram, Send, Email, Notifications
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
-// ========== АНИМАЦИИ ==========
+// ========== NEW COLOR PALETTE ==========
+// Deep Purple + Almond Oil
+const DEEP_PURPLE = '#2D1B69';      // Тёмно-фиолетовый фон
+const PURPLE_PRIMARY = '#6C3BAA';   // Основной фиолетовый
+const PURPLE_LIGHT = '#9B6FD4';     // Светло-фиолетовый
+const ALMOND = '#F5E6D3';          // Миндальное масло (светлый)
+const ALMOND_DARK = '#E8D5C0';     // Тёмный миндальный
+const CREAM = '#FFF8F0';           // Кремовый
+const GOLD = '#C8963E';            // Золотой акцент
+const ROSE = '#D4856B';            // Розовый акцент
+const SUCCESS_GREEN = '#5B8C5A';   // Зелёный (приглушённый)
+
+// ========== ANIMATIONS ==========
 const float = keyframes`
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
 `;
 
-const glow = keyframes`
-    0%, 100% { boxShadow: '0 0 20px rgba(79, 70, 229, 0.3)'; }
-    50% { boxShadow: '0 0 40px rgba(79, 70, 229, 0.6)'; }
+const pulse = keyframes`
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
 `;
 
-// ========== СТИЛИ ==========
-const ACCENT = '#4F46E5';
-const DARK = '#0F0F1A';
-const CARD_BG = 'rgba(255, 255, 255, 0.03)';
-const TEXT_DIM = '#8892B0';
-const SUCCESS = '#10B981';
-
+// ========== STYLED ==========
 const StyledButton = styled(Button)({
-    borderRadius: 50,
+    borderRadius: 18,
     textTransform: 'none',
     fontWeight: 600,
-    padding: '14px 36px',
+    padding: '14px 26px',
     fontSize: '1rem',
-    letterSpacing: '0.3px',
+    transition: 'all .3s cubic-bezier(.22,1,.36,1)',
 });
 
-const GlowButton = styled(StyledButton)({
-    background: `linear-gradient(135deg, ${ACCENT}, #7C3AED)`,
-    color: 'white',
-    animation: `${glow} 3s ease-in-out infinite`,
-    '&:hover': { transform: 'translateY(-2px)' },
-});
-
-const GlassCard = styled(Box)({
-    background: CARD_BG,
-    backdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: 24,
-    padding: 40,
-    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+const PrimaryButton = styled(StyledButton)({
+    background: `linear-gradient(135deg, ${PURPLE_PRIMARY}, ${PURPLE_LIGHT})`,
+    color: CREAM,
+    boxShadow: `0 10px 30px rgba(108,59,170,.35)`,
     '&:hover': {
-        background: 'rgba(255, 255, 255, 0.06)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        transform: 'translateY(-4px)',
+        transform: 'translateY(-2px)',
+        boxShadow: `0 18px 40px rgba(108,59,170,.45)`,
     },
 });
 
-const StatNumber = styled(Typography)({
-    fontSize: '3rem',
-    fontWeight: 800,
-    background: `linear-gradient(135deg, ${ACCENT}, #A78BFA)`,
+const SecondaryButton = styled(StyledButton)({
+    border: `1px solid ${ALMOND_DARK}`,
+    color: ALMOND,
+    background: 'rgba(245,230,211,.05)',
+    '&:hover': {
+        borderColor: ALMOND,
+        background: 'rgba(245,230,211,.1)',
+    },
+});
+
+const AccentButton = styled(StyledButton)({
+    background: `linear-gradient(135deg, ${GOLD}, ${ROSE})`,
+    color: CREAM,
+    boxShadow: `0 10px 30px rgba(200,150,62,.25)`,
+    '&:hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: `0 18px 40px rgba(200,150,62,.35)`,
+    },
+});
+
+const GlassCard = styled(Box)({
+    position: 'relative', overflow: 'hidden',
+    background: `linear-gradient(180deg, rgba(245,230,211,.06), rgba(245,230,211,.03))`,
+    border: `1px solid rgba(245,230,211,.1)`,
+    backdropFilter: 'blur(20px)',
+    borderRadius: 32,
+    transition: 'all .45s cubic-bezier(.22,1,.36,1)',
+    '&:hover': {
+        transform: 'translateY(-6px)',
+        border: `1px solid rgba(245,230,211,.2)`,
+        background: `linear-gradient(180deg, rgba(245,230,211,.1), rgba(245,230,211,.05))`,
+    },
+});
+
+const GradientText = styled('span')({
+    background: `linear-gradient(135deg, ${ALMOND}, ${PURPLE_LIGHT})`,
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
-    lineHeight: 1,
-    '@media (max-width: 600px)': { fontSize: '2.2rem' },
 });
 
-const StatLabel = styled(Typography)({
-    color: TEXT_DIM,
-    fontSize: '0.95rem',
-    fontWeight: 500,
-    marginTop: 8,
+const StyledAccordion = styled(Accordion)({
+    background: 'transparent',
+    border: `1px solid rgba(245,230,211,.08)`,
+    borderRadius: '16px !important',
+    marginBottom: 12,
+    '&:before': { display: 'none' },
 });
 
+// ========== COMPONENT ==========
 const LandingPage = () => {
     const navigate = useNavigate();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const [mobileMenu, setMobileMenu] = useState(false);
-    const [email, setEmail] = useState('');
-    const [snackbar, setSnackbar] = useState(false);
-    const [typedText, setTypedText] = useState('');
-    const fullText = 'репетитора';
-    const statsRef = useRef(null);
-    const [statsVisible, setStatsVisible] = useState(false);
+    const [demoOpen, setDemoOpen] = useState(false);
+    const [counts, setCounts] = useState({ lessons: 0, students: 0, income: 0 });
+    const [faqExpanded, setFaqExpanded] = useState(false);
 
     useEffect(() => {
-        let i = 0;
-        const interval = setInterval(() => {
-            if (i <= fullText.length) {
-                setTypedText(fullText.substring(0, i));
-                i++;
-            } else {
-                clearInterval(interval);
-                setTimeout(() => { i = 0; setTypedText(''); }, 2000);
-            }
-        }, 100);
-        return () => clearInterval(interval);
+        const targets = { lessons: 300, students: 35, income: 200 };
+        const duration = 2000;
+        const steps = 60;
+        let step = 0;
+        const timer = setInterval(() => {
+            step++;
+            const progress = step / steps;
+            setCounts({
+                lessons: Math.floor(targets.lessons * progress),
+                students: Math.floor(targets.students * progress),
+                income: Math.floor(targets.income * progress),
+            });
+            if (step >= steps) clearInterval(timer);
+        }, duration / steps);
+        return () => clearInterval(timer);
     }, []);
-
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => { if (entry.isIntersecting) setStatsVisible(true); },
-            { threshold: 0.3 }
-        );
-        if (statsRef.current) observer.observe(statsRef.current);
-        return () => observer.disconnect();
-    }, []);
-
-    const handleSubscribe = () => {
-        if (email) { setSnackbar(true); setEmail(''); }
-    };
 
     const advantages = [
-        { icon: <Bolt sx={{ fontSize: 28 }} />, title: 'Всё в одном окне', desc: 'Расписание, видеозвонки, онлайн-доска, домашние задания, оплаты и уведомления — одна платформа вместо четырёх сервисов.' },
-        { icon: <VerifiedUser sx={{ fontSize: 28 }} />, title: 'Прозрачно для родителей', desc: 'Родители видят расписание, успеваемость и финансы. Сами загружают чеки и оплачивают занятия — вы просто ведёте уроки.' },
-        { icon: <SupportAgent sx={{ fontSize: 28 }} />, title: 'Активная доработка', desc: 'Платформа в бета-тесте. Мы каждый день добавляем новые функции по запросам репетиторов. Ваши идеи становятся реальностью.' },
+        { icon: <Bolt sx={{ fontSize: 28 }} />, title: 'Всё в одном месте', desc: 'Расписание, видеоуроки, оплаты, домашние задания и онлайн-доска — одна система вместо пяти сервисов.' },
+        { icon: <VerifiedUser sx={{ fontSize: 28 }} />, title: 'Прозрачно для родителей', desc: 'Родители видят прогресс, расписание и оплаты. Вам не нужно вести бесконечные переписки.' },
+        { icon: <SupportAgent sx={{ fontSize: 28 }} />, title: 'Развиваем вместе', desc: 'Мы ежедневно улучшаем платформу на основе обратной связи репетиторов.' },
+    ];
+
+    const steps = [
+        { icon: <RocketLaunch sx={{ fontSize: 36 }} />, title: 'Регистрация', desc: 'Создайте аккаунт за 2 минуты' },
+        { icon: <School sx={{ fontSize: 36 }} />, title: 'Добавьте учеников', desc: 'Пригласите или создайте вручную' },
+        { icon: <CalendarMonth sx={{ fontSize: 36 }} />, title: 'Составьте расписание', desc: 'Постоянные и разовые занятия' },
+        { icon: <Videocam sx={{ fontSize: 36 }} />, title: 'Проводите занятия', desc: 'Видеозвонки, доски, задания' },
     ];
 
     const testimonials = [
-        { name: 'Дмитрий А.', role: 'Репетитор по информатике', text: 'Наконец-то всё в одном месте. Раньше у меня было 4 разных сервиса, теперь только EdSpace.', avatar: 'ДА' },
-        { name: 'Анна К.', role: 'Репетитор по математике', text: 'Родители в восторге — видят расписание и оплачивают занятия сами. Я просто веду уроки.', avatar: 'АК' },
+        { name: 'Ангелина', role: 'Репетитор по математике', text: 'EdSpace заменил мне 4 разных сервиса. Теперь всё в одном месте — это сэкономило кучу времени!', avatar: 'А' },
+        { name: 'Дмитрий', role: 'Репетитор по информатике', text: 'Ученики и родители в восторге от прозрачности. Все видят расписание, оценки и платежи.', avatar: 'Д' },
+        { name: 'Юлия', role: 'Репетитор по русскому', text: 'Генерация заданий через ИИ — это просто магия. Уроки стали интереснее, а готовиться стало легче.', avatar: 'Ю' },
+    ];
+
+    const faqItems = [
+        {
+            question: 'Сколько стоит EdSpace?',
+            answer: 'Первые 14 дней — бесплатно. Затем 990 ₽ в месяц. Никаких скрытых платежей, отменить можно в любой момент.'
+        },
+        {
+            question: 'Нужно ли устанавливать что-то на компьютер?',
+            answer: 'Нет, EdSpace работает в браузере. Вы можете зайти с любого устройства — компьютера, ноутбука, планшета или телефона.'
+        },
+        {
+            question: 'Как подключить учеников?',
+            answer: 'Вы можете создать ученика вручную или отправить приглашение по ссылке. Ученик получит доступ к своему расписанию, домашним заданиям и материалам.'
+        },
+        {
+            question: 'Какие видеоплатформы поддерживаются?',
+            answer: 'Zoom, Яндекс.Телемост, Skype, Jitsi и другие. Вы можете выбрать любую удобную платформу для каждого урока.'
+        },
+        {
+            question: 'Могут ли родители следить за прогрессом?',
+            answer: 'Да! Родители видят расписание, оценки за домашние задания, оплаты и могут подтверждать платежи через платформу.'
+        },
+        {
+            question: 'Что будет с моими данными?',
+            answer: 'Все данные хранятся на серверах в России. Мы соблюдаем 152-ФЗ «О персональных данных». Вы можете экспортировать или удалить данные в любой момент.'
+        },
+        {
+            question: 'Как работает ИИ-генерация заданий?',
+            answer: 'Вы описываете тему или тип задания, и нейросеть создаёт уникальное задание с ответом. Это экономит часы подготовки к урокам.'
+        },
     ];
 
     return (
-        <Box sx={{ bgcolor: DARK, color: '#FFFFFF', minHeight: '100vh', overflowX: 'hidden' }}>
-            {/* ========== ДЕКОРАТИВНЫЙ ФОН ========== */}
-            <Box sx={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-                <Box sx={{ position: 'absolute', top: '10%', left: '5%', width: 400, height: 400, borderRadius: '50%', background: `radial-gradient(circle, rgba(79,70,229,0.15) 0%, transparent 70%)`, filter: 'blur(40px)' }} />
-                <Box sx={{ position: 'absolute', bottom: '20%', right: '5%', width: 500, height: 500, borderRadius: '50%', background: `radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)`, filter: 'blur(60px)' }} />
-                <Box sx={{ position: 'absolute', top: '50%', left: '50%', width: 300, height: 300, borderRadius: '50%', background: `radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)`, filter: 'blur(50px)' }} />
-            </Box>
+        <Box sx={{ bgcolor: DEEP_PURPLE, color: CREAM, minHeight: '100vh', overflowX: 'hidden', position: 'relative' }}>
+            {/* BACKGROUND EFFECTS */}
+            <Box sx={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
+                backgroundImage: `linear-gradient(rgba(245,230,211,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(245,230,211,.02) 1px, transparent 1px)`,
+                backgroundSize: '42px 42px',
+                maskImage: 'radial-gradient(circle at 70% 30%, black, transparent 90%)',
+            }} />
 
-            {/* ========== ХЕДЕР ========== */}
-            <AppBar position="sticky" sx={{ bgcolor: 'rgba(15,15,26,0.85)', backdropFilter: 'blur(20px)', boxShadow: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)', zIndex: 10 }}>
-                <Toolbar sx={{ justifyContent: 'space-between', maxWidth: 1200, mx: 'auto', width: '100%' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 32, height: 32, borderRadius: 2, background: `linear-gradient(135deg, ${ACCENT}, #7C3AED)` }} />
-                        <Typography sx={{ fontWeight: 700, fontSize: '1.3rem', letterSpacing: -0.5 }}>EdSpace</Typography>
-                    </Box>
-                    {!isMobile && (
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            <Button onClick={() => navigate('/login')} sx={{ color: TEXT_DIM, textTransform: 'none', fontWeight: 500, borderRadius: 3, px: 3, '&:hover': { color: '#FFFFFF' } }}>Войти</Button>
-                            <StyledButton onClick={() => navigate('/register')} sx={{ bgcolor: ACCENT, color: 'white', py: 1, px: 4, fontSize: '0.9rem', '&:hover': { bgcolor: '#4338CA' } }}>Попробовать</StyledButton>
+            <Box sx={{ position: 'fixed', top: -200, right: -100, width: 600, height: 600, borderRadius: '50%',
+                background: `radial-gradient(circle, rgba(108,59,170,.3), transparent 70%)`,
+                filter: 'blur(80px)', zIndex: 0, animation: `${pulse} 4s ease-in-out infinite`,
+            }} />
+
+            <Box sx={{ position: 'fixed', bottom: -200, right: -100, width: 500, height: 500, borderRadius: '50%',
+                background: `radial-gradient(circle, rgba(212,133,107,.2), transparent 70%)`,
+                filter: 'blur(90px)', zIndex: 0, animation: `${pulse} 5s ease-in-out infinite alternate`,
+            }} />
+
+            {/* HEADER */}
+            <AppBar position="fixed" elevation={0} sx={{ bgcolor: 'rgba(45,27,105,.8)', backdropFilter: 'blur(20px)', borderBottom: `1px solid rgba(245,230,211,.06)` }}>
+                <Toolbar sx={{ maxWidth: 1280, width: '100%', mx: 'auto', py: 1.5 }}>
+                    <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                            <Box sx={{ width: 36, height: 36, borderRadius: 3,
+                                background: `linear-gradient(135deg, ${PURPLE_PRIMARY}, ${PURPLE_LIGHT})`,
+                                boxShadow: `0 10px 30px rgba(108,59,170,.4)`,
+                            }} />
+                            <Typography sx={{ fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.04em', color: ALMOND }}>EdSpace</Typography>
                         </Stack>
-                    )}
-                    {isMobile && <IconButton onClick={() => setMobileMenu(true)} sx={{ color: '#FFFFFF' }}><MenuIcon /></IconButton>}
+
+                        {!isMobile ? (
+                            <Stack direction="row" spacing={2} alignItems="center">
+                                <Button onClick={() => navigate('/login')} sx={{ color: ALMOND_DARK, textTransform: 'none', fontWeight: 500, '&:hover': { color: ALMOND } }}>Войти</Button>
+                                <PrimaryButton onClick={() => navigate('/register')} endIcon={<ArrowForward />}>Попробовать бесплатно</PrimaryButton>
+                            </Stack>
+                        ) : (
+                            <IconButton onClick={() => setMobileMenu(true)} sx={{ color: ALMOND }}><MenuIcon /></IconButton>
+                        )}
+                    </Box>
                 </Toolbar>
             </AppBar>
 
-            {/* ========== МОБИЛЬНОЕ МЕНЮ ========== */}
-            <Drawer anchor="right" open={mobileMenu} onClose={() => setMobileMenu(false)} PaperProps={{ sx: { bgcolor: '#1A1A2E', color: '#FFFFFF' } }}>
-                <Box sx={{ width: 250, p: 2 }}>
-                    <IconButton onClick={() => setMobileMenu(false)} sx={{ color: '#FFFFFF', mb: 2 }}><Close /></IconButton>
+            {/* MOBILE MENU */}
+            <Drawer anchor="right" open={mobileMenu} onClose={() => setMobileMenu(false)}
+                PaperProps={{ sx: { bgcolor: DEEP_PURPLE, color: CREAM, width: 260 } }}>
+                <Box sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <IconButton onClick={() => setMobileMenu(false)} sx={{ color: ALMOND }}><Close /></IconButton>
+                    </Box>
                     <List>
-                        <ListItem button onClick={() => { navigate('/login'); setMobileMenu(false); }}><ListItemText primary="Войти" /></ListItem>
-                        <ListItem button onClick={() => { navigate('/register'); setMobileMenu(false); }}><ListItemText primary="Попробовать" sx={{ color: ACCENT }} /></ListItem>
+                        <ListItem button onClick={() => navigate('/login')}><ListItemText primary="Войти" /></ListItem>
+                        <ListItem button onClick={() => navigate('/register')}><ListItemText primary="Попробовать бесплатно" sx={{ color: PURPLE_LIGHT }} /></ListItem>
                     </List>
                 </Box>
             </Drawer>
 
             {/* ========== HERO ========== */}
-            <Box sx={{ position: 'relative', zIndex: 1, pt: { xs: 10, md: 16 }, pb: { xs: 8, md: 12 } }}>
-                <Container maxWidth="md" sx={{ textAlign: 'center' }}>
-                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(79,70,229,0.15)', border: '1px solid rgba(79,70,229,0.3)', borderRadius: 50, px: 2.5, py: 1, mb: 4 }}>
-                        <AutoAwesome sx={{ fontSize: 16, color: ACCENT }} />
-                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 500, color: '#A78BFA' }}>Бесплатный пробный период — 14 дней</Typography>
-                    </Box>
+            <Container maxWidth="xl" sx={{ position: 'relative', zIndex: 1, pt: { xs: 14, md: 20 }, pb: { xs: 10, md: 16 } }}>
+                <Grid container spacing={8} alignItems="center">
+                    <Grid item xs={12} md={1} />
+                    
+                    <Grid item xs={12} md={5}>
+                        <Chip icon={<AutoAwesome />} label="14 дней бесплатно"
+                            sx={{ mb: 4, bgcolor: 'rgba(108,59,170,.2)', color: PURPLE_LIGHT, border: `1px solid rgba(108,59,170,.3)`, px: 1 }} />
 
-                    <Typography component="h1" sx={{ fontSize: { xs: '2.2rem', md: '4rem' }, fontWeight: 800, lineHeight: 1.1, mb: 3, letterSpacing: -1 }}>
-                        Платформа для{' '}
-                        <Box component="span" sx={{ color: ACCENT, position: 'relative' }}>
-                            {typedText}
-                            <Box component="span" sx={{ animation: `${float} 0.6s ease-in-out infinite`, color: ACCENT }}>|</Box>
-                        </Box>
-                    </Typography>
-
-                    <Typography sx={{ fontSize: { xs: '1rem', md: '1.2rem' }, color: TEXT_DIM, maxWidth: 550, mx: 'auto', mb: 6, lineHeight: 1.7 }}>
-                        Расписание, видео, онлайн-доска, домашние задания, оплаты и уведомления — всё, что нужно для проведения занятий, в одном окне.
-                    </Typography>
-
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" sx={{ mb: 8 }}>
-                        <GlowButton onClick={() => navigate('/register')} endIcon={<ArrowForward />}>
-                            Начать бесплатно
-                        </GlowButton>
-                        <StyledButton variant="outlined" onClick={() => navigate('/login')}
-                            sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#FFFFFF', '&:hover': { borderColor: 'rgba(255,255,255,0.5)' } }}>
-                            Уже есть аккаунт
-                        </StyledButton>
-                    </Stack>
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
-                        <AvatarGroup max={5}>
-                            {['#4F46E5', '#7C3AED', '#EC4899', '#10B981', '#F59E0B'].map((color, i) => (
-                                <Avatar key={i} sx={{ bgcolor: color, width: 40, height: 40, fontSize: 16, fontWeight: 600, border: '2px solid #0F0F1A' }}>
-                                    {['Д', 'А', 'М', 'С', 'Е'][i]}
-                                </Avatar>
-                            ))}
-                        </AvatarGroup>
-                        <Typography sx={{ color: TEXT_DIM, fontSize: '0.9rem' }}>
-                            <strong style={{ color: SUCCESS }}>30+</strong> репетиторов уже тестируют
+                        <Typography component="h1"
+                            sx={{ fontSize: { xs: '2.8rem', md: '5.2rem' }, lineHeight: .95, fontWeight: 900,
+                                letterSpacing: '-0.06em', maxWidth: 760, mb: 3, color: ALMOND }}>
+                            Ведите занятия,<br />
+                            <GradientText>а не таблицы и чаты</GradientText>
                         </Typography>
-                    </Box>
-                </Container>
-            </Box>
 
-            {/* ========== СТАТИСТИКА ========== */}
-            <Box ref={statsRef} sx={{ position: 'relative', zIndex: 1, py: 8, borderTop: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <Container maxWidth="lg">
-                    <Grid container spacing={4} justifyContent="center">
-                        {[
-                            { value: '300+', label: 'Проведено занятий' },
-                            { value: '35', label: 'Активных учеников' },
-                            { value: '200k+', label: 'Заработано репетиторами' },
-                            { value: '24/7', label: 'Поддержка в Telegram' },
-                        ].map((stat, i) => (
-                            <Grid item xs={6} md={3} key={i}>
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <StatNumber sx={{
-                                        opacity: statsVisible ? 1 : 0,
-                                        transform: statsVisible ? 'translateY(0)' : 'translateY(20px)',
-                                        transition: `all 0.6s ease ${i * 0.1}s`,
-                                    }}>
-                                        {stat.value}
-                                    </StatNumber>
-                                    <StatLabel>{stat.label}</StatLabel>
-                                </Box>
-                            </Grid>
-                        ))}
+                        <Typography sx={{ fontSize: { xs: '1rem', md: '1.15rem' }, lineHeight: 1.8, color: ALMOND_DARK, maxWidth: 560, mb: 5 }}>
+                            Расписание, онлайн-уроки, домашние задания, оплаты и уведомления — всё в одной платформе для современных репетиторов.
+                        </Typography>
+
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
+                            <PrimaryButton size="large" onClick={() => navigate('/register')} endIcon={<ArrowForward />}>Начать бесплатно</PrimaryButton>
+                            <SecondaryButton startIcon={<PlayArrow />} onClick={() => setDemoOpen(true)}>Посмотреть демо</SecondaryButton>
+                        </Stack>
+
+                        {/* Extra buttons */}
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 6 }}>
+                            <AccentButton startIcon={<Telegram />} onClick={() => window.open('https://t.me/edspace', '_blank')}>
+                                Telegram-канал
+                            </AccentButton>
+                            <SecondaryButton startIcon={<Email />} onClick={() => navigate('/register')}>
+                                Подписаться на рассылку
+                            </SecondaryButton>
+                        </Stack>
+
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <AvatarGroup max={5}>
+                                {['Д', 'А', 'М', 'Е', 'С'].map((x, i) => (
+                                    <Avatar key={i} sx={{ bgcolor: [PURPLE_PRIMARY, PURPLE_LIGHT, GOLD, ROSE, SUCCESS_GREEN][i], border: `2px solid ${DEEP_PURPLE}` }}>{x}</Avatar>
+                                ))}
+                            </AvatarGroup>
+                            <Typography sx={{ color: ALMOND_DARK }}>
+                                Уже используют <Box component="span" sx={{ color: GOLD, fontWeight: 700 }}>30+</Box> репетиторов
+                            </Typography>
+                        </Stack>
                     </Grid>
-                </Container>
-            </Box>
 
-            {/* ========== ПРЕИМУЩЕСТВА ========== */}
-            <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 14 } }}>
-                <Container maxWidth="lg">
-                    <Typography sx={{ fontSize: { xs: '2rem', md: '3rem' }, fontWeight: 700, textAlign: 'center', mb: 2 }}>
-                        Почему{' '}
-                        <Box component="span" sx={{ background: `linear-gradient(135deg, ${ACCENT}, #A78BFA)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                            EdSpace
+                    {/* RIGHT — Dashboard Preview */}
+                    <Grid item xs={12} md={5}>
+                        <Box sx={{ position: 'relative', maxWidth: 620, mx: 'auto' }}>
+                            <GlassCard sx={{ p: 4 }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
+                                    <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: ALMOND }}>Dashboard</Typography>
+                                    <Chip label="Онлайн" sx={{ bgcolor: 'rgba(91,140,90,.15)', color: SUCCESS_GREEN }} />
+                                </Stack>
+
+                                <Grid container spacing={2} sx={{ mb: 3 }}>
+                                    {[
+                                        { title: 'Уроков', value: '42', icon: <CalendarMonth /> },
+                                        { title: 'Доход', value: '92k', icon: <Payments /> },
+                                        { title: 'Созвонов', value: '18', icon: <Videocam /> },
+                                    ].map((item, i) => (
+                                        <Grid item xs={4} key={i}>
+                                            <Box sx={{ p: 2, borderRadius: 4, background: 'rgba(245,230,211,.04)', border: `1px solid rgba(245,230,211,.06)` }}>
+                                                <Box sx={{ color: PURPLE_LIGHT, mb: 1 }}>{item.icon}</Box>
+                                                <Typography sx={{ fontWeight: 800, fontSize: '1.4rem', color: ALMOND }}>{item.value}</Typography>
+                                                <Typography sx={{ color: ALMOND_DARK, fontSize: '.85rem' }}>{item.title}</Typography>
+                                            </Box>
+                                        </Grid>
+                                    ))}
+                                </Grid>
+
+                                <Box sx={{ p: 3, borderRadius: 5, background: 'rgba(245,230,211,.04)', border: `1px solid rgba(245,230,211,.06)` }}>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                                        <Typography sx={{ fontWeight: 700, color: ALMOND }}>Ближайшие занятия</Typography>
+                                        <BarChart sx={{ color: ALMOND_DARK }} />
+                                    </Stack>
+                                    {[
+                                        { name: 'Математика', time: '16:00' },
+                                        { name: 'Информатика', time: '18:30' },
+                                    ].map((x, i) => (
+                                        <Box key={i}>
+                                            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 1.5 }}>
+                                                <Stack direction="row" spacing={2} alignItems="center">
+                                                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: PURPLE_PRIMARY }} />
+                                                    <Typography sx={{ color: ALMOND }}>{x.name}</Typography>
+                                                </Stack>
+                                                <Typography sx={{ color: ALMOND_DARK }}>{x.time}</Typography>
+                                            </Stack>
+                                            {i !== 1 && <Divider sx={{ borderColor: 'rgba(245,230,211,.08)' }} />}
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </GlassCard>
+
+                            <GlassCard sx={{ position: 'absolute', right: -40, bottom: -40, p: 3, width: 240, display: { xs: 'none', md: 'block' } }}>
+                                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                                    <CheckCircle sx={{ color: SUCCESS_GREEN }} />
+                                    <Typography sx={{ fontWeight: 700, color: ALMOND }}>Оплата получена</Typography>
+                                </Stack>
+                                <Typography sx={{ color: ALMOND_DARK, fontSize: '.95rem', lineHeight: 1.7 }}>
+                                    Родитель оплатил пакет занятий автоматически.
+                                </Typography>
+                            </GlassCard>
                         </Box>
-                        ?
-                    </Typography>
-                    <Typography sx={{ textAlign: 'center', color: TEXT_DIM, mb: 8, fontSize: '1.1rem' }}>
-                        Три причины, почему репетиторы выбирают нас
-                    </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={1} />
+                </Grid>
+            </Container>
+
+            {/* ========== STATS ========== */}
+            <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, pb: { xs: 10, md: 14 } }}>
+                <GlassCard sx={{ p: { xs: 4, md: 6 } }}>
                     <Grid container spacing={4}>
-                        {advantages.map((item, i) => (
-                            <Grid item xs={12} md={4} key={i}>
-                                <GlassCard>
-                                    <Box sx={{ width: 56, height: 56, borderRadius: 3, bgcolor: 'rgba(79,70,229,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3, color: ACCENT }}>
-                                        {item.icon}
-                                    </Box>
-                                    <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>{item.title}</Typography>
-                                    <Typography sx={{ color: TEXT_DIM, lineHeight: 1.7 }}>{item.desc}</Typography>
-                                </GlassCard>
+                        {[
+                            [`${counts.lessons}+`, 'Проведено занятий'],
+                            [`${counts.students}`, 'Активных учеников'],
+                            [`${counts.income}k+`, 'Заработано'],
+                            ['24/7', 'Поддержка'],
+                        ].map((x, i) => (
+                            <Grid item xs={6} md={3} key={i}>
+                                <Typography sx={{ fontSize: { xs: '2rem', md: '3rem' }, fontWeight: 900, letterSpacing: '-0.05em', mb: 1,
+                                    background: `linear-gradient(135deg, ${ALMOND}, ${PURPLE_LIGHT})`,
+                                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                    {x[0]}
+                                </Typography>
+                                <Typography sx={{ color: ALMOND_DARK }}>{x[1]}</Typography>
                             </Grid>
                         ))}
                     </Grid>
-                </Container>
-            </Box>
+                </GlassCard>
+            </Container>
 
-            {/* ========== ТАРИФЫ ========== */}
-            <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 14 }, bgcolor: '#0A0A14' }}>
-                <Container maxWidth="md">
-                    <Typography sx={{ fontSize: { xs: '2rem', md: '3rem' }, fontWeight: 700, textAlign: 'center', mb: 2 }}>
-                        Выберите{' '}
-                        <Box component="span" sx={{ background: `linear-gradient(135deg, ${ACCENT}, #A78BFA)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                            тариф
-                        </Box>
-                    </Typography>
-                    <Typography sx={{ textAlign: 'center', color: TEXT_DIM, mb: 3, fontSize: '1.1rem' }}>
-                        14 дней бесплатно — карта не нужна. Отменить можно в любой момент.
-                    </Typography>
-                    <Grid container spacing={4} justifyContent="center" sx={{ maxWidth: 800, mx: 'auto' }}>
-                        {/* Пробный */}
-                        <Grid item xs={12} sm={6}>
-                            <GlassCard sx={{ textAlign: 'center' }}>
-                                <Typography sx={{ fontSize: '1.3rem', fontWeight: 700, mb: 1 }}>Пробный</Typography>
-                                <Typography sx={{ color: TEXT_DIM, mb: 3, fontSize: '0.95rem' }}>Для знакомства с платформой</Typography>
-                                <Typography sx={{ fontSize: '3rem', fontWeight: 800, mb: 4 }}>0 ₽</Typography>
-                                <Box sx={{ textAlign: 'left', mb: 4 }}>
-                                    {['14 дней бесплатно', 'До 5 учеников', 'Все функции платформы', 'Расписание', 'Видеозвонки', 'Домашние задания', 'Финансовый учёт'].map((f, i) => (
-                                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                                            <CheckIcon sx={{ color: SUCCESS, fontSize: 18 }} />
-                                            <Typography sx={{ color: '#CBD5E1', fontSize: '0.9rem' }}>{f}</Typography>
-                                        </Box>
-                                    ))}
+            {/* ========== HOW IT WORKS ========== */}
+            <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, pb: { xs: 10, md: 16 } }}>
+                <Typography sx={{ fontSize: { xs: '2.2rem', md: '3rem' }, fontWeight: 900, letterSpacing: '-0.05em', textAlign: 'center', mb: 2, color: ALMOND }}>
+                    Как начать работать
+                </Typography>
+                <Typography sx={{ textAlign: 'center', color: ALMOND_DARK, maxWidth: 600, mx: 'auto', mb: 8 }}>
+                    Всё просто — от регистрации до первого урока за 5 минут
+                </Typography>
+
+                <Grid container spacing={3} sx={{ pl: { md: 4 } }}>
+                    {steps.map((step, i) => (
+                        <Grid item xs={12} sm={6} md={3} key={i}>
+                            <GlassCard sx={{ p: 4, textAlign: 'center', height: '100%' }}>
+                                <Box sx={{ width: 64, height: 64, borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: `linear-gradient(135deg, rgba(108,59,170,.3), rgba(155,111,212,.15))`,
+                                    color: PURPLE_LIGHT, mx: 'auto', mb: 3 }}>
+                                    {step.icon}
                                 </Box>
-                                <StyledButton fullWidth onClick={() => navigate('/register')}
-                                    sx={{ bgcolor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#FFFFFF', '&:hover': { borderColor: ACCENT } }}>
-                                    Начать бесплатно
-                                </StyledButton>
+                                <Chip label={`Шаг ${i + 1}`} size="small" sx={{ mb: 2, bgcolor: 'rgba(108,59,170,.2)', color: PURPLE_LIGHT }} />
+                                <Typography sx={{ fontWeight: 700, fontSize: '1.2rem', mb: 1, color: ALMOND }}>{step.title}</Typography>
+                                <Typography sx={{ color: ALMOND_DARK, fontSize: '.9rem' }}>{step.desc}</Typography>
+                            </GlassCard>
+                        </Grid>
+                    ))}
+                </Grid>
+            </Container>
+
+            {/* ========== FEATURES ========== */}
+            <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, pb: { xs: 10, md: 16 } }}>
+                <Typography sx={{ fontSize: { xs: '2.2rem', md: '3.5rem' }, fontWeight: 900, letterSpacing: '-0.05em', textAlign: 'center', mb: 2, color: ALMOND }}>
+                    Почему выбирают EdSpace
+                </Typography>
+                <Typography sx={{ textAlign: 'center', color: ALMOND_DARK, maxWidth: 680, mx: 'auto', lineHeight: 1.8, mb: 8 }}>
+                    Мы убираем рутину из работы репетитора, чтобы вы могли сосредоточиться на учениках.
+                </Typography>
+
+                <Grid container spacing={4} sx={{ pl: { md: 4 } }}>
+                    {advantages.map((item, i) => (
+                        <Grid item xs={12} md={4} key={i}>
+                            <GlassCard sx={{ p: 4, height: '100%' }}>
+                                <Box sx={{ width: 58, height: 58, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: 'rgba(108,59,170,.2)', color: PURPLE_LIGHT, mb: 4 }}>
+                                    {item.icon}
+                                </Box>
+                                <Typography sx={{ fontWeight: 800, fontSize: '1.35rem', mb: 2, color: ALMOND }}>{item.title}</Typography>
+                                <Typography sx={{ color: ALMOND_DARK, lineHeight: 1.8 }}>{item.desc}</Typography>
+                            </GlassCard>
+                        </Grid>
+                    ))}
+                </Grid>
+            </Container>
+
+            {/* ========== TESTIMONIALS ========== */}
+            <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, pb: { xs: 10, md: 16 } }}>
+                <Typography sx={{ fontSize: { xs: '2.2rem', md: '3rem' }, fontWeight: 900, letterSpacing: '-0.05em', textAlign: 'center', mb: 2, color: ALMOND }}>
+                    Что говорят репетиторы
+                </Typography>
+                <Typography sx={{ textAlign: 'center', color: ALMOND_DARK, mb: 8 }}>Присоединяйтесь к сообществу EdSpace</Typography>
+
+                <Grid container spacing={4} sx={{ pl: { md: 4 } }}>
+                    {testimonials.map((t, i) => (
+                        <Grid item xs={12} md={4} key={i}>
+                            <GlassCard sx={{ p: 4, height: '100%' }}>
+                                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                                    <Avatar sx={{ bgcolor: [PURPLE_PRIMARY, GOLD, ROSE][i], fontWeight: 700 }}>{t.avatar}</Avatar>
+                                    <Box>
+                                        <Typography sx={{ fontWeight: 700, color: ALMOND }}>{t.name}</Typography>
+                                        <Typography sx={{ color: ALMOND_DARK, fontSize: '.85rem' }}>{t.role}</Typography>
+                                    </Box>
+                                </Stack>
+                                <Box sx={{ color: GOLD, mb: 2 }}>{'★'.repeat(5)}</Box>
+                                <Typography sx={{ color: ALMOND_DARK, lineHeight: 1.8, fontStyle: 'italic' }}>«{t.text}»</Typography>
+                            </GlassCard>
+                        </Grid>
+                    ))}
+                </Grid>
+            </Container>
+
+            {/* ========== PRICING ========== */}
+            <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 10, md: 16 }, background: `linear-gradient(180deg, transparent, rgba(245,230,211,.02))` }}>
+                <Container maxWidth="lg">
+                    <Typography sx={{ fontSize: { xs: '2.2rem', md: '3.5rem' }, fontWeight: 900, letterSpacing: '-0.05em', textAlign: 'center', mb: 2, color: ALMOND }}>
+                        Простой тариф
+                    </Typography>
+                    <Typography sx={{ textAlign: 'center', color: ALMOND_DARK, mb: 8, lineHeight: 1.8 }}>
+                        14 дней бесплатно. Без карты и скрытых условий.
+                    </Typography>
+
+                    <Grid container spacing={4} justifyContent="center" sx={{ pl: { md: 4 } }}>
+                        <Grid item xs={12} md={5}>
+                            <GlassCard sx={{ p: 5, height: '100%' }}>
+                                <Typography sx={{ fontWeight: 800, fontSize: '1.4rem', mb: 1, color: ALMOND }}>Starter</Typography>
+                                <Typography sx={{ color: ALMOND_DARK, mb: 4 }}>Для знакомства с платформой</Typography>
+                                <Typography sx={{ fontSize: '3.5rem', fontWeight: 900, letterSpacing: '-0.06em', mb: 4, color: ALMOND }}>0 ₽</Typography>
+                                <Stack spacing={2.5} sx={{ mb: 5 }}>
+                                    {['14 дней бесплатно', 'Все основные функции', 'Онлайн-занятия', 'Поддержка'].map((x, i) => (
+                                        <Stack key={i} direction="row" spacing={2} alignItems="center">
+                                            <CheckCircle sx={{ color: SUCCESS_GREEN, fontSize: 20 }} />
+                                            <Typography sx={{ color: ALMOND }}>{x}</Typography>
+                                        </Stack>
+                                    ))}
+                                </Stack>
+                                <SecondaryButton fullWidth onClick={() => navigate('/register')}>Попробовать</SecondaryButton>
                             </GlassCard>
                         </Grid>
 
-                        {/* Профи */}
-                        <Grid item xs={12} sm={6}>
-                            <GlassCard sx={{ 
-                                textAlign: 'center', 
-                                position: 'relative',
-                                border: `2px solid ${ACCENT}`,
-                            }}>
-                                <Box sx={{ 
-                                    position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)',
-                                    bgcolor: ACCENT, color: '#fff', px: 2.5, py: 0.5, borderRadius: 50, fontSize: '0.85rem', fontWeight: 600
-                                }}>
-                                    Основной
-                                </Box>
-                                <Typography sx={{ fontSize: '1.3rem', fontWeight: 700, mb: 1 }}>Профи</Typography>
-                                <Typography sx={{ color: TEXT_DIM, mb: 3, fontSize: '0.95rem' }}>Для активных репетиторов</Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', mb: 1 }}>
-                                    <Typography sx={{ fontSize: '3rem', fontWeight: 800 }}>500</Typography>
-                                    <Typography sx={{ color: TEXT_DIM, fontSize: '1.5rem', ml: 0.5 }}>₽/мес</Typography>
-                                </Box>
-                                <Box sx={{ textAlign: 'left', mb: 4 }}>
-                                    {['Всё из Пробного', 'Безлимит учеников', 'Полный финансовый учёт с прогнозами', 'Родительский кабинет', 'Экспорт чеков', 'Приоритетная поддержка', 'Реферальная программа'].map((f, i) => (
-                                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                                            <CheckIcon sx={{ color: SUCCESS, fontSize: 18 }} />
-                                            <Typography sx={{ color: '#CBD5E1', fontSize: '0.9rem' }}>{f}</Typography>
-                                        </Box>
+                        <Grid item xs={12} md={5}>
+                            <GlassCard sx={{ p: 5, height: '100%', border: `1px solid rgba(108,59,170,.5)`, boxShadow: `0 20px 60px rgba(108,59,170,.2)` }}>
+                                <Chip label="Самый популярный" sx={{ mb: 3, bgcolor: 'rgba(108,59,170,.2)', color: PURPLE_LIGHT, border: `1px solid rgba(108,59,170,.3)` }} />
+                                <Typography sx={{ fontWeight: 800, fontSize: '1.4rem', mb: 1, color: ALMOND }}>Pro</Typography>
+                                <Typography sx={{ color: ALMOND_DARK, mb: 4 }}>Для активных репетиторов</Typography>
+                                <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ mb: 4 }}>
+                                    <Typography sx={{ fontSize: '3.5rem', fontWeight: 900, letterSpacing: '-0.06em', lineHeight: 1, color: ALMOND }}>990 ₽</Typography>
+                                    <Typography sx={{ color: ALMOND_DARK, mb: .7 }}>/ месяц</Typography>
+                                </Stack>
+                                <Stack spacing={2.5} sx={{ mb: 5 }}>
+                                    {['Без ограничений', 'Все будущие функции', 'Приоритетная поддержка', 'Расширенная аналитика'].map((x, i) => (
+                                        <Stack key={i} direction="row" spacing={2} alignItems="center">
+                                            <CheckCircle sx={{ color: SUCCESS_GREEN, fontSize: 20 }} />
+                                            <Typography sx={{ color: ALMOND }}>{x}</Typography>
+                                        </Stack>
                                     ))}
-                                </Box>
-                                <StyledButton fullWidth onClick={() => navigate('/register')}
-                                    sx={{ bgcolor: ACCENT, color: '#fff', '&:hover': { bgcolor: '#4338CA' } }}>
-                                    Попробовать
-                                </StyledButton>
+                                </Stack>
+                                <PrimaryButton fullWidth onClick={() => navigate('/register')}>Начать бесплатно</PrimaryButton>
                             </GlassCard>
                         </Grid>
                     </Grid>
-                    <Typography sx={{ textAlign: 'center', color: TEXT_DIM, mt: 4, fontSize: '0.85rem' }}>
-                        Все функции доступны с первого дня. Ограничиваем только количество учеников в пробном периоде.
-                    </Typography>
                 </Container>
             </Box>
 
             {/* ========== FAQ ========== */}
-            <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 14 } }}>
-                <Container maxWidth="sm">
-                    <Typography sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, fontWeight: 700, textAlign: 'center', mb: 6 }}>
-                        Частые вопросы
-                    </Typography>
-                    {[
-                        { q: 'Можно ли отменить подписку в любой момент?', a: 'Да, вы можете отменить подписку в любой момент. Все данные сохранятся, вы просто вернётесь на бесплатный тариф.' },
-                        { q: 'Нужно ли привязывать карту для пробного периода?', a: 'Нет. 14 дней бесплатно без привязки карты. Просто зарегистрируйтесь и пользуйтесь.' },
-                        { q: 'Что будет после пробного периода?', a: 'Вы сможете выбрать тариф Профи за 500 ₽/мес или остаться на бесплатном с ограничением в 5 учеников.' },
-                        { q: 'Подходит ли EdSpace для групповых занятий?', a: 'Да, вы можете создавать группы и вести занятия для нескольких учеников одновременно. Видеозвонки и доски работают для групп.' },
-                    ].map((faq, i) => (
-                        <GlassCard key={i} sx={{ mb: 3, p: 3 }}>
-                            <Typography sx={{ fontWeight: 600, fontSize: '1.05rem', mb: 1 }}>{faq.q}</Typography>
-                            <Typography sx={{ color: TEXT_DIM, fontSize: '0.95rem', lineHeight: 1.6 }}>{faq.a}</Typography>
-                        </GlassCard>
-                    ))}
-                </Container>
-            </Box>
+            <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1, pb: { xs: 10, md: 16 } }}>
+                <Typography sx={{ fontSize: { xs: '2.2rem', md: '3rem' }, fontWeight: 900, letterSpacing: '-0.05em', textAlign: 'center', mb: 2, color: ALMOND }}>
+                    Частые вопросы
+                </Typography>
+                <Typography sx={{ textAlign: 'center', color: ALMOND_DARK, mb: 6 }}>
+                    Всё что нужно знать о платформе
+                </Typography>
 
-            {/* ========== ОТЗЫВЫ ========== */}
-            <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 14 }, bgcolor: '#0A0A14' }}>
-                <Container maxWidth="md">
-                    <Typography sx={{ fontSize: { xs: '2rem', md: '3rem' }, fontWeight: 700, textAlign: 'center', mb: 2 }}>
-                        Что говорят{' '}
-                        <Box component="span" sx={{ background: `linear-gradient(135deg, ${ACCENT}, #A78BFA)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                            репетиторы
-                        </Box>
-                    </Typography>
-                    <Typography sx={{ textAlign: 'center', color: TEXT_DIM, mb: 8, fontSize: '1.1rem' }}>
-                        Присоединяйтесь к тем, кто уже работает на EdSpace
-                    </Typography>
-                    <Grid container spacing={4}>
-                        {testimonials.map((t, i) => (
-                            <Grid item xs={12} md={6} key={i}>
-                                <GlassCard>
-                                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-                                        <Avatar sx={{ bgcolor: ACCENT, width: 48, height: 48, fontSize: 18, fontWeight: 700 }}>{t.avatar}</Avatar>
-                                        <Box>
-                                            <Typography sx={{ fontWeight: 600 }}>{t.name}</Typography>
-                                            <Typography sx={{ color: TEXT_DIM, fontSize: '0.85rem' }}>{t.role}</Typography>
-                                        </Box>
-                                    </Stack>
-                                    <Typography sx={{ color: '#CBD5E1', lineHeight: 1.8, fontStyle: 'italic', fontSize: '1.05rem' }}>
-                                        «{t.text}»
-                                    </Typography>
-                                </GlassCard>
-                            </Grid>
-                        ))}
-                    </Grid>
-                </Container>
-            </Box>
+                {faqItems.map((item, i) => (
+                    <StyledAccordion key={i} expanded={faqExpanded === i} onChange={() => setFaqExpanded(faqExpanded === i ? false : i)}>
+                        <AccordionSummary expandIcon={<ExpandMore sx={{ color: PURPLE_LIGHT }} />}>
+                            <Typography sx={{ fontWeight: 600, color: ALMOND, fontSize: '1.1rem' }}>{item.question}</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                            <Typography sx={{ color: ALMOND_DARK, lineHeight: 1.8 }}>{item.answer}</Typography>
+                        </AccordionDetails>
+                    </StyledAccordion>
+                ))}
 
-            {/* ========== ПОДПИСКА ========== */}
-            <Box sx={{ position: 'relative', zIndex: 1, py: { xs: 8, md: 14 } }}>
-                <Container maxWidth="sm" sx={{ textAlign: 'center' }}>
-                    <Star sx={{ fontSize: 48, color: '#F59E0B', mb: 3 }} />
-                    <Typography sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, fontWeight: 700, mb: 2 }}>
-                        Готовы начать?
-                    </Typography>
-                    <Typography sx={{ color: TEXT_DIM, mb: 5, fontSize: '1.05rem', lineHeight: 1.7 }}>
-                        Присоединяйтесь к бета-тесту. Первые 14 дней — бесплатно. Мы поможем настроить всё под вас.
-                    </Typography>
-                    <GlowButton onClick={() => navigate('/register')} endIcon={<ArrowForward />}>
-                        Начать бесплатно
-                    </GlowButton>
-                </Container>
-            </Box>
+                {/* Ещё вопросы */}
+                <Box sx={{ textAlign: 'center', mt: 6, p: 4, borderRadius: 4, background: 'rgba(245,230,211,.03)', border: `1px solid rgba(245,230,211,.06)` }}>
+                    <Typography sx={{ fontWeight: 700, fontSize: '1.3rem', mb: 2, color: ALMOND }}>Остались вопросы?</Typography>
+                    <Typography sx={{ color: ALMOND_DARK, mb: 3 }}>Напишите нам — ответим в течение часа</Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
+                        <AccentButton startIcon={<Telegram />} onClick={() => window.open('https://t.me/edspace', '_blank')}>
+                            Telegram
+                        </AccentButton>
+                        <SecondaryButton startIcon={<Email />}>
+                            Написать на почту
+                        </SecondaryButton>
+                    </Stack>
+                </Box>
+            </Container>
 
-            {/* ========== ФУТЕР ========== */}
-            <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.04)', py: 4, textAlign: 'center' }}>
-                <Container maxWidth="lg">
-                    <Typography sx={{ color: TEXT_DIM, fontSize: '0.9rem' }}>
-                        © 2026 EdSpace. Сделано с ❤️ для репетиторов. Сейчас платформа в стадии бета-тестирования.
+            {/* ========== CTA ========== */}
+            <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1, pb: { xs: 10, md: 16 } }}>
+                <GlassCard sx={{ p: { xs: 5, md: 8 }, textAlign: 'center', border: `1px solid rgba(108,59,170,.3)` }}>
+                    <Typography sx={{ fontSize: { xs: '2rem', md: '3rem' }, fontWeight: 900, letterSpacing: '-0.05em', mb: 3, color: ALMOND }}>
+                        Попробуйте EdSpace
                     </Typography>
-                </Container>
-            </Box>
+                    <Typography sx={{ color: ALMOND_DARK, lineHeight: 1.8, maxWidth: 620, mx: 'auto', mb: 5 }}>
+                        Подключитесь за пару минут и начните вести занятия в единой современной платформе.
+                    </Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
+                        <PrimaryButton size="large" onClick={() => navigate('/register')} endIcon={<ArrowForward />}>Начать бесплатно</PrimaryButton>
+                        <AccentButton size="large" startIcon={<Telegram />} onClick={() => window.open('https://t.me/edspace', '_blank')}>Telegram-канал</AccentButton>
+                    </Stack>
+                </GlassCard>
+            </Container>
 
-            <Snackbar open={snackbar} autoHideDuration={4000} onClose={() => setSnackbar(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-                <Alert severity="success" sx={{ borderRadius: 3, bgcolor: '#065F46', color: '#A7F3D0' }}>
-                    🎉 Спасибо! Мы свяжемся с вами в ближайшее время.
-                </Alert>
-            </Snackbar>
+            {/* DEMO DIALOG */}
+            <Dialog open={demoOpen} onClose={() => setDemoOpen(false)} maxWidth="md" fullWidth
+                PaperProps={{ sx: { bgcolor: DEEP_PURPLE, borderRadius: 4, border: `1px solid rgba(245,230,211,.1)` } }}>
+                <DialogContent sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography sx={{ fontSize: '1.5rem', fontWeight: 700, mb: 3, color: ALMOND }}>🎥 Демо-видео</Typography>
+                    <Box sx={{ bgcolor: '#000', borderRadius: 3, height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
+                        <PlayArrow sx={{ fontSize: 64, color: PURPLE_LIGHT, opacity: 0.6 }} />
+                    </Box>
+                    <Typography sx={{ color: ALMOND_DARK }}>
+                        Демо-видео появится здесь. А пока — <Box component="span" onClick={() => { setDemoOpen(false); navigate('/register'); }} sx={{ color: PURPLE_LIGHT, cursor: 'pointer', fontWeight: 600 }}>попробуйте сами!</Box>
+                    </Typography>
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 };

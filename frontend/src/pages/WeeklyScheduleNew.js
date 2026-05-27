@@ -10,7 +10,7 @@ import {
     FormControl, InputLabel, Select, MenuItem,
     IconButton, Alert, CircularProgress, Chip, Snackbar,
     Avatar, Card, CardContent, ToggleButton, ToggleButtonGroup,
-    TextField, Tooltip
+    TextField, Tooltip, Autocomplete, Stack, Grid, Divider
 } from '@mui/material';
 import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
 import { styled } from '@mui/material/styles';
@@ -793,13 +793,17 @@ function WeeklySchedule() {
                             <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 2 }}>
                                 {DAYS.find(d => d.id === formData.dayOfWeek)?.name}, {formData.startTime} – {formData.endTime}
                             </Typography>
-                            <FormControl fullWidth sx={{ mb: 2 }}>
-                                <InputLabel sx={{ fontSize: '14px' }}>Ученик</InputLabel>
-                                <Select value={formData.studentId} onChange={(e) => setFormData({...formData, studentId: e.target.value})} label="Ученик"
-                                    sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' } }}>
-                                    {students.map(s => { const rate = getStudentRateForTutor(s, user?.id); return <MenuItem key={s.id} value={s.id}>{s.fullName} ({rate || '—'} ₽/час)</MenuItem>; })}
-                                </Select>
-                            </FormControl>
+                            <Autocomplete
+                                options={students}
+                                getOptionLabel={(s) => `${s.fullName} (${getStudentRateForTutor(s, user?.id) || '—'} ₽/час)`}
+                                value={students.find(s => s.id === formData.studentId) || null}
+                                onChange={(e, newValue) => setFormData({...formData, studentId: newValue?.id || ''})}
+                                renderInput={(params) => (
+                                    <TextField {...params} label="Ученик" size="small"
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                                )}
+                                sx={{ mb: 2 }}
+                            />
                             <FormControl fullWidth sx={{ mb: 2 }}>
                                 <InputLabel sx={{ fontSize: '14px' }}>Предмет (необязательно)</InputLabel>
                                 <Select value={formData.courseId} onChange={(e) => setFormData({...formData, courseId: e.target.value})} label="Предмет"
@@ -829,112 +833,270 @@ function WeeklySchedule() {
                 </StyledDialog>
 
                 {/* ========== ДИАЛОГ ОТРАБОТКИ ДОЛГА ========== */}
-                <StyledDialog open={openResurrectDialog} onClose={() => setOpenResurrectDialog(false)} maxWidth="sm" fullWidth>
-                    <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
-                        Отработать пропущенное занятие
-                    </DialogTitle>
-                    <DialogContent sx={{ px: 3 }}>
-                        <Box sx={{ pt: 2 }}>
-                            <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 2 }}>
-                                Ученик: {selectedDebtor?.fullName}
-                            </Typography>
-                            <DatePicker label="Дата" value={resurrectForm.date}
+                <StyledDialog open={openResurrectDialog} onClose={() => setOpenResurrectDialog(false)} maxWidth="sm" fullWidth
+                    PaperProps={{ sx: { borderRadius: '20px', overflow: 'hidden' } }}>
+                    
+                    {/* Шапка */}
+                    <Box sx={{ 
+                        background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                        p: 3, color: '#fff'
+                    }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Box sx={{ 
+                                width: 44, height: 44, borderRadius: '14px', 
+                                bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', 
+                                alignItems: 'center', justifyContent: 'center' 
+                            }}>
+                                <WorkIcon sx={{ color: '#fff' }} />
+                            </Box>
+                            <Box>
+                                <Typography sx={{ fontSize: '20px', fontWeight: 700 }}>
+                                    Отработать пропущенное занятие
+                                </Typography>
+                                <Typography sx={{ fontSize: '13px', opacity: 0.85 }}>
+                                    Создать занятие для списания долга
+                                </Typography>
+                            </Box>
+                        </Box>
+                    </Box>
+
+                    <DialogContent sx={{ p: 3 }}>
+                        <Stack spacing={2.5}>
+                            <Paper sx={{ p: 2.5, borderRadius: '14px', bgcolor: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                                <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 1.5, color: '#374151' }}>
+                                    👤 Ученик-должник
+                                </Typography>
+                                <Autocomplete
+                                    options={debtors}
+                                    getOptionLabel={(s) => `${s.fullName} (долг: ${s.debtLessons || s.missedLessons || 0} занятий)`}
+                                    value={debtors.find(s => s.id === selectedDebtor?.id) || null}
+                                    onChange={(e, newValue) => { if (newValue) setSelectedDebtor(newValue); }}
+                                    renderInput={(params) => (
+                                        <TextField {...params} label="Выберите должника" placeholder="Начните вводить имя..."
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
+                                    )}
+                                />
+                                {selectedDebtor && (
+                                    <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
+                                        <Chip icon={<WorkIcon sx={{ fontSize: 14 }} />}
+                                            label={`Долг: ${selectedDebtor.debtLessons || selectedDebtor.missedLessons || 0} занятий`}
+                                            color="warning" size="small" sx={{ borderRadius: '8px', fontWeight: 600 }} />
+                                    </Box>
+                                )}
+                            </Paper>
+
+                            <Divider sx={{ borderColor: '#F3F4F6' }} />
+
+                            <DatePicker label="Дата отработки" value={resurrectForm.date}
                                 onChange={(newDate) => setResurrectForm({...resurrectForm, date: newDate})}
                                 minDate={new Date()}
-                                slotProps={{ textField: { fullWidth: true, sx: { mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } } } }} />
-                            <TextField label="Время начала" type="time" value={resurrectForm.startTime}
-                                onChange={(e) => setResurrectForm({...resurrectForm, startTime: e.target.value})}
-                                fullWidth sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                                InputLabelProps={{ shrink: true }} inputProps={{ step: 300 }} />
-                            <FormControl fullWidth sx={{ mb: 2 }}>
-                                <InputLabel sx={{ fontSize: '14px' }}>Длительность</InputLabel>
-                                <Select value={resurrectForm.duration} onChange={(e) => setResurrectForm({...resurrectForm, duration: e.target.value})} label="Длительность"
-                                    sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
-                                    <MenuItem value={30}>30 минут</MenuItem><MenuItem value={45}>45 минут</MenuItem>
-                                    <MenuItem value={60}>1 час</MenuItem><MenuItem value={90}>1,5 часа</MenuItem>
-                                    <MenuItem value={120}>2 часа</MenuItem>
-                                </Select>
-                            </FormControl>
+                                slotProps={{ textField: { fullWidth: true, sx: { '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } } } }} />
+
+                            <Grid container spacing={2}>
+                                <Grid item xs={6}>
+                                    <TextField fullWidth label="Время начала" type="time" value={resurrectForm.startTime}
+                                        onChange={(e) => setResurrectForm({...resurrectForm, startTime: e.target.value})}
+                                        InputLabelProps={{ shrink: true }} inputProps={{ step: 300 }}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <FormControl fullWidth>
+                                        <InputLabel>Длительность</InputLabel>
+                                        <Select value={resurrectForm.duration} onChange={(e) => setResurrectForm({...resurrectForm, duration: e.target.value})} label="Длительность"
+                                            sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
+                                            <MenuItem value={30}>30 минут</MenuItem>
+                                            <MenuItem value={45}>45 минут</MenuItem>
+                                            <MenuItem value={60}>1 час</MenuItem>
+                                            <MenuItem value={90}>1,5 часа</MenuItem>
+                                            <MenuItem value={120}>2 часа</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                            </Grid>
+
                             <FormControl fullWidth>
-                                <InputLabel sx={{ fontSize: '14px' }}>Предмет</InputLabel>
+                                <InputLabel>Предмет</InputLabel>
                                 <Select value={resurrectForm.courseId} onChange={(e) => setResurrectForm({...resurrectForm, courseId: e.target.value})} label="Предмет"
-                                    sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
+                                    sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
                                     <MenuItem value="">— Без предмета —</MenuItem>
                                     {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                                 </Select>
                             </FormControl>
-                        </Box>
+
+                            <Alert severity="success" sx={{ borderRadius: '12px', fontSize: '13px' }}>
+                                ✅ При создании занятия долг автоматически уменьшится на 1.
+                            </Alert>
+                        </Stack>
                     </DialogContent>
-                    <DialogActions sx={{ px: 3, pb: 3 }}>
-                        <StyledButton onClick={() => setOpenResurrectDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
-                        <StyledButton onClick={handleSaveResurrect} variant="contained"
-                            sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
+
+                    <DialogActions sx={{ px: 3, pb: 3, pt: 0 }}>
+                        <Button onClick={() => setOpenResurrectDialog(false)} sx={{ borderRadius: '12px', color: '#6B7280' }}>Отмена</Button>
+                        <Button variant="contained" onClick={handleSaveResurrect} disabled={!selectedDebtor || !resurrectForm.startTime}
+                            startIcon={<WorkIcon />}
+                            sx={{ bgcolor: '#059669', borderRadius: '12px', px: 4, fontWeight: 600, '&:hover': { bgcolor: '#047857' } }}>
                             Создать занятие
-                        </StyledButton>
+                        </Button>
                     </DialogActions>
                 </StyledDialog>
 
                 {/* ========== ДИАЛОГ РАЗОВОГО ЗАНЯТИЯ ========== */}
-                <StyledDialog open={openSingleLesson} onClose={() => setOpenSingleLesson(false)} maxWidth="sm" fullWidth>
-                    <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
-                        {singleLesson.isTrial ? '🎯 Пробное занятие' : 'Разовое занятие'}
-                    </DialogTitle>
-                    <DialogContent sx={{ px: 3 }}>
-                        <Box sx={{ pt: 2 }}>
+                <StyledDialog open={openSingleLesson} onClose={() => setOpenSingleLesson(false)} maxWidth="sm" fullWidth
+                    PaperProps={{ sx: { borderRadius: '20px', overflow: 'hidden' } }}>
+                    
+                    {/* Шапка */}
+                    <Box sx={{ 
+                        background: singleLesson.isTrial 
+                            ? 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' 
+                            : 'linear-gradient(135deg, #4F46E5 0%, #6366F1 100%)',
+                        p: 3, color: '#fff'
+                    }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Box sx={{ 
+                                width: 44, height: 44, borderRadius: '14px', 
+                                bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', 
+                                alignItems: 'center', justifyContent: 'center' 
+                            }}>
+                                {singleLesson.isTrial ? '🎯' : '📅'}
+                            </Box>
+                            <Box>
+                                <Typography sx={{ fontSize: '20px', fontWeight: 700 }}>
+                                    {singleLesson.isTrial ? 'Пробное занятие' : 'Разовое занятие'}
+                                </Typography>
+                                <Typography sx={{ fontSize: '13px', opacity: 0.85 }}>
+                                    {singleLesson.isTrial ? 'Для нового ученика' : 'Одно занятие на выбранную дату'}
+                                </Typography>
+                            </Box>
+                        </Box>
+                    </Box>
+
+                    <DialogContent sx={{ p: 3 }}>
+                        <Stack spacing={2.5}>
                             {/* Чекбокс пробного */}
                             <FormControlLabel
-                                control={<Checkbox checked={singleLesson.isTrial || false} onChange={(e) => setSingleLesson({ ...singleLesson, isTrial: e.target.checked })} />}
-                                label="Пробное занятие (новый ученик)"
-                                sx={{ mb: 2 }}
+                                control={
+                                    <Checkbox 
+                                        checked={singleLesson.isTrial || false} 
+                                        onChange={(e) => setSingleLesson({ 
+                                            ...singleLesson, 
+                                            isTrial: e.target.checked,
+                                            studentId: '', courseId: '', trialName: '', trialEmail: '', trialPrice: 0
+                                        })} 
+                                        sx={{ color: '#7C3AED', '&.Mui-checked': { color: '#7C3AED' } }}
+                                    />
+                                }
+                                label={<Typography sx={{ fontWeight: 500, fontSize: '14px' }}>Пробное занятие (новый ученик)</Typography>}
                             />
 
+                            {/* Пробное: поля для имени и email */}
                             {singleLesson.isTrial ? (
                                 <>
                                     <TextField fullWidth label="Имя ученика" value={singleLesson.trialName || ''}
                                         onChange={(e) => setSingleLesson({ ...singleLesson, trialName: e.target.value })}
-                                        sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                                        placeholder="Введите имя"
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
                                     <TextField fullWidth label="Email ученика" value={singleLesson.trialEmail || ''}
                                         onChange={(e) => setSingleLesson({ ...singleLesson, trialEmail: e.target.value })}
-                                        sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                                    <TextField fullWidth label="Стоимость (₽, 0 = бесплатно)" type="number" value={singleLesson.trialPrice || 0}
-                                        onChange={(e) => setSingleLesson({ ...singleLesson, trialPrice: e.target.value })}
-                                        sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                                        helperText="0 — бесплатное пробное занятие" />
+                                        placeholder="email@example.com"
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
+                                    <TextField fullWidth label="Стоимость (₽)" type="number" value={singleLesson.trialPrice || 0}
+                                        onChange={(e) => setSingleLesson({ ...singleLesson, trialPrice: Number(e.target.value) })}
+                                        helperText="0 — бесплатное пробное занятие"
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
                                 </>
                             ) : (
                                 <>
-                                    <FormControl fullWidth sx={{ mb: 2 }}>
-                                        <InputLabel sx={{ fontSize: '14px' }}>Ученик</InputLabel>
-                                        <Select value={singleLesson.studentId} onChange={(e) => setSingleLesson({ ...singleLesson, studentId: e.target.value })} label="Ученик"
-                                            sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
-                                            {students.map(s => <MenuItem key={s.id} value={s.id}>{s.fullName}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
-                                    <FormControl fullWidth sx={{ mb: 2 }}>
-                                        <InputLabel sx={{ fontSize: '14px' }}>Предмет</InputLabel>
+                                    {/* Поиск ученика */}
+                                    <Autocomplete
+                                        options={students}
+                                        getOptionLabel={(s) => `${s.fullName} (${getStudentRateForTutor(s, user?.id) || '—'} ₽)`}
+                                        value={students.find(s => s.id === singleLesson.studentId) || null}
+                                        onChange={(e, newValue) => setSingleLesson({ ...singleLesson, studentId: newValue?.id || '' })}
+                                        renderInput={(params) => (
+                                            <TextField {...params} label="Ученик" placeholder="Начните вводить имя..."
+                                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
+                                        )}
+                                    />
+                                    {/* Предмет */}
+                                    <FormControl fullWidth>
+                                        <InputLabel>Предмет</InputLabel>
                                         <Select value={singleLesson.courseId} onChange={(e) => setSingleLesson({ ...singleLesson, courseId: e.target.value })} label="Предмет"
-                                            sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' } }}>
+                                            sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
                                             <MenuItem value="">Без предмета</MenuItem>
                                             {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                                         </Select>
                                     </FormControl>
                                 </>
                             )}
-                            <DatePicker label="Дата" value={singleLesson.date} onChange={(d) => setSingleLesson({ ...singleLesson, date: d })} minDate={new Date()}
-                                slotProps={{ textField: { fullWidth: true, sx: { mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } } } }} />
-                            <TextField fullWidth label="Время" type="time" value={singleLesson.time}
-                                onChange={(e) => setSingleLesson({ ...singleLesson, time: e.target.value })}
-                                InputLabelProps={{ shrink: true }}
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        </Box>
+
+                            <Divider sx={{ borderColor: '#F3F4F6' }} />
+
+                            {/* Дата */}
+                            <DatePicker 
+                                label="Дата занятия" 
+                                value={singleLesson.date} 
+                                onChange={(d) => setSingleLesson({ ...singleLesson, date: d })} 
+                                minDate={new Date()}
+                                slotProps={{ 
+                                    textField: { 
+                                        fullWidth: true, 
+                                        sx: { '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } } 
+                                    } 
+                                }} 
+                            />
+
+                            {/* Время + Длительность в одной строке */}
+                            <Grid container spacing={2}>
+                                <Grid item xs={6}>
+                                    <TextField 
+                                        fullWidth label="Время начала" type="time" 
+                                        value={singleLesson.time}
+                                        onChange={(e) => setSingleLesson({ ...singleLesson, time: e.target.value })}
+                                        InputLabelProps={{ shrink: true }}
+                                        inputProps={{ step: 300 }}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} 
+                                    />
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <FormControl fullWidth>
+                                        <InputLabel>Длительность</InputLabel>
+                                        <Select 
+                                            value={singleLesson.duration || 60} 
+                                            onChange={(e) => setSingleLesson({ ...singleLesson, duration: Number(e.target.value) })} 
+                                            label="Длительность"
+                                            sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
+                                            <MenuItem value={30}>30 минут</MenuItem>
+                                            <MenuItem value={45}>45 минут</MenuItem>
+                                            <MenuItem value={60}>1 час</MenuItem>
+                                            <MenuItem value={90}>1,5 часа</MenuItem>
+                                            <MenuItem value={120}>2 часа</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                            </Grid>
+
+                            <Alert severity="info" sx={{ borderRadius: '12px', fontSize: '13px' }}>
+                                {singleLesson.isTrial 
+                                    ? 'Пробное занятие — ученик будет создан автоматически. Отправить приглашение можно позже.'
+                                    : 'Занятие будет добавлено в расписание на выбранную дату.'}
+                            </Alert>
+                        </Stack>
                     </DialogContent>
-                    <DialogActions sx={{ px: 3, pb: 3 }}>
-                        <StyledButton onClick={() => setOpenSingleLesson(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
-                        <StyledButton onClick={handleCreateSingleLesson} variant="contained" 
-                            disabled={singleLesson.isTrial ? (!singleLesson.trialName || !singleLesson.time) : (!singleLesson.studentId || !singleLesson.time)}
-                            sx={{ bgcolor: singleLesson.isTrial ? '#7C3AED' : '#4F46E5', '&:hover': { bgcolor: singleLesson.isTrial ? '#6D28D9' : '#4338CA' } }}>
-                            {singleLesson.isTrial ? 'Создать пробное' : 'Создать'}
-                        </StyledButton>
+
+                    <DialogActions sx={{ px: 3, pb: 3, pt: 0 }}>
+                        <Button onClick={() => setOpenSingleLesson(false)} sx={{ borderRadius: '12px', color: '#6B7280' }}>Отмена</Button>
+                        <Button 
+                            variant="contained" 
+                            onClick={handleCreateSingleLesson}
+                            disabled={singleLesson.isTrial 
+                                ? (!singleLesson.trialName || !singleLesson.time) 
+                                : (!singleLesson.studentId || !singleLesson.time)}
+                            sx={{ 
+                                bgcolor: singleLesson.isTrial ? '#7C3AED' : '#4F46E5', 
+                                borderRadius: '12px', px: 4, fontWeight: 600,
+                                '&:hover': { bgcolor: singleLesson.isTrial ? '#6D28D9' : '#4338CA' }
+                            }}>
+                            {singleLesson.isTrial ? 'Создать пробное' : 'Создать занятие'}
+                        </Button>
                     </DialogActions>
                 </StyledDialog>
 

@@ -113,9 +113,16 @@ public class LessonService {
         return lessonRepository.findUpcomingLessons(tutorId, LocalDate.now());
     }
 
+    public List<Lesson> getActiveLessons(Long tutorId) {
+        return lessonRepository.findActiveLessonsSince(tutorId, LocalDate.now().minusDays(7));
+    }
+
+
     public List<Lesson> getAllLessons(Long tutorId) {
-        log.debug("Загрузка всех занятий для репетитора: {}", tutorId);
-        return lessonRepository.findAllByTutorId(tutorId);
+        log.error(">>> NEW METHOD CALLED with since={}", LocalDate.now().minusDays(14));
+        List<Lesson> lessons = lessonRepository.findAllByTutorIdSince(tutorId, LocalDate.now().minusDays(14));
+        log.error(">>> NEW METHOD RETURNED {} lessons", lessons.size());
+        return lessons;
     }
 
     private boolean hasTimeConflict(List<Lesson> existingLessons, LocalTime newStart, int duration) {
@@ -382,8 +389,8 @@ public class LessonService {
 
         Lesson lesson = getLessonById(lessonId);
 
-        // ✅ Если отменяем перенесённый урок — отменяем и оригинал
-        if ("RESCHEDULED".equals(lesson.getStatus()) && lesson.getOriginalLesson() != null) {
+        // ✅ Если у урока есть originalLesson — это перенесённый урок (любой статус)
+        if (lesson.getOriginalLesson() != null) {
             Lesson originalLesson = lesson.getOriginalLesson();
 
             // Отменяем оригинал
@@ -405,18 +412,7 @@ public class LessonService {
             }
             lesson.setUpdatedAt(LocalDateTime.now());
 
-            // ✅ Добавляем долг для оригинала, если он абонементный
-            Student originalStudent = originalLesson.getStudent();
-            if ("subscription".equals(originalStudent.getPaymentTypeForTutor(originalLesson.getTutor().getId()))) {
-                Optional<Subscription> activeSub = subscriptionRepository
-                        .findByStudentIdAndTutorIdAndStatus(originalStudent.getId(), originalLesson.getTutor().getId(), "ACTIVE");
-                if (activeSub.isPresent()) {
-                    Subscription sub = activeSub.get();
-                    sub.setDebtLessons((sub.getDebtLessons() != null ? sub.getDebtLessons() : 0) + 1);
-                    subscriptionRepository.save(sub);
-                    log.info("Долг добавлен в абонемент id={} при отмене перенесённого, долгов: {}", sub.getId(), sub.getDebtLessons());
-                }
-            }
+            // ✅ НЕ добавляем долг — урок был перенесён/начат, это не вина ученика
 
             Lesson savedLesson = lessonRepository.save(lesson);
             log.info("✅ Перенесённое занятие и оригинал отменены: новое id={}, оригинал id={}", lessonId, originalLesson.getId());

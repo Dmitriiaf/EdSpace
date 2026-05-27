@@ -42,6 +42,7 @@ com\example\demo\exception\BusinessException.class
 com\example\demo\controller\LessonPlanController.class
 com\example\demo\entity\Material.class
 com\example\demo\controller\MaterialController.class
+com\example\demo\service\AIGenerationService$1.class
 com\example\demo\service\AIGenerationService.class
 com\example\demo\entity\Subject.class
 com\example\demo\controller\SubscriptionRenewalController.class

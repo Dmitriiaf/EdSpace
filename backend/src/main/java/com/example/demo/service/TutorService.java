@@ -196,7 +196,7 @@ public class TutorService {
 
         // Уроки (последние 100)
         List<Map<String, Object>> lessonsList = new ArrayList<>();
-        List<Lesson> lessons = lessonRepository.findAllByTutorId(tutorId);
+        List<Lesson> lessons = lessonRepository.findAllByTutorIdSince(tutorId, LocalDate.now().minusDays(365));
         for (Lesson l : lessons.stream().limit(100).toList()) {
             Map<String, Object> lm = new HashMap<>();
             lm.put("id", l.getId());

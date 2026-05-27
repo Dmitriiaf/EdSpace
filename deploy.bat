@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo         EDSPACE DEPLOY v1.7
+echo         EDSPACE DEPLOY v1.9
 echo ============================================
 echo 1 - Backend only (mvn + restart)
 echo 2 - Frontend only (npm + reload)
@@ -31,7 +31,7 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo === [3/3] Restarting backend ===
-ssh edspace "docker cp /opt/EdSpace/backend/target/demo-0.0.1-SNAPSHOT.jar lmstutor-backend:/app/app.jar && docker restart lmstutor-backend"
+ssh edspace "cd /opt/EdSpace && docker compose stop backend && docker rm lmstutor-backend && docker compose up -d backend"
 echo.
 echo ✅ BACKEND DEPLOYED
 goto end
@@ -46,18 +46,18 @@ if %errorlevel% neq 0 (
     goto end
 )
 echo.
-echo === [2/4] Clearing old frontend ===
-ssh edspace "docker exec lmstutor-frontend sh -c 'rm -rf /usr/share/nginx/html/static/js/* && rm -rf /usr/share/nginx/html/static/css/*'"
-echo.
-echo === [3/4] Uploading build ===
-scp -r build\* root@72.56.238.224:/tmp/build/
+echo === [2/4] Uploading build ===
+scp -r build\* root@72.56.238.224:/opt/EdSpace/frontend/build/
 if %errorlevel% neq 0 (
     echo ❌ UPLOAD FAILED
     goto end
 )
 echo.
-echo === [4/4] Updating container ===
-ssh edspace "docker cp /tmp/build/. lmstutor-frontend:/usr/share/nginx/html/ && docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
+echo === [3/4] Fixing permissions ===
+ssh edspace "docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/"
+echo.
+echo === [4/4] Reloading frontend ===
+ssh edspace "docker exec lmstutor-frontend nginx -s reload"
 echo.
 echo ✅ FRONTEND DEPLOYED
 goto end
@@ -81,18 +81,24 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo === [3/6] Uploading backend ===
-cd /d C:\Users\datro\tutor-workspace\backend
 scp target\demo-0.0.1-SNAPSHOT.jar root@72.56.238.224:/opt/EdSpace/backend/target/
+if %errorlevel% neq 0 (
+    echo ❌ UPLOAD FAILED
+    goto end
+)
 echo.
-echo === [4/6] Clearing old frontend ===
-ssh edspace "docker exec lmstutor-frontend sh -c 'rm -rf /usr/share/nginx/html/static/js/* && rm -rf /usr/share/nginx/html/static/css/*'"
+echo === [4/6] Uploading frontend ===
+scp -r build\* root@72.56.238.224:/opt/EdSpace/frontend/build/
+if %errorlevel% neq 0 (
+    echo ❌ UPLOAD FAILED
+    goto end
+)
 echo.
-echo === [5/6] Uploading frontend ===
-cd /d C:\Users\datro\tutor-workspace\frontend
-scp -r build\* root@72.56.238.224:/tmp/build/
+echo === [5/6] Deploying backend ===
+ssh edspace "cd /opt/EdSpace && docker compose stop backend && docker rm lmstutor-backend && docker compose up -d backend"
 echo.
-echo === [6/6] Deploying containers ===
-ssh edspace "docker cp /opt/EdSpace/backend/target/demo-0.0.1-SNAPSHOT.jar lmstutor-backend:/app/app.jar && docker restart lmstutor-backend && docker cp /tmp/build/. lmstutor-frontend:/usr/share/nginx/html/ && docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
+echo === [6/6] Deploying frontend ===
+ssh edspace "docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
 echo.
 echo ✅ ALL DEPLOYED
 goto end

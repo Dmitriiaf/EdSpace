@@ -6,6 +6,7 @@ import {
     IconButton, Tooltip, Typography, Avatar, Badge, Popover,
     Paper, Stack, Button, Drawer
 } from '@mui/material';
+import { styled, alpha } from '@mui/material/styles';
 import {
     Dashboard as DashboardIcon,
     People as PeopleIcon,
@@ -20,15 +21,83 @@ import {
     Menu as MenuIcon,
     TrendingUp as TrendingUpIcon,
     Notifications as NotificationsIcon,
-    Draw as DrawIcon
+    Draw as DrawIcon,
+    School,
+    AutoAwesome,
+    ChevronLeft,
+    ChevronRight
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 
-const SIDEBAR_WIDTH = 240;
-const SIDEBAR_COLLAPSED = 64;
+// ========== ЦВЕТА ИКОНОК ==========
+const ICON_COLORS = {
+    'Главная': '#6366F1',
+    'Расписание': '#10B981',
+    'Ученики': '#F59E0B',
+    'Финансы': '#3B82F6',
+    'Курсы': '#8B5CF6',
+    'Банк заданий': '#EC4899',
+    'Материалы': '#06B6D4',
+    'Инструменты': '#F97316',
+    'Домашние задания': '#EF4444',
+    'Архив': '#6B7280',
+    'Профиль': '#4F46E5',
+    'Задания': '#10B981',
+    'Успеваемость': '#F59E0B',
+};
+
+// ========== СТИЛИ ==========
+const SidebarContainer = styled(Box)(({ collapsed }) => ({
+    width: collapsed ? 68 : 260,
+    height: '100vh',
+    background: 'linear-gradient(180deg, #111827 0%, #1F2937 100%)',
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'fixed',
+    left: 0, top: 0, zIndex: 1200,
+    transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    overflow: 'hidden',
+    boxShadow: '4px 0 20px rgba(0,0,0,0.3)',
+}));
+
+const LogoBox = styled(Box)({
+    height: 64,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    flexShrink: 0,
+});
+
+const NavButton = styled(ListItemButton)(({ active, iconcolor }) => ({
+    borderRadius: 14,
+    margin: '2px 8px',
+    padding: '10px 14px',
+    minHeight: 46,
+    color: active ? '#fff' : '#9CA3AF',
+    backgroundColor: active ? alpha(iconcolor || '#6366F1', 0.2) : 'transparent',
+    transition: 'all 0.2s ease',
+    '&:hover': {
+        backgroundColor: active ? alpha(iconcolor || '#6366F1', 0.3) : 'rgba(255,255,255,0.04)',
+        color: '#fff',
+    },
+}));
+
+const UserSection = styled(Box)({
+    borderTop: '1px solid rgba(255,255,255,0.06)',
+    flexShrink: 0,
+    padding: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+});
+
+const SIDEBAR_WIDTH = 260;
+const SIDEBAR_COLLAPSED = 68;
 const MOBILE_BREAKPOINT = 900;
 
+// ========== КОМПОНЕНТ ==========
 const Sidebar = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -46,23 +115,18 @@ const Sidebar = () => {
     const isStudent = user?.role === 'student';
     const isParent = user?.role === 'parent';
 
-    // Отслеживаем размер экрана
     useEffect(() => {
-        const handleResize = () => {
-            setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-        };
+        const handleResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Отступ контента
     useEffect(() => {
         if (!isMobile) {
-            document.body.style.transition = 'margin-left 0.2s ease';
+            document.body.style.transition = 'margin-left 0.25s ease';
             document.body.style.marginLeft = collapsed ? `${SIDEBAR_COLLAPSED}px` : `${SIDEBAR_WIDTH}px`;
         } else {
             document.body.style.marginLeft = '0px';
-            document.body.style.transition = 'none';
         }
         return () => { document.body.style.marginLeft = '0px'; };
     }, [collapsed, isMobile]);
@@ -113,8 +177,7 @@ const Sidebar = () => {
             setNotifications(prev => prev.map(not => not.id === n.id ? { ...not, read: true } : not));
             setUnreadCount(prev => Math.max(0, prev - 1));
             setNotifAnchor(null);
-            if (n.notificationType === 'HOMEWORK_ASSIGNED' || n.notificationType === 'HOMEWORK_SUBMITTED' || 
-                n.notificationType === 'HOMEWORK_RETURNED' || n.notificationType === 'HOMEWORK_CHECKED') {
+            if (['HOMEWORK_ASSIGNED','HOMEWORK_SUBMITTED','HOMEWORK_RETURNED','HOMEWORK_CHECKED'].includes(n.notificationType)) {
                 navigate(isTutor ? '/extracurricular' : '/student/homework');
             }
         } catch (err) {}
@@ -141,46 +204,64 @@ const Sidebar = () => {
     const handleMouseEnter = () => { if (!isMobile) setCollapsed(false); };
     const handleMouseLeave = () => { if (!isMobile) setCollapsed(true); };
 
+    const getIconColor = (label) => ICON_COLORS[label] || '#9CA3AF';
+
     const menuGroups = isTutor ? [
         { title: 'Основное', items: [
-            { path: '/dashboard', label: 'Главная', icon: <DashboardIcon /> },
-            { path: '/weekly-schedule', label: 'Расписание', icon: <CalendarIcon /> },
-            { path: '/students', label: 'Ученики', icon: <PeopleIcon /> },
-            { path: '/finance', label: 'Финансы', icon: <MoneyIcon /> },
+            { path: '/dashboard', label: 'Главная' },
+            { path: '/weekly-schedule', label: 'Расписание' },
+            { path: '/students', label: 'Ученики' },
+            { path: '/finance', label: 'Финансы' },
         ]},
         { title: 'Обучение', items: [
-            { path: '/courses', label: 'Курсы', icon: <BookIcon /> },
-            { path: '/task-bank', label: 'Банк заданий', icon: <AssignmentIcon /> },
-            { path: '/materials', label: 'Материалы', icon: <FolderIcon /> },
-            { path: '/tools', label: 'Инструменты', icon: <DrawIcon /> },
-            { path: '/extracurricular', label: 'Домашние задания', icon: <AssignmentIcon /> },
+            { path: '/courses', label: 'Курсы' },
+            { path: '/task-bank', label: 'Банк заданий' },
+            { path: '/materials', label: 'Материалы' },
+            { path: '/tools', label: 'Инструменты' },
+            { path: '/extracurricular', label: 'Домашние задания' },
         ]},
         { title: 'Ещё', items: [
-            { path: '/lessons-archive', label: 'Архив', icon: <ArchiveIcon /> },
-            { path: '/profile', label: 'Профиль', icon: <PersonIcon /> },
+            { path: '/lessons-archive', label: 'Архив' },
+            { path: '/profile', label: 'Профиль' },
         ]},
     ] : isStudent ? [
         { title: '', items: [
-            { path: '/student', label: 'Главная', icon: <DashboardIcon /> },
-            { path: '/student/homework', label: 'Задания', icon: <AssignmentIcon /> },
-            { path: '/student/materials', label: 'Материалы', icon: <FolderIcon /> },
-            { path: '/student/tools', label: 'Инструменты', icon: <DrawIcon /> },
-            { path: '/student/progress', label: 'Успеваемость', icon: <TrendingUpIcon /> },
-            { path: '/student/profile', label: 'Профиль', icon: <PersonIcon /> },
+            { path: '/student', label: 'Главная' },
+            { path: '/student/homework', label: 'Задания' },
+            { path: '/student/materials', label: 'Материалы' },
+            { path: '/student/tools', label: 'Инструменты' },
+            { path: '/student/progress', label: 'Успеваемость' },
+            { path: '/student/profile', label: 'Профиль' },
         ]},
     ] : [
         { title: '', items: [
-            { path: '/parent/dashboard', label: 'Главная', icon: <DashboardIcon /> },
-            { path: '/parent/profile', label: 'Профиль', icon: <PersonIcon /> },
+            { path: '/parent/dashboard', label: 'Главная' },
+            { path: '/parent/profile', label: 'Профиль' },
         ]},
     ];
+
+    const iconMap = {
+        'Главная': <DashboardIcon />,
+        'Расписание': <CalendarIcon />,
+        'Ученики': <PeopleIcon />,
+        'Финансы': <MoneyIcon />,
+        'Курсы': <BookIcon />,
+        'Банк заданий': <AssignmentIcon />,
+        'Материалы': <FolderIcon />,
+        'Инструменты': <DrawIcon />,
+        'Домашние задания': <AssignmentIcon />,
+        'Архив': <ArchiveIcon />,
+        'Профиль': <PersonIcon />,
+        'Задания': <AssignmentIcon />,
+        'Успеваемость': <TrendingUpIcon />,
+    };
 
     const isActive = (path) => location.pathname === path;
 
     const NotificationBell = () => (
         <>
             <Tooltip title="Уведомления" placement="right">
-                <IconButton onClick={(e) => setNotifAnchor(e.currentTarget)} sx={{ color: '#D1D5DB', '&:hover': { color: '#fff' } }}>
+                <IconButton onClick={(e) => setNotifAnchor(e.currentTarget)} sx={{ color: '#9CA3AF', '&:hover': { color: '#fff' } }}>
                     <Badge badgeContent={unreadCount} color="error">
                         <NotificationsIcon />
                     </Badge>
@@ -188,16 +269,11 @@ const Sidebar = () => {
             </Tooltip>
             <Popover open={Boolean(notifAnchor)} anchorEl={notifAnchor} onClose={() => setNotifAnchor(null)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-                <Paper sx={{ width: { xs: 300, sm: 350 }, maxHeight: 400, overflow: 'auto', p: 2 }}>
+                <Paper sx={{ width: 350, maxHeight: 400, overflow: 'auto', p: 2, borderRadius: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                            🔔 Уведомления {unreadCount > 0 && `(${unreadCount})`}
-                        </Typography>
+                        <Typography variant="subtitle1" fontWeight={600}>🔔 Уведомления {unreadCount > 0 && `(${unreadCount})`}</Typography>
                         {unreadCount > 0 && (
-                            <Button size="small" onClick={handleMarkAllAsRead}
-                                sx={{ fontSize: '0.75rem', textTransform: 'none', color: '#4F46E5', fontWeight: 500, '&:hover': { backgroundColor: '#EEF2FF' } }}>
-                                Прочитать всё
-                            </Button>
+                            <Button size="small" onClick={handleMarkAllAsRead} sx={{ fontSize: '0.75rem', textTransform: 'none', color: '#6366F1' }}>Прочитать всё</Button>
                         )}
                     </Box>
                     {notifications.length === 0 ? (
@@ -205,12 +281,10 @@ const Sidebar = () => {
                     ) : (
                         <Stack spacing={1}>
                             {notifications.slice(0, 20).map(n => (
-                                <Paper key={n.id} sx={{ p: 1.5, bgcolor: n.read ? 'transparent' : '#EEF2FF', cursor: 'pointer', borderRadius: 2, '&:hover': { bgcolor: '#E8EDFF' } }}
+                                <Paper key={n.id} sx={{ p: 1.5, bgcolor: n.read ? 'transparent' : alpha('#6366F1', 0.06), cursor: 'pointer', borderRadius: 2, '&:hover': { bgcolor: alpha('#6366F1', 0.1) } }}
                                     onClick={() => handleMarkAsRead(n)}>
                                     <Typography variant="body2">{n.message}</Typography>
-                                    <Typography variant="caption" color="textSecondary">
-                                        {new Date(n.createdAt).toLocaleString('ru-RU')}
-                                    </Typography>
+                                    <Typography variant="caption" color="textSecondary">{new Date(n.createdAt).toLocaleString('ru-RU')}</Typography>
                                 </Paper>
                             ))}
                         </Stack>
@@ -220,45 +294,37 @@ const Sidebar = () => {
         </>
     );
 
-    // Контент сайдбара (общий для мобилки и десктопа)
     const sidebarContent = (
-        <Box sx={{ 
-            height: '100%', bgcolor: '#1F2937',
-            display: 'flex', flexDirection: 'column',
-        }}>
-            {/* Логотип */}
-            <Box sx={{ height: 64, display: 'flex', alignItems: 'center', px: 2, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-                <Typography sx={{ color: '#fff', fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>EdSpace</Typography>
-            </Box>
+        <Box sx={{ height: '100%', bgcolor: '#111827', display: 'flex', flexDirection: 'column' }}>
+            <LogoBox>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box sx={{ width: 34, height: 34, borderRadius: '12px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <AutoAwesome sx={{ color: '#fff', fontSize: 18 }} />
+                    </Box>
+                    <Typography sx={{ color: '#fff', fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px' }}>EdSpace</Typography>
+                </Box>
+            </LogoBox>
 
-            {/* Меню */}
             <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
                 {menuGroups.map((group, gi) => (
-                    <Box key={gi} sx={{ mb: 2 }}>
+                    <Box key={gi} sx={{ mb: 1 }}>
                         {group.title && (
-                            <Typography sx={{ px: 2.5, py: 1, color: '#6B7280', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            <Typography sx={{ px: 3, py: 1, color: '#6B7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
                                 {group.title}
                             </Typography>
                         )}
                         {group.items.map((item) => {
                             const active = isActive(item.path);
+                            const color = getIconColor(item.label);
                             return (
-                                <ListItem key={item.path} disablePadding sx={{ px: 1 }}>
-                                    <ListItemButton
-                                        onClick={() => handleNavigation(item.path)}
-                                        sx={{
-                                            borderRadius: 2, py: 1.2, px: 2,
-                                            color: active ? '#FFFFFF' : '#D1D5DB',
-                                            bgcolor: active ? '#374151' : 'transparent',
-                                            '&:hover': { bgcolor: active ? '#374151' : 'rgba(255,255,255,0.06)' },
-                                            minHeight: 44,
-                                        }}
-                                    >
-                                        <ListItemIcon sx={{ color: active ? '#FFFFFF' : '#D1D5DB', minWidth: 40 }}>
-                                            {item.icon}
+                                <ListItem key={item.path} disablePadding>
+                                    <NavButton onClick={() => handleNavigation(item.path)} active={active} iconcolor={color}>
+                                        <ListItemIcon sx={{ color: active ? color : '#9CA3AF', minWidth: 40 }}>
+                                            {iconMap[item.label] || <DashboardIcon />}
                                         </ListItemIcon>
-                                        <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 500 : 400 } }} />
-                                    </ListItemButton>
+                                        <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 600 : 400 } }} />
+                                        {active && <Box sx={{ width: 3, height: 20, borderRadius: 2, bgcolor: color }} />}
+                                    </NavButton>
                                 </ListItem>
                             );
                         })}
@@ -266,114 +332,80 @@ const Sidebar = () => {
                 ))}
             </Box>
 
-            {/* Низ */}
-            <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
-                    <NotificationBell />
+            <UserSection>
+                <NotificationBell />
+                <Avatar src={isTutor ? avatar : null} sx={{ width: 34, height: 34, bgcolor: '#6366F1', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
+                    onClick={() => handleNavigation(isTutor ? '/dashboard' : isStudent ? '/student' : '/parent/dashboard')}>
+                    {(!isTutor || !avatar) && (user?.fullName?.charAt(0) || 'U')}
+                </Avatar>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ color: '#F3F4F6', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {user?.fullName?.split(' ')[0] || 'Пользователь'}
+                    </Typography>
+                    <Typography sx={{ color: '#6B7280', fontSize: 11 }}>
+                        {isTutor ? 'Репетитор' : isStudent ? 'Ученик' : 'Родитель'}
+                    </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, gap: 1.5 }}>
-                    <Avatar src={isTutor ? avatar : null} sx={{ width: 32, height: 32, bgcolor: '#4F46E5', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
-                        onClick={() => handleNavigation(isTutor ? '/dashboard' : isStudent ? '/student' : '/parent/dashboard')}>
-                        {(!isTutor || !avatar) && (user?.fullName?.charAt(0) || 'U')}
-                    </Avatar>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ color: '#F3F4F6', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {user?.fullName?.split(' ')[0] || 'Пользователь'}
-                        </Typography>
-                        <Typography sx={{ color: '#6B7280', fontSize: 11 }}>
-                            {isTutor ? 'Репетитор' : isStudent ? 'Ученик' : 'Родитель'}
-                        </Typography>
-                    </Box>
-                    <IconButton onClick={handleLogout} sx={{ color: '#6B7280', '&:hover': { color: '#EF4444' } }}>
-                        <LogoutIcon fontSize="small" />
-                    </IconButton>
-                </Box>
-            </Box>
+                <IconButton onClick={handleLogout} sx={{ color: '#6B7280', '&:hover': { color: '#EF4444' } }}>
+                    <LogoutIcon fontSize="small" />
+                </IconButton>
+            </UserSection>
         </Box>
     );
 
-    // Мобильная версия — Drawer
     if (isMobile) {
         return (
             <>
-                <IconButton
-                    onClick={() => setMobileOpen(true)}
-                    sx={{
-                        position: 'fixed',
-                        top: 8,
-                        left: 8,
-                        zIndex: 1100,
-                        bgcolor: 'rgba(31, 41, 55, 0.9)',
-                        backdropFilter: 'blur(4px)',
-                        color: '#fff',
-                        width: 40,
-                        height: 40,
-                        '&:hover': { bgcolor: '#374151' },
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                    }}
-                >
+                <IconButton onClick={() => setMobileOpen(true)}
+                    sx={{ position: 'fixed', top: 8, left: 8, zIndex: 1100, bgcolor: 'rgba(17,24,39,0.9)', backdropFilter: 'blur(4px)', color: '#fff', width: 40, height: 40, '&:hover': { bgcolor: '#374151' }, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                     <MenuIcon />
                 </IconButton>
-
-                <Drawer
-                    anchor="left"
-                    open={mobileOpen}
-                    onClose={() => setMobileOpen(false)}
-                    PaperProps={{ sx: { width: SIDEBAR_WIDTH, bgcolor: '#1F2937' } }}
-                >
+                <Drawer anchor="left" open={mobileOpen} onClose={() => setMobileOpen(false)}
+                    PaperProps={{ sx: { width: SIDEBAR_WIDTH, bgcolor: '#111827' } }}>
                     {sidebarContent}
                 </Drawer>
             </>
         );
     }
 
-    // Десктоп — фиксированный сайдбар с ховером
     return (
-        <Box 
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            sx={{
-                width: collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_WIDTH, 
-                height: '100vh', bgcolor: '#1F2937',
-                display: 'flex', flexDirection: 'column', position: 'fixed', left: 0, top: 0,
-                zIndex: 1200, transition: 'width 0.2s ease', overflow: 'hidden',
-            }}
-        >
-            {/* Логотип */}
-            <Box sx={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', px: collapsed ? 0 : 2, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-                {!collapsed && <Typography sx={{ color: '#fff', fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>EdSpace</Typography>}
-            </Box>
+        <SidebarContainer collapsed={collapsed} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+            <LogoBox>
+                {collapsed ? (
+                    <Box sx={{ width: 34, height: 34, borderRadius: '12px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <AutoAwesome sx={{ color: '#fff', fontSize: 18 }} />
+                    </Box>
+                ) : (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{ width: 34, height: 34, borderRadius: '12px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <AutoAwesome sx={{ color: '#fff', fontSize: 18 }} />
+                        </Box>
+                        <Typography sx={{ color: '#fff', fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px' }}>EdSpace</Typography>
+                    </Box>
+                )}
+            </LogoBox>
 
-            {/* Меню */}
             <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
                 {menuGroups.map((group, gi) => (
-                    <Box key={gi} sx={{ mb: 2 }}>
+                    <Box key={gi} sx={{ mb: 1 }}>
                         {group.title && !collapsed && (
-                            <Typography sx={{ px: 2.5, py: 1, color: '#6B7280', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            <Typography sx={{ px: 3, py: 1, color: '#6B7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
                                 {group.title}
                             </Typography>
                         )}
                         {group.items.map((item) => {
                             const active = isActive(item.path);
+                            const color = getIconColor(item.label);
                             return (
-                                <ListItem key={item.path} disablePadding sx={{ px: 1 }}>
+                                <ListItem key={item.path} disablePadding>
                                     <Tooltip title={collapsed ? item.label : ''} placement="right">
-                                        <ListItemButton
-                                            onClick={() => handleNavigation(item.path)}
-                                            sx={{
-                                                borderRadius: 2, py: 1.2, px: collapsed ? 1.5 : 2,
-                                                color: active ? '#FFFFFF' : '#D1D5DB',
-                                                bgcolor: active ? '#374151' : 'transparent',
-                                                '&:hover': { bgcolor: active ? '#374151' : 'rgba(255,255,255,0.06)' },
-                                                minHeight: 44,
-                                                justifyContent: collapsed ? 'center' : 'flex-start'
-                                            }}
-                                        >
-                                            <ListItemIcon sx={{ color: active ? '#FFFFFF' : '#D1D5DB', minWidth: collapsed ? 0 : 40 }}>
-                                                {item.icon}
+                                        <NavButton onClick={() => handleNavigation(item.path)} active={active} iconcolor={color}
+                                            sx={{ justifyContent: collapsed ? 'center' : 'flex-start', px: collapsed ? 1.5 : 2 }}>
+                                            <ListItemIcon sx={{ color: active ? color : '#9CA3AF', minWidth: collapsed ? 0 : 40 }}>
+                                                {iconMap[item.label] || <DashboardIcon />}
                                             </ListItemIcon>
-                                            {!collapsed && <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 500 : 400 } }} />}
-                                        </ListItemButton>
+                                            {!collapsed && <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 600 : 400 } }} />}
+                                        </NavButton>
                                     </Tooltip>
                                 </ListItem>
                             );
@@ -382,34 +414,29 @@ const Sidebar = () => {
                 ))}
             </Box>
 
-            {/* Низ */}
-            <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
-                    <NotificationBell />
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', px: collapsed ? 1 : 2, py: 1.5, gap: 1.5, justifyContent: collapsed ? 'center' : 'flex-start' }}>
-                    <Avatar src={isTutor ? avatar : null} sx={{ width: 32, height: 32, bgcolor: '#4F46E5', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
-                        onClick={() => handleNavigation(isTutor ? '/dashboard' : isStudent ? '/student' : '/parent/dashboard')}>
-                        {(!isTutor || !avatar) && (user?.fullName?.charAt(0) || 'U')}
-                    </Avatar>
-                    {!collapsed && (
-                        <>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography sx={{ color: '#F3F4F6', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {user?.fullName?.split(' ')[0] || 'Пользователь'}
-                                </Typography>
-                                <Typography sx={{ color: '#6B7280', fontSize: 11 }}>
-                                    {isTutor ? 'Репетитор' : isStudent ? 'Ученик' : 'Родитель'}
-                                </Typography>
-                            </Box>
-                            <IconButton onClick={handleLogout} sx={{ color: '#6B7280', '&:hover': { color: '#EF4444' } }}>
-                                <LogoutIcon fontSize="small" />
-                            </IconButton>
-                        </>
-                    )}
-                </Box>
-            </Box>
-        </Box>
+            <UserSection sx={{ justifyContent: collapsed ? 'center' : 'flex-start', flexDirection: collapsed ? 'column' : 'row', gap: collapsed ? 0.5 : 1.5 }}>
+                <NotificationBell />
+                <Avatar src={isTutor ? avatar : null} sx={{ width: 34, height: 34, bgcolor: '#6366F1', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
+                    onClick={() => handleNavigation(isTutor ? '/dashboard' : isStudent ? '/student' : '/parent/dashboard')}>
+                    {(!isTutor || !avatar) && (user?.fullName?.charAt(0) || 'U')}
+                </Avatar>
+                {!collapsed && (
+                    <>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ color: '#F3F4F6', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {user?.fullName?.split(' ')[0] || 'Пользователь'}
+                            </Typography>
+                            <Typography sx={{ color: '#6B7280', fontSize: 11 }}>
+                                {isTutor ? 'Репетитор' : isStudent ? 'Ученик' : 'Родитель'}
+                            </Typography>
+                        </Box>
+                        <IconButton onClick={handleLogout} sx={{ color: '#6B7280', '&:hover': { color: '#EF4444' } }}>
+                            <LogoutIcon fontSize="small" />
+                        </IconButton>
+                    </>
+                )}
+            </UserSection>
+        </SidebarContainer>
     );
 };
 

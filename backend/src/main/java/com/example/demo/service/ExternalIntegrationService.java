@@ -6,10 +6,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
-
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -27,6 +29,75 @@ public class ExternalIntegrationService {
 
     @Autowired
     private HomeworkRepository homeworkRepository;
+
+    @Transactional
+    public TaskBank createTask(Map<String, Object> request, Long tutorId) {
+        Tutor tutor = tutorRepository.findById(tutorId)
+                .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
+
+        String source = request.get("source") != null ? String.valueOf(request.get("source")) : "MANUAL";
+        String question = String.valueOf(request.getOrDefault("question", ""));
+        String subject = request.get("subject") != null ? String.valueOf(request.get("subject")) : "Информатика";
+        String type = request.get("type") != null ? String.valueOf(request.get("type")) : "problem";
+        String examType = request.get("examType") != null ? String.valueOf(request.get("examType")) : "ЕГЭ";
+
+        TaskBank task = new TaskBank(source, question, subject, type, examType);
+        task.setTutor(tutor);
+
+        if (request.get("answer") != null) task.setAnswer(String.valueOf(request.get("answer")));
+        if (request.get("topic") != null) task.setTopic(String.valueOf(request.get("topic")));
+        if (request.get("explanation") != null) task.setExplanation(String.valueOf(request.get("explanation")));
+        if (request.get("difficulty") != null) task.setDifficulty(Integer.parseInt(String.valueOf(request.get("difficulty"))));
+        if (request.get("maxScore") != null) task.setMaxScore(Integer.parseInt(String.valueOf(request.get("maxScore"))));
+
+        task.setIsPublic(false);
+        task.setCreatedAt(LocalDateTime.now());
+        task.setUpdatedAt(LocalDateTime.now());
+
+        return taskBankRepository.save(task);
+    }
+
+    /**
+     * Генерация задания через ИИ (DeepSeek API)
+     */
+    public TaskBank generateWithAI(String prompt, String subject, String examType, Long tutorId) {
+        // Вызываем DeepSeek API
+        String jsonResponse = callDeepSeek(prompt, subject, examType);
+
+        // Парсим JSON ответ
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            Map<String, Object> result = mapper.readValue(jsonResponse, Map.class);
+
+            TaskBank task = new TaskBank(
+                    "AI_GENERATED",
+                    (String) result.getOrDefault("question", ""),
+                    subject,
+                    "problem",
+                    examType
+            );
+
+            task.setAnswer((String) result.getOrDefault("answer", ""));
+            task.setExplanation((String) result.getOrDefault("explanation", ""));
+            task.setTopic((String) result.getOrDefault("topic", ""));
+            task.setDifficulty(result.get("difficulty") != null ?
+                    Integer.parseInt(result.get("difficulty").toString()) : 3);
+            task.setIsPublic(true);
+            task.setCreatedAt(LocalDateTime.now());
+            task.setUpdatedAt(LocalDateTime.now());
+
+            if (tutorId != null) {
+                Tutor tutor = tutorRepository.findById(tutorId).orElse(null);
+                task.setTutor(tutor);
+            }
+
+            return taskBankRepository.save(task);
+
+        } catch (Exception e) {
+            log.error("Ошибка парсинга ответа DeepSeek: {}", e.getMessage());
+            throw new RuntimeException("Не удалось распознать ответ ИИ");
+        }
+    }
 
     @Transactional
     public List<TaskBank> importFromKEGE(String subject, String examType, Long tutorId) {
@@ -162,6 +233,71 @@ public class ExternalIntegrationService {
     public TaskBank getTaskForHomework(Long taskId) {
         return taskBankRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Задание не найдено"));
+    }
+
+    private String callDeepSeek(String prompt, String subject, String examType) {
+        // Бесплатный API DeepSeek
+        String apiKey = "sk-9f287861f91348f9829fc9325bf9263e"; // ← ВСТАВЬ СВОЙ КЛЮЧ
+
+        try {
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+
+            String systemPrompt = String.format(
+                    "Ты — помощник для генерации учебных заданий. " +
+                            "Сгенерируй задание по предмету '%s' для экзамена '%s'. " +
+                            "Ответь СТРОГО в формате JSON без лишнего текста:\n" +
+                            "{\n" +
+                            "  \"question\": \"текст задания\",\n" +
+                            "  \"answer\": \"правильный ответ\",\n" +
+                            "  \"explanation\": \"пояснение к решению\",\n" +
+                            "  \"topic\": \"тема задания\",\n" +
+                            "  \"difficulty\": 3\n" +
+                            "}", subject, examType);
+
+            String body = String.format("""
+            {
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": "%s"},
+                    {"role": "user", "content": "%s"}
+                ],
+                "temperature": 0.7,
+                "max_tokens": 2000
+            }
+            """, systemPrompt.replace("\"", "\\\""), prompt.replace("\"", "\\\""));
+
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.deepseek.com/v1/chat/completions"))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+            java.net.http.HttpResponse<String> response = client.send(request,
+                    java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            // Парсим ответ
+            String responseBody = response.body();
+            int jsonStart = responseBody.indexOf("```json");
+            int jsonEnd = responseBody.indexOf("```", jsonStart + 7);
+
+            if (jsonStart != -1 && jsonEnd != -1) {
+                return responseBody.substring(jsonStart + 7, jsonEnd).trim();
+            } else {
+                return responseBody;
+            }
+
+        } catch (Exception e) {
+            log.error("Ошибка вызова DeepSeek: {}", e.getMessage());
+            throw new RuntimeException("Ошибка генерации: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void deleteTask(Long taskId) {
+        TaskBank task = taskBankRepository.findById(taskId)
+                .orElseThrow(() -> new RuntimeException("Задание не найдено"));
+        taskBankRepository.delete(task);
     }
 
     @Transactional

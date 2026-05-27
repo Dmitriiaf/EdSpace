@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Finance.js (РЕДИЗАЙН v2) ==========
+// ========== frontend/src/pages/Finance.js (v2.1 — HERO-СЕКЦИЯ) ==========
 import React, { useState, useEffect } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
@@ -193,84 +193,76 @@ function Finance() {
             setAllPayments(payments);
             setStudents(studentsList);
 
+            // ========== ЕДИНАЯ ФУНКЦИЯ ПОДСЧЁТА ДОХОДА ЗА МЕСЯЦ ==========
+            const calcMonthIncome = (monthStart, monthEnd) => {
+                const mPayments = payments.filter(p => {
+                    const paymentDate = new Date(p.paymentDate);
+                    return paymentDate >= monthStart && paymentDate <= monthEnd && 
+                        (p.status === 'PAID' || p.status === 'CONFIRMED' || p.status === 'paid');
+                });
+                
+                const mPaymentIncome = mPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+                
+                const paidLessonIds = new Set(mPayments.map(p => p.lesson?.id).filter(id => id));
+                
+                const mLessonsIncome = Array.isArray(allLessons)
+                    ? allLessons
+                        .filter(l => {
+                            const lessonDate = new Date(l.lessonDate);
+                            return lessonDate >= monthStart && lessonDate <= monthEnd && 
+                                l.status === 'PAID' && !paidLessonIds.has(l.id);
+                        })
+                        .reduce((sum, l) => {
+                            const student = studentsList.find(s => s.id === l.student?.id);
+                            if (!student || student.paymentType === 'subscription') return sum;
+                            return sum + (getStudentRateForTutor(student, user.id) || 0);
+                        }, 0)
+                    : 0;
+                
+                return { total: mPaymentIncome + mLessonsIncome, payments: mPayments, lessonsIncome: mLessonsIncome };
+            };
+
             const monthStart = startOfMonth(selectedMonth);
             const monthEnd = endOfMonth(selectedMonth);
-            
-            const monthPayments = payments.filter(p => {
-                const paymentDate = new Date(p.paymentDate);
-                return paymentDate >= monthStart && paymentDate <= monthEnd && (p.status === 'PAID' || p.status === 'CONFIRMED' || p.status === 'paid');
-            });
+            const monthData = calcMonthIncome(monthStart, monthEnd);
 
-            // Сначала считаем занятия за месяц
-            const monthLessons = Array.isArray(allLessons) 
-                ? allLessons.filter(l => {
-                    const lessonDate = new Date(l.lessonDate);
-                    return lessonDate >= monthStart && lessonDate <= monthEnd;
-                })
-                : [];
-            const totalLessons = monthLessons.length;
-
-            // ID занятий, уже учтённых в платежах
-            const paidLessonIds = new Set(monthPayments.map(p => p.lesson?.id).filter(id => id));
-
-            // Оплаченные занятия, не учтённые в таблице payments
-            // НО только для поурочных учеников (НЕ абонементников)
-            const paidLessonsIncome = monthLessons
-                .filter(l => {
-                    if (l.status !== 'PAID') return false;
-                    if (paidLessonIds.has(l.id)) return false;
-                    // Пропускаем абонементников — их доход уже учтён в платеже за абонемент
-                    const student = studentsList.find(s => s.id === l.student?.id);
-                    if (student?.paymentType === 'subscription') return false;
-                    return true;
-                })
-                .reduce((sum, l) => {
-                    const student = studentsList.find(s => s.id === l.student?.id);
-                    return sum + (getStudentRateForTutor(student, user.id) || 0);
-                }, 0);
-
-            const totalIncome = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0) + paidLessonsIncome;
-            
             let subscriptionIncome = 0;
             let singleIncome = 0;
-
-            monthPayments.forEach(p => {
+            monthData.payments.forEach(p => {
                 if (p.paymentType === 'subscription' || (p.courseName && p.courseName.includes('Абонемент'))) {
                     subscriptionIncome += p.amount || 0;
                 } else {
                     singleIncome += p.amount || 0;
                 }
             });
-
-            // Добавляем оплаченные занятия ТОЛЬКО для поурочных учеников
+            
+            const monthLessons = Array.isArray(allLessons) 
+                ? allLessons.filter(l => {
+                    const lessonDate = new Date(l.lessonDate);
+                    return lessonDate >= monthStart && lessonDate <= monthEnd;
+                }) : [];
+            const paidLessonIds = new Set(monthData.payments.map(p => p.lesson?.id).filter(id => id));
             monthLessons.filter(l => l.status === 'PAID' && !paidLessonIds.has(l.id)).forEach(l => {
                 const student = studentsList.find(s => s.id === l.student?.id);
-                const rate = getStudentRateForTutor(student, user.id) || 0;
-                // Для абонементников НЕ добавляем — их доход уже в платеже за абонемент
                 if (student?.paymentType !== 'subscription') {
-                    singleIncome += rate;
+                    singleIncome += (getStudentRateForTutor(student, user.id) || 0);
                 }
             });
-            
+
+            const totalLessons = monthLessons.length;
             const activeStudents = studentsList.filter(s => getStudentRateForTutor(s, user.id) !== null);
             const averageRate = activeStudents.length > 0 
                 ? activeStudents.reduce((sum, s) => sum + (getStudentRateForTutor(s, user.id) || 0), 0) / activeStudents.length 
                 : 0;
-            
-            const paidStudentsIds = [...new Set(monthPayments.map(p => p.student?.id).filter(id => id))];
-            const paidStudents = paidStudentsIds.length;
-            
+            const paidStudents = [...new Set(monthData.payments.map(p => p.student?.id).filter(id => id))].length;
+
             const prevMonthStart = startOfMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1));
             const prevMonthEnd = endOfMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1));
-            const prevMonthPayments = payments.filter(p => {
-                const paymentDate = new Date(p.paymentDate);
-                return paymentDate >= prevMonthStart && paymentDate <= prevMonthEnd && (p.status === 'PAID' || p.status === 'CONFIRMED' || p.status === 'paid');
-            });
-            const prevTotal = prevMonthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-            const growth = prevTotal > 0 ? ((totalIncome - prevTotal) / prevTotal) * 100 : 0;
+            const prevData = calcMonthIncome(prevMonthStart, prevMonthEnd);
+            const growth = prevData.total > 0 ? ((monthData.total - prevData.total) / prevData.total) * 100 : 0;
 
             setMonthlyStats({
-                totalIncome,
+                totalIncome: monthData.total,
                 subscriptionIncome,
                 singleIncome,
                 totalLessons,
@@ -287,30 +279,11 @@ function Finance() {
             const yearlyStats = months.map(month => {
                 const mStart = startOfMonth(month);
                 const mEnd = endOfMonth(month);
-                const mPayments = payments.filter(p => {
-                    const paymentDate = new Date(p.paymentDate);
-                    return paymentDate >= mStart && paymentDate <= mEnd && (p.status === 'PAID' || p.status === 'CONFIRMED' || p.status === 'paid');
-                });
-                
-                // Учитываем оплаченные занятия в годовом графике
-                const mLessonIds = new Set(mPayments.map(p => p.lesson?.id).filter(id => id));
-                const mLessonsIncome = Array.isArray(allLessons)
-                    ? allLessons
-                        .filter(l => {
-                            const lessonDate = new Date(l.lessonDate);
-                            return lessonDate >= mStart && lessonDate <= mEnd && 
-                                l.status === 'PAID' && !mLessonIds.has(l.id);
-                        })
-                        .reduce((sum, l) => {
-                            const student = studentsList.find(s => s.id === l.student?.id);
-                            return sum + (getStudentRateForTutor(student, user.id) || 0);
-                        }, 0)
-                    : 0;
-                
+                const data = calcMonthIncome(mStart, mEnd);
                 return {
                     month: format(month, 'LLLL yyyy', { locale: ru }),
                     monthShort: format(month, 'MMM', { locale: ru }),
-                    total: mPayments.reduce((sum, p) => sum + (p.amount || 0), 0) + mLessonsIncome
+                    total: data.total
                 };
             });
             
@@ -428,53 +401,64 @@ function Finance() {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
-            <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
-                {/* ========== ЗАГОЛОВОК ========== */}
-                <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    mb: 3, 
-                    flexWrap: 'wrap', 
-                    gap: 2 
+            <PageContainer sx={{ px: { xs: 1, sm: 3 }, bgcolor: '#F9FAFB' }}>
+                {/* ========== HERO ========== */}
+                <Box sx={{
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    borderRadius: '24px', p: { xs: 3, sm: 4 }, color: '#fff',
+                    mb: 3, position: 'relative', overflow: 'hidden',
+                    '&::before': { content: '""', position: 'absolute', top: -50, right: -30, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' },
+                    '&::after': { content: '""', position: 'absolute', bottom: -60, left: -20, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' },
                 }}>
-                    <Box>
-                        <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 600, color: '#1F2937', mb: 0.5 }}>                            Финансы
-                        </Typography>
-                        <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
-                            Доходы, платежи и абонементы
-                        </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <StyledButton 
-                            variant="outlined" 
-                            startIcon={<RefreshIcon sx={{ fontSize: 16 }} />} 
-                            onClick={fetchFinanceData}
-                            sx={{ 
-                                color: '#374151', 
-                                borderColor: '#D1D5DB', 
-                                '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' } 
-                            }}
-                        >
-                            Обновить
-                        </StyledButton>
-                        <IconButton onClick={handleMenuOpen} size="small" sx={{ color: '#6B7280' }}>
-                            <MoreVertIcon />
-                        </IconButton>
-                        <Menu 
-                            anchorEl={anchorEl} 
-                            open={open} 
-                            onClose={handleMenuClose}
-                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} 
-                            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                            PaperProps={{ sx: { borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' } }}
-                        >
-                            <MenuItem onClick={handleExport} sx={{ fontSize: '14px' }}>
-                                <DownloadIcon sx={{ mr: 1, fontSize: 18 }} />Экспорт отчёта
-                            </MenuItem>
-                        </Menu>
+                    <Box sx={{ position: 'relative', zIndex: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+                            <Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                                    <PaymentsIcon sx={{ fontSize: 32 }} />
+                                    <Typography sx={{ fontSize: '28px', fontWeight: 700 }}>Финансы</Typography>
+                                </Box>
+                                <Typography sx={{ opacity: 0.85, fontSize: '15px' }}>Доходы, платежи и абонементы</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                <StyledButton variant="contained" startIcon={<RefreshIcon />} onClick={fetchFinanceData}
+                                    sx={{ bgcolor: '#fff', color: '#059669', fontWeight: 600, '&:hover': { bgcolor: '#F3F4F6' } }}>
+                                    Обновить
+                                </StyledButton>
+                                <IconButton onClick={handleMenuOpen} sx={{ color: '#fff' }}><MoreVertIcon /></IconButton>
+                            </Box>
+                        </Box>
+                        <Grid container spacing={2}>
+                            {[
+                                { label: 'Доход', value: `${monthlyStats.totalIncome.toLocaleString()} ₽`, icon: <PaymentsIcon sx={{ fontSize: 28, mb: 0.5 }} /> },
+                                { label: 'Абонементы', value: `${monthlyStats.subscriptionIncome.toLocaleString()} ₽`, icon: <CardGiftcardIcon sx={{ fontSize: 28, mb: 0.5 }} /> },
+                                { label: 'Поурочно', value: `${monthlyStats.singleIncome.toLocaleString()} ₽`, icon: <ReceiptIcon sx={{ fontSize: 28, mb: 0.5 }} /> },
+                                { label: 'Занятий', value: monthlyStats.totalLessons, icon: <CalendarIcon sx={{ fontSize: 28, mb: 0.5 }} /> },
+                            ].map((s, i) => (
+                                <Grid item xs={6} md={3} key={i}>
+                                    <Paper sx={{ p: 2.5, borderRadius: '16px', bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', textAlign: 'center', border: '1px solid rgba(255,255,255,0.2)' }}>
+                                        {s.icon}
+                                        <Typography sx={{ fontSize: '22px', fontWeight: 700, fontFamily: '"Inter", "Roboto", sans-serif', letterSpacing: '-0.02em' }}>{s.value}</Typography>
+                                        <Typography sx={{ fontSize: '13px', opacity: 0.8, fontWeight: 500 }}>{s.label}</Typography>
+                                    </Paper>
+                                </Grid>
+                            ))}
+                        </Grid>
                     </Box>
                 </Box>
+
+                {/* Выпадающее меню */}
+                <Menu 
+                    anchorEl={anchorEl} 
+                    open={open} 
+                    onClose={handleMenuClose}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} 
+                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    PaperProps={{ sx: { borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' } }}
+                >
+                    <MenuItem onClick={handleExport} sx={{ fontSize: '14px' }}>
+                        <DownloadIcon sx={{ mr: 1, fontSize: 18 }} />Экспорт отчёта
+                    </MenuItem>
+                </Menu>
 
                 {/* ========== ВКЛАДКИ ========== */}
                 <TabsPaper data-tour="finance-tabs" elevation={0}>
@@ -551,79 +535,6 @@ function Finance() {
                             }} 
                         />
                     </Box>
-
-                    {/* ========== HERO-СЕКЦИЯ ========== */}
-                    <HeroSection data-tour="finance-overview" elevation={0} sx={{ p: { xs: 2, sm: 4 } }}>                        <Typography sx={{ 
-                            fontSize: '13px', 
-                            opacity: 0.8, 
-                            mb: 1, 
-                            textTransform: 'uppercase', 
-                            letterSpacing: 1,
-                            fontWeight: 500,
-                        }}>
-                            Доход за {format(selectedMonth, 'LLLL yyyy', { locale: ru })}
-                        </Typography>
-                        <Typography sx={{ 
-                            fontWeight: 700, 
-                            fontSize: { xs: '32px', md: '42px' }, 
-                            mb: 3,
-                            letterSpacing: '-1px',
-                        }}>
-                            {monthlyStats.totalIncome.toLocaleString()} ₽
-                        </Typography>
-                        
-                        <Grid container spacing={2} sx={{ mb: 3 }}>
-                            <Grid item xs={6}>
-                                <HeroMiniCard>
-                                    <Typography sx={{ fontSize: '20px', fontWeight: 600 }}>
-                                        {monthlyStats.subscriptionIncome.toLocaleString()} ₽
-                                    </Typography>
-                                    <Typography sx={{ fontSize: '13px', opacity: 0.8 }}>
-                                        Абонементы
-                                    </Typography>
-                                </HeroMiniCard>
-                            </Grid>
-                            <Grid item xs={6}>
-                                <HeroMiniCard>
-                                    <Typography sx={{ fontSize: '20px', fontWeight: 600 }}>
-                                        {monthlyStats.singleIncome.toLocaleString()} ₽
-                                    </Typography>
-                                    <Typography sx={{ fontSize: '13px', opacity: 0.8 }}>
-                                        Поурочно
-                                    </Typography>
-                                </HeroMiniCard>
-                            </Grid>
-                        </Grid>
-                        
-                        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <ReceiptIcon sx={{ fontSize: 16, opacity: 0.8 }} />
-                                <Typography sx={{ fontSize: '13px', opacity: 0.8 }}>
-                                    {monthlyStats.totalLessons} занятий
-                                </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <SchoolIcon sx={{ fontSize: 16, opacity: 0.8 }} />
-                                <Typography sx={{ fontSize: '13px', opacity: 0.8 }}>
-                                    {monthlyStats.paidStudents} учеников оплатили
-                                </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <CalculateIcon sx={{ fontSize: 16, opacity: 0.8 }} />
-                                <Typography sx={{ fontSize: '13px', opacity: 0.8 }}>
-                                    Ср. ставка: {Math.round(monthlyStats.averageRate).toLocaleString()} ₽
-                                </Typography>
-                            </Box>
-                        </Box>
-                        
-                        <MoneyIcon sx={{ 
-                            position: 'absolute', 
-                            bottom: 16, 
-                            right: 16, 
-                            fontSize: 80, 
-                            opacity: 0.1,
-                        }} />
-                    </HeroSection>
 
                     {/* ========== ГРАФИК ДОХОДОВ ========== */}
                     <ChartCard elevation={0} sx={{ mt: 3 }}>
@@ -956,7 +867,6 @@ function Finance() {
                     {reportData && (
                         <Fade in={true}>
                             <Box>
-                                {/* Сводка */}
                                 <Grid container spacing={2} sx={{ mb: 3 }}>
                                     {[
                                         { label: 'Доход', value: `${reportData.totalIncome.toLocaleString()} ₽`, color: '#10B981', bg: '#ECFDF5' },
@@ -973,7 +883,6 @@ function Finance() {
                                     ))}
                                 </Grid>
 
-                                {/* Таблица по ученикам */}
                                 <Paper sx={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #F3F4F6' }}>
                                     <Box sx={{ p: 2, borderBottom: '1px solid #F3F4F6', bgcolor: '#F9FAFB' }}>
                                         <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '16px' }}>
@@ -1005,7 +914,6 @@ function Finance() {
                                         </Table>
                                     </TableContainer>
                                     
-                                    {/* Итого */}
                                     <Box sx={{ p: 2, borderTop: '2px solid #E5E7EB', bgcolor: '#F9FAFB', display: 'flex', justifyContent: 'space-between' }}>
                                         <Typography sx={{ fontWeight: 600, color: '#1F2937' }}>
                                             Итого за месяц

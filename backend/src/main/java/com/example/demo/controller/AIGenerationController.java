@@ -34,30 +34,16 @@ public class AIGenerationController {
 
     @PostMapping("/generate")
     @PreAuthorize("hasRole('TUTOR')")
-    public ResponseEntity<?> generateTask(@RequestBody Map<String, String> request,
+    public ResponseEntity<?> generateTask(@RequestBody Map<String, Object> request,
                                           @RequestAttribute("userId") Long tutorId) {
         try {
-            String prompt = request.get("prompt");
-            String subject = request.get("subject");
-            String examType = request.get("examType");
-            String taskType = request.getOrDefault("taskType", "");
+            String prompt = (String) request.get("prompt");
+            String subject = (String) request.getOrDefault("subject", "Информатика");
+            String examType = (String) request.getOrDefault("examType", "ЕГЭ");
 
-            // 1. Генерируем задание (пока без привязки)
-            TaskBank task = aiService.generateTaskWithRAG(prompt, subject, examType, taskType);
-
-            // 2. ✅ СРАЗУ ЖЕСТКО ПРИВЯЗЫВАЕМ К РЕПЕТИТОРУ
-            Tutor tutor = tutorRepository.findById(tutorId)
-                    .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
-            task.setTutor(tutor);
-            task.setIsPublic(false);
-            // 3. ✅ ДОПОЛНИТЕЛЬНАЯ СТРАХОВКА: Принудительно ставим isPublic = false (если нужно)
-            // task.setIsPublic(false); // Раскомментируй, если хочешь, чтобы все ИИ-задания были приватными по умолчанию
-
-            log.info("✅ Задание сгенерировано и привязано к репетитору: {} (ID: {})", tutor.getFullName(), tutor.getId());
-
+            TaskBank task = aiService.generateWithAI(prompt, subject, examType, tutorId);
             return ResponseEntity.ok(task);
         } catch (Exception e) {
-            log.error("❌ Ошибка генерации задания: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

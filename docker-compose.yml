@@ -1,4 +1,4 @@
-# ========== docker-compose.yml (добавлен APP_BASE_URL) ==========
+# ========== docker-compose.yml (v3 — чистый + volume для JAR) ==========
 services:
   postgres:
     image: postgres:15-alpine
@@ -30,6 +30,7 @@ services:
       - .env.docker
     volumes:
       - ./uploads:/opt/EdSpace/uploads
+      - ./backend/target/demo-0.0.1-SNAPSHOT.jar:/app/app.jar
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/tutor_workspace
       DB_USERNAME: tutor_user
@@ -63,46 +64,15 @@ services:
     networks:
       - lmstutor-network
 
-  # Excalidraw — фронтенд
-  excalidraw:
-    image: excalidraw/excalidraw:latest
-    container_name: lmstutor-excalidraw
+  wbo:
+    image: lovasoa/wbo:latest
+    container_name: lmstutor-wbo
     restart: unless-stopped
-    networks:
-      - lmstutor-network
-
-  glitchtip-postgres:
-    image: postgres:15-alpine
-    container_name: glitchtip-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_HOST_AUTH_METHOD: trust
-    volumes:
-      - glitchtip_db:/var/lib/postgresql/data
-    networks:
-      - lmstutor-network
-
-  glitchtip-web:
-    image: glitchtip/glitchtip:latest
-    container_name: glitchtip-web
-    restart: unless-stopped
-    depends_on:
-      - glitchtip-postgres
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: postgres://postgres@glitchtip-postgres/postgres
-      SECRET_KEY: EdSpace_GlitchTip_2026_SecureKey!
-      GLITCHTIP_DOMAIN: https://ed-space.ru
-      DEFAULT_FROM_EMAIL: noreply@ed-space.ru
-      ENABLE_USER_REGISTRATION: "False"
-      VALKEY_URL: ""
     networks:
       - lmstutor-network
 
 volumes:
   postgres_data:
-  glitchtip_db:
 
 networks:
   lmstutor-network:

@@ -24,6 +24,20 @@ public class IntegrationController {
     @Autowired
     private ExternalIntegrationService integrationService;
 
+    @PostMapping("/tasks")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> createTask(@RequestBody Map<String, Object> request,
+                                        @RequestAttribute("userId") Long tutorId) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> params = (Map<String, Object>) request;
+            TaskBank task = integrationService.createTask(params, tutorId);
+            return ResponseEntity.ok(task);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/import/kege")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> importFromKEGE(@RequestBody Map<String, String> request,
@@ -92,7 +106,6 @@ public class IntegrationController {
         try {
             TaskBank task = integrationService.getTaskForHomework(id);
 
-            // ✅ IDOR FIX: Проверяем, что задание принадлежит репетитору или публичное
             if (task.getTutor() != null &&
                     !task.getTutor().getId().equals(tutorId) &&
                     !Boolean.TRUE.equals(task.getIsPublic())) {
@@ -105,6 +118,25 @@ public class IntegrationController {
         }
     }
 
+    @DeleteMapping("/tasks/{id}")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> deleteTask(@PathVariable Long id,
+                                        @RequestAttribute("userId") Long tutorId) {
+        try {
+            TaskBank task = integrationService.getTaskForHomework(id);
+
+            // Проверка что задание принадлежит репетитору
+            if (task.getTutor() != null && !task.getTutor().getId().equals(tutorId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            integrationService.deleteTask(id);
+            return ResponseEntity.ok(Map.of("message", "Задание удалено"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/create-homework-from-task")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> createHomeworkFromTask(@RequestBody Map<String, Object> request,
@@ -113,7 +145,6 @@ public class IntegrationController {
             Long taskId = Long.parseLong(request.get("taskId").toString());
             Long studentId = Long.parseLong(request.get("studentId").toString());
 
-            // ✅ IDOR FIX: Проверяем, что задание принадлежит репетитору или публичное
             TaskBank task = integrationService.getTaskForHomework(taskId);
             if (task.getTutor() != null &&
                     !task.getTutor().getId().equals(currentUserId) &&

@@ -52,11 +52,14 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
     List<Lesson> findByTutorIdAndLessonDate(Long tutorId, LocalDate lessonDate);
 
+    @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND l.lessonDate >= :since AND l.status IN ('SCHEDULED', 'RESCHEDULED', 'IN_PROGRESS') ORDER BY l.lessonDate ASC, l.startTime ASC")
+    List<Lesson> findActiveLessonsSince(@Param("tutorId") Long tutorId, @Param("since") LocalDate since);
+
     @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND l.lessonDate >= :today AND l.status IN ('SCHEDULED', 'RESCHEDULED') ORDER BY l.lessonDate ASC, l.startTime ASC")
     List<Lesson> findUpcomingLessons(@Param("tutorId") Long tutorId, @Param("today") LocalDate today);
 
-    @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId ORDER BY l.lessonDate DESC, l.startTime DESC")
-    List<Lesson> findAllByTutorId(@Param("tutorId") Long tutorId);
+    @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND l.lessonDate >= :since ORDER BY l.lessonDate DESC, l.startTime DESC")
+    List<Lesson> findAllByTutorIdSince(@Param("tutorId") Long tutorId, @Param("since") LocalDate since);
 
     @Query("SELECT l FROM Lesson l WHERE l.tutor.id = :tutorId AND (l.status = 'COMPLETED' OR l.status = 'PAID' OR l.status = 'CANCELLED') ORDER BY l.lessonDate DESC, l.startTime DESC")
     List<Lesson> findArchivedLessons(@Param("tutorId") Long tutorId);

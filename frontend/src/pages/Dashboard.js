@@ -28,6 +28,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import ruLocale from 'date-fns/locale/ru';
+import EdSpaceOwl from '../components/EdSpaceOwl';
 import { format, isSameDay, subDays, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
@@ -85,6 +86,33 @@ const TimeDivider = styled(Box)({
     },
 });
 
+// // ========== СОВА В УГЛУ ==========
+// const CornerOwl = () => {
+//   const [owlState, setOwlState] = useState('idle');
+  
+//   return (
+//     <Box
+//       onMouseEnter={() => setOwlState('happy')}
+//       onMouseLeave={() => setOwlState('idle')}
+//       onClick={() => setOwlState('loading')}
+//       sx={{
+//         position: 'fixed',
+//         bottom: 20,
+//         left: 20,
+//         zIndex: 9999,
+//         cursor: 'pointer',
+//         opacity: 0.6,
+//         transition: 'opacity 0.3s, transform 0.3s',
+//         '&:hover': {
+//           opacity: 1,
+//           transform: 'scale(1.15)',
+//         },
+//       }}
+//     >
+//       <EdSpaceOwl state={owlState} size={100} />
+//     </Box>
+//   );
+// };
 
 
 function Dashboard() {
@@ -872,8 +900,11 @@ function Dashboard() {
 
     if (loading) return (
         <PageContainer>
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <EdSpaceLoader text="Загрузка расписания..." />
+            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', gap: 2 }}>
+                <EdSpaceOwl state="loading" size={180} />
+                <Typography sx={{ color: '#6B7280', fontSize: '16px', fontWeight: 500 }}>
+                    Загружаем расписание...
+                </Typography>
             </Box>
         </PageContainer>
     );
@@ -1300,6 +1331,7 @@ function Dashboard() {
                 <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
                     <Alert severity={snackbar.severity} sx={{ borderRadius: '8px' }}>{snackbar.message}</Alert>
                 </Snackbar>
+            {/* <CornerOwl /> */}
             </PageContainer>
         </LocalizationProvider>
     );

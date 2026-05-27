@@ -418,6 +418,21 @@ public class LessonController {
         }
     }
 
+    @GetMapping("/active")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getActiveLessons(@RequestParam Long tutorId,
+                                              @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        if (!tutorId.equals(currentUserId)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+        }
+        try {
+            List<Lesson> lessons = lessonService.getActiveLessons(tutorId);
+            return ResponseEntity.ok(lessons);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/{id}/select-room")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> selectRoom(@PathVariable Long id,

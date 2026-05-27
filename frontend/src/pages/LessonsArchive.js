@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/LessonsArchive.js (v3 — единый источник дохода) ==========
+// ========== frontend/src/pages/LessonsArchive.js (v4 — исправленная аналитика) ==========
 import React, { useState, useEffect } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
 import axiosInstance, { getArchivedLessons } from '../services/api';
@@ -110,7 +110,8 @@ function LessonsArchive() {
     });
 
     useEffect(() => { if (user && user.id) fetchData(); }, [user]);
-    useEffect(() => { applyFilters(); calculateStats(); }, [lessons, payments, filterStatus, filterStudent, selectedMonth, searchTerm]);
+    useEffect(() => { applyFilters(); }, [lessons, payments, filterStatus, filterStudent, selectedMonth, searchTerm]);
+    useEffect(() => { calculateStats(); }, [lessons, payments, selectedMonth]);
 
     const fetchData = async () => {
         if (!user || !user.id) return;
@@ -156,45 +157,43 @@ function LessonsArchive() {
     };
 
     const calculateStats = () => {
-        const total = lessons.length;
-        const completed = lessons.filter(l => l.status === 'COMPLETED').length;
-        const paid = lessons.filter(l => l.status === 'PAID').length;
-        const cancelled = lessons.filter(l => l.status === 'CANCELLED').length;
+        const monthStart = startOfMonth(selectedMonth);
+        const monthEnd = endOfMonth(selectedMonth);
+        const monthLessons = lessons.filter(l => {
+            const d = new Date(l.lessonDate);
+            return d >= monthStart && d <= monthEnd;
+        });
+
+        const total = monthLessons.length;
+        const completed = monthLessons.filter(l => l.status === 'COMPLETED').length;
+        const paid = monthLessons.filter(l => l.status === 'PAID').length;
+        const cancelled = monthLessons.filter(l => l.status === 'CANCELLED').length;
 
         const months = eachMonthOfInterval({ start: subMonths(new Date(), 5), end: new Date() });
 
         const monthlyStats = months.map(month => {
-            const monthStart = startOfMonth(month);
-            const monthEnd = endOfMonth(month);
-            const monthLessons = filteredLessons.filter(l => {
+            const mStart = startOfMonth(month);
+            const mEnd = endOfMonth(month);
+            const mMonthLessons = lessons.filter(l => {
                 const lessonDate = new Date(l.lessonDate);
-                return lessonDate >= monthStart && lessonDate <= monthEnd;
+                return lessonDate >= mStart && lessonDate <= mEnd;
             });
 
-            // Платежи за месяц
             const monthPayments = payments.filter(p => {
                 const paymentDate = new Date(p.paymentDate);
-                return paymentDate >= monthStart && paymentDate <= monthEnd &&
+                return paymentDate >= mStart && paymentDate <= mEnd &&
                     (p.status === 'PAID' || p.status === 'paid' || p.status === 'CONFIRMED');
             });
 
-            // ID уроков, уже учтённых в платежах
-            const paidLessonIds = new Set(monthPayments.map(p => p.lesson?.id).filter(id => id));
-
-            // PAID уроки без платёжной записи
-            const paidLessonsIncome = monthLessons
-                .filter(l => l.status === 'PAID' && !paidLessonIds.has(l.id))
-                .reduce((sum, l) => sum + (getStudentRateForTutor(l.student, user?.id) || 0), 0);
-
-            const totalIncome = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0) + paidLessonsIncome;
+            const totalIncome = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
             return {
                 month: format(month, 'MMM', { locale: ru }),
                 fullMonth: format(month, 'LLLL yyyy', { locale: ru }),
-                total: monthLessons.length,
-                completed: monthLessons.filter(l => l.status === 'COMPLETED').length,
-                paid: monthLessons.filter(l => l.status === 'PAID').length,
-                cancelled: monthLessons.filter(l => l.status === 'CANCELLED').length,
+                total: mMonthLessons.length,
+                completed: mMonthLessons.filter(l => l.status === 'COMPLETED').length,
+                paid: mMonthLessons.filter(l => l.status === 'PAID').length,
+                cancelled: mMonthLessons.filter(l => l.status === 'CANCELLED').length,
                 income: totalIncome
             };
         });
@@ -205,7 +204,15 @@ function LessonsArchive() {
 
     const getFilteredLessonsInternal = () => {
         let filtered = [...lessons];
-        if (filterStatus !== 'all') filtered = filtered.filter(l => l.status === filterStatus);
+        
+        if (filterStatus !== 'all') {
+            if (filterStatus === 'COMPLETED') {
+                filtered = filtered.filter(l => l.status === 'COMPLETED');
+            } else {
+                filtered = filtered.filter(l => l.status === filterStatus);
+            }
+        }
+        
         if (filterStudent !== 'all') filtered = filtered.filter(l => l.student?.id === parseInt(filterStudent));
         const monthStart = startOfMonth(selectedMonth);
         const monthEnd = endOfMonth(selectedMonth);
@@ -276,7 +283,7 @@ function LessonsArchive() {
     const getStatusBadge = (status) => {
         switch (status) {
             case 'PAID': return <Box className="badge badge-success"><CheckIcon sx={{ fontSize: 12 }} />Оплачено</Box>;
-            case 'COMPLETED': return <Box className="badge badge-info"><ScheduleIcon sx={{ fontSize: 12 }} />Проведено</Box>;
+            case 'COMPLETED': return <Box className="badge badge-info"><ScheduleIcon sx={{ fontSize: 12 }} />Не оплачено</Box>;
             case 'CANCELLED': return <Box className="badge badge-danger"><CancelIcon sx={{ fontSize: 12 }} />Отменено</Box>;
             default: return <Box className="badge badge-neutral">{status}</Box>;
         }
@@ -316,7 +323,7 @@ function LessonsArchive() {
                 <Grid container spacing={1.5} sx={{ mb: 3 }}>
                     {[
                         { label: 'Всего записей', value: stats.total, color: '#3B82F6', bg: '#EFF6FF' },
-                        { label: 'Проведено', value: stats.completed, color: '#F59E0B', bg: '#FFFBEB' },
+                        { label: 'Не оплачено', value: stats.completed, color: '#F59E0B', bg: '#FFFBEB' },
                         { label: 'Оплачено', value: stats.paid, color: '#10B981', bg: '#ECFDF5' },
                         { label: 'Отменено', value: stats.cancelled, color: '#EF4444', bg: '#FEF2F2' },
                     ].map((item) => (
@@ -346,7 +353,7 @@ function LessonsArchive() {
                                 <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} label="Статус" sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' } }}>
                                     <MenuItem value="all">Все статусы</MenuItem>
                                     <MenuItem value="PAID">Оплачено</MenuItem>
-                                    <MenuItem value="COMPLETED">Проведено</MenuItem>
+                                    <MenuItem value="COMPLETED">Не оплачено</MenuItem>
                                     <MenuItem value="CANCELLED">Отменено</MenuItem>
                                 </Select>
                             </FormControl>
@@ -520,7 +527,6 @@ function LessonsArchive() {
                                         const rate = getStudentRateForTutor(student, user?.id) || 0;
                                         const isExpanded = expandedRow === lesson.id;
                                         
-                                        // Доход: сначала ищем платёж, потом ставку
                                         const lessonPayment = payments.find(p => p.lesson?.id === lesson.id && (p.status === 'PAID' || p.status === 'paid'));
                                         const displayAmount = lessonPayment ? lessonPayment.amount : (lesson.status === 'PAID' ? rate : 0);
 

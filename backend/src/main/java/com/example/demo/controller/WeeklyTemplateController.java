@@ -1,3 +1,4 @@
+// ========== backend/src/main/java/com/example/demo/controller/WeeklyTemplateController.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.controller;
 
 import com.example.demo.entity.WeeklyTemplate;
@@ -78,10 +79,12 @@ public class WeeklyTemplateController {
             LocalTime localEndTime = LocalTime.parse(endTimeStr);
             int dayOfWeek = Integer.parseInt(request.get("dayOfWeek").toString());
 
+            // Если время между 00:00 и 04:00 — это ночное время, сдвигаем день недели
             if (localStartTime.isAfter(LocalTime.of(0, 0).minusNanos(1))
                     && localStartTime.isBefore(LocalTime.of(4, 0))) {
                 dayOfWeek = dayOfWeek % 7 + 1;
             }
+
             // Конвертируем локальное время в UTC и определяем реальный день недели в UTC
             LocalDate monday = LocalDate.now().with(java.time.DayOfWeek.MONDAY);
             LocalDate localDate = monday.plusDays(dayOfWeek - 1);

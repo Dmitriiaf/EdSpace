@@ -19,6 +19,7 @@
     "@tldraw/sync": "^5.0.0",
     "axios": "^1.13.6",
     "date-fns": "^4.1.0",
+    "framer-motion": "^12.40.0",
     "react": "^19.2.4",
     "react-big-calendar": "^1.19.4",
     "react-chrome-dino": "^0.1.3",
