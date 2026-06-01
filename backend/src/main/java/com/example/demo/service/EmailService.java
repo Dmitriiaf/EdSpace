@@ -332,4 +332,40 @@ public class EmailService {
             throw new RuntimeException("Не удалось отправить email: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Отправить код подтверждения email
+     */
+    public void sendVerificationCode(String email, String userName, String code) {
+        String subject = "🔐 EdSpace — Код подтверждения: " + code;
+
+        String htmlMessage = String.format("""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"></head>
+            <body style="font-family: Arial, sans-serif; background: #EEF2FF; padding: 30px;">
+                <div style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 30px rgba(79,70,229,0.15);">
+                    <div style="background: linear-gradient(135deg, #4F46E5, #7C3AED); padding: 28px; text-align: center; color: #fff;">
+                        <h1 style="margin: 0; font-size: 24px;">🔐 EdSpace</h1>
+                        <p style="margin: 8px 0 0; opacity: 0.9;">Подтверждение email</p>
+                    </div>
+                    <div style="padding: 28px;">
+                        <p style="font-size: 15px; color: #1F2937;">Здравствуйте, <strong>%s</strong>!</p>
+                        <p style="font-size: 14px; color: #6B7280;">Ваш код подтверждения:</p>
+                        <div style="text-align: center; margin: 24px 0;">
+                            <span style="display: inline-block; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #4F46E5; background: #EEF2FF; padding: 16px 28px; border-radius: 14px;">%s</span>
+                        </div>
+                        <p style="font-size: 13px; color: #9CA3AF;">Код действителен 10 минут. Никому не сообщайте этот код.</p>
+                    </div>
+                    <div style="background: #F9FAFB; padding: 14px; text-align: center; border-top: 1px solid #E5E7EB;">
+                        <p style="font-size: 11px; color: #9CA3AF; margin: 0;">© 2026 EdSpace</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """, userName, code);
+
+        sendHtmlEmail(email, subject, htmlMessage);
+        log.info("📧 Код подтверждения отправлен на {}", email);
+    }
 }

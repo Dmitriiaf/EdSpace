@@ -16,7 +16,7 @@ public class LessonGeneratorScheduler {
     private LessonGeneratorService lessonGeneratorService;
 
     // Запускается каждый понедельник в 00:01
-    @Scheduled(cron = "0 1 0 * * MON")
+    @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Krasnoyarsk")
     public void generateWeeklyLessons() {
         System.out.println("========== ЗАПУСК ЕЖЕНЕДЕЛЬНОЙ ГЕНЕРАЦИИ ЗАНЯТИЙ ==========");
         LocalDate today = LocalDate.now();

@@ -30,6 +30,8 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
             @Param("tutorId") Long tutorId,
             @Param("status") String status);
 
+    List<Lesson> findByGroupId(Long groupId);
+
     @Query("SELECT l FROM Lesson l WHERE l.lessonDate = :date AND l.startTime BETWEEN :startFrom AND :startTo AND l.status IN ('SCHEDULED', 'RESCHEDULED')")
     List<Lesson> findByLessonDateAndStartTimeBetween(
             @Param("date") LocalDate date,
@@ -135,6 +137,17 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
             @Param("endTime") LocalTime endTime
     );
 
+    // Для автогенерации: поиск будущих уроков шаблона
+    @Query("SELECT l FROM Lesson l WHERE l.weeklyTemplateId = :templateId AND l.lessonDate > :afterDate AND l.status = :status")
+    List<Lesson> findByTemplateIdAndLessonDateAfterAndStatus(
+            @Param("templateId") Long templateId,
+            @Param("afterDate") LocalDate afterDate,
+            @Param("status") String status);
 
+    // Проверка существования урока шаблона на дату
+    @Query("SELECT COUNT(l) > 0 FROM Lesson l WHERE l.weeklyTemplateId = :templateId AND l.lessonDate = :date")
+    boolean existsByTemplateIdAndLessonDate(
+            @Param("templateId") Long templateId,
+            @Param("date") LocalDate date);
 
 }

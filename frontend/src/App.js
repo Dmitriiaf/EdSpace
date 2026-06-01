@@ -40,8 +40,8 @@ import StudentMaterials from './pages/StudentMaterials';
 import Tools from './pages/Tools';
 import Homework from './pages/Homework';
 import Extracurricular from './pages/Extracurricular';
+import Groups from './pages/Groups';
 
-// Контекст темы
 const ThemeContext = createContext();
 export const useThemeContext = () => useContext(ThemeContext);
 
@@ -50,8 +50,7 @@ const StepikPageWrapper = () => {
     return <StepikPage key={location.pathname + Date.now()} />;
 };
 
-// Фон с акцентными пятнами
-const BG_IMAGE = `
+const BG_IMAGE_LIGHT = `
     linear-gradient(180deg, rgba(79, 70, 229, 0.04) 0%, transparent 300px),
     radial-gradient(circle at 15% 20%, rgba(79, 70, 229, 0.12) 0%, transparent 50%),
     radial-gradient(circle at 85% 75%, rgba(124, 58, 237, 0.10) 0%, transparent 50%),
@@ -61,9 +60,13 @@ const BG_IMAGE = `
     radial-gradient(circle at 70% 30%, rgba(79, 70, 229, 0.08) 0%, transparent 50%)
 `;
 
+const BG_IMAGE_DARK = `
+    radial-gradient(circle at 15% 20%, rgba(79, 70, 229, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 85% 75%, rgba(124, 58, 237, 0.04) 0%, transparent 50%)
+`;
+
 const AppContent = () => {
     const { user } = useAuth();
-
     const [isSidebarHovered, setIsSidebarHovered] = useState(false);
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('darkMode');
@@ -84,29 +87,28 @@ const AppContent = () => {
             primary: { main: '#4F46E5' },
             secondary: { main: '#10B981' },
             background: {
-                default: darkMode ? '#121212' : '#F3F4F6',
-                paper: darkMode ? '#1e1e1e' : '#FFFFFF',
+                default: darkMode ? '#0f0f0f' : '#F3F4F6',
+                paper: darkMode ? '#1a1a1a' : '#FFFFFF',
             },
             text: {
-                primary: darkMode ? '#ffffff' : '#1F2937',
-                secondary: darkMode ? '#aaaaaa' : '#6B7280',
+                primary: darkMode ? '#E5E7EB' : '#1F2937',
+                secondary: darkMode ? '#9CA3AF' : '#6B7280',
             },
+            divider: darkMode ? '#2a2a2a' : '#E5E7EB',
         },
         shape: { borderRadius: 12 },
         components: {
             MuiCard: {
                 styleOverrides: {
                     root: {
-                        backgroundColor: darkMode ? '#1e1e1e' : '#ffffff',
-                        borderColor: darkMode ? '#333' : '#E5E7EB',
+                        backgroundColor: darkMode ? '#1a1a1a' : '#FFFFFF',
+                        border: `1px solid ${darkMode ? '#2a2a2a' : '#E5E7EB'}`,
                     },
                 },
             },
             MuiPaper: {
                 styleOverrides: {
-                    root: {
-                        backgroundImage: 'none',
-                    },
+                    root: { backgroundImage: 'none' },
                 },
             },
         },
@@ -137,6 +139,22 @@ const AppContent = () => {
         return (
             <ThemeProvider theme={theme}>
                 <CssBaseline />
+                <style>{`
+                    .MuiButton-root, .MuiIconButton-root, .MuiChip-root, .MuiCard-root, .MuiPaper-root {
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    }
+                    @keyframes pulse {
+                        0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
+                        50% { box-shadow: 0 0 0 8px rgba(79, 70, 229, 0); }
+                    }
+                    .MuiButton-containedPrimary { animation: pulse 2s infinite; }
+                    .MuiCard-root:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.08) !important; }
+                    @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+                    .fade-in { animation: fadeInUp 0.4s ease forwards; }
+                    .MuiIconButton-root:hover .MuiSvgIcon-root { transform: scale(1.1); transition: transform 0.2s ease; }
+                    .MuiTab-root { transition: all 0.3s ease !important; }
+                    .MuiTab-root:hover { background: rgba(79, 70, 229, 0.04); }
+                `}</style>
                 {publicRoutes}
             </ThemeProvider>
         );
@@ -145,26 +163,33 @@ const AppContent = () => {
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
+            <style>{`
+                .MuiButton-root, .MuiIconButton-root, .MuiChip-root, .MuiCard-root, .MuiPaper-root {
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                }
+                @keyframes pulse {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
+                    50% { box-shadow: 0 0 0 8px rgba(79, 70, 229, 0); }
+                }
+                .MuiButton-containedPrimary { animation: pulse 2s infinite; }
+                .MuiCard-root:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.08) !important; }
+                @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+                .fade-in { animation: fadeInUp 0.4s ease forwards; }
+                .MuiIconButton-root:hover .MuiSvgIcon-root { transform: scale(1.1); transition: transform 0.2s ease; }
+                .MuiTab-root { transition: all 0.3s ease !important; }
+                .MuiTab-root:hover { background: rgba(79, 70, 229, 0.04); }
+            `}</style>
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>
                 <Sidebar onHoverChange={setIsSidebarHovered} darkMode={darkMode} />
                 
-                {/* Кнопка переключения темы */}
                 <Tooltip title={darkMode ? 'Светлая тема' : 'Тёмная тема'}>
                     <IconButton
                         onClick={toggleDarkMode}
                         sx={{
-                            position: 'fixed',
-                            bottom: 20,
-                            right: 20,
-                            zIndex: 9999,
-                            bgcolor: darkMode ? '#333' : '#4F46E5',
-                            color: 'white',
-                            '&:hover': {
-                                bgcolor: darkMode ? '#555' : '#4338CA',
-                            },
-                            width: 48,
-                            height: 48,
-                            boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                            position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
+                            bgcolor: darkMode ? '#333' : '#4F46E5', color: 'white',
+                            '&:hover': { bgcolor: darkMode ? '#555' : '#4338CA' },
+                            width: 48, height: 48, boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
                         }}
                     >
                         {darkMode ? <LightIcon /> : <DarkIcon />}
@@ -173,22 +198,20 @@ const AppContent = () => {
 
                 <Box
                     component="main"
+                    className="fade-in"
                     sx={{
-                        flexGrow: 1,
-                        ml: { xs: 0, md: `${sidebarWidth}px` },
-                        minHeight: '100vh',
-                        transition: 'margin-left 0.2s ease-in-out',
-                        bgcolor: darkMode ? '#121212' : '#F3F4F6',
-                        backgroundImage: darkMode ? 'none' : BG_IMAGE,
+                        flexGrow: 1, ml: { xs: 0, md: `${sidebarWidth}px` },
+                        minHeight: '100vh', transition: 'margin-left 0.2s ease-in-out',
+                        bgcolor: darkMode ? '#0f0f0f' : '#F3F4F6',
+                        backgroundImage: darkMode ? BG_IMAGE_DARK : BG_IMAGE_LIGHT,
                         width: { xs: '100%', md: `calc(100% - ${sidebarWidth}px)` },
-
                     }}
                 >
                     <Routes>
-                        {/* Репетитор */}
                         <Route path="/dashboard" element={<PrivateRoute requiredRole="tutor"><Dashboard /></PrivateRoute>} />
                         <Route path="/students" element={<PrivateRoute requiredRole="tutor"><Students /></PrivateRoute>} />
                         <Route path="/courses" element={<PrivateRoute requiredRole="tutor"><Courses /></PrivateRoute>} />
+                        <Route path="/groups" element={<PrivateRoute requiredRole="tutor"><Groups /></PrivateRoute>} />
                         <Route path="/weekly-schedule" element={<PrivateRoute requiredRole="tutor"><WeeklySchedule /></PrivateRoute>} />
                         <Route path="/finance" element={<PrivateRoute requiredRole="tutor"><Finance /></PrivateRoute>} />
                         <Route path="/materials" element={<PrivateRoute requiredRole="tutor"><Materials /></PrivateRoute>} />
@@ -200,28 +223,22 @@ const AppContent = () => {
                         <Route path="/student-progress/:id" element={<PrivateRoute requiredRole="tutor"><StudentProgress /></PrivateRoute>} />
                         <Route path="/tools" element={<PrivateRoute requiredRole="tutor"><Tools /></PrivateRoute>} />
                         <Route path="/extracurricular" element={<PrivateRoute requiredRole="tutor"><Extracurricular /></PrivateRoute>} />
-                        {/* Ученик */}
                         <Route path="/student" element={<PrivateRoute requiredRole="student"><StudentDashboard /></PrivateRoute>} />
                         <Route path="/student/profile" element={<PrivateRoute requiredRole="student"><StudentProfile /></PrivateRoute>} />
                         <Route path="/student/progress" element={<PrivateRoute requiredRole="student"><StudentProgress /></PrivateRoute>} />
                         <Route path="/student/materials" element={<PrivateRoute requiredRole="student"><StudentMaterials /></PrivateRoute>} />
                         <Route path="/student/tools" element={<PrivateRoute requiredRole="student"><Tools /></PrivateRoute>} />
                         <Route path="/student/homework" element={<PrivateRoute requiredRole="student"><Homework /></PrivateRoute>} />
-                        {/* Родитель */}
                         <Route path="/parent/dashboard" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/children" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/payments" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/profile" element={<PrivateRoute requiredRole="parent"><ParentProfile /></PrivateRoute>} />
-
-                        {/* Публичные страницы */}
                         <Route path="/onboarding" element={<OnboardingQuestions />} />
                         <Route path="/forgot-password" element={<ForgotPassword />} />
                         <Route path="/reset-password" element={<ResetPassword />} />
                         <Route path="/complete-registration" element={<CompleteRegistration />} />
                         <Route path="/parent-registration" element={<ParentRegistration />} />
                         <Route path="/stepik/callback" element={<StepikCallback />} />
-
-                        {/* Перенаправление */}
                         <Route path="/" element={<Navigate to={isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
                         <Route path="*" element={<NotFoundPage />} />
                     </Routes>

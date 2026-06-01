@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Finance.js (v2.1 — HERO-СЕКЦИЯ) ==========
+// ========== frontend/src/pages/Finance.js (v3.0 — Glassmorphism + Bento Style) ==========
 import React, { useState, useEffect } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
@@ -40,76 +40,167 @@ import axiosInstance, { getAllLessons } from '../services/api';
 import Payments from './Payments';
 import Subscriptions from './Subscriptions';
 
-// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+// ========== СТИЛИ — ЖИВОЕ СТЕКЛО + BENTO ==========
 
+// Основной контейнер с градиентным фоном
+const GlassPageContainer = styled(Box)(({ theme }) => ({
+    background: 'radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.08) 0%, rgba(16, 185, 129, 0.05) 100%)',
+    minHeight: '100vh',
+    padding: theme.spacing(3),
+    [theme.breakpoints.down('sm')]: {
+        padding: theme.spacing(1.5),
+    },
+}));
 
-const HeroSection = styled(Paper)({
-    padding: '32px',
-    borderRadius: '16px',
-    background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+// Glass-карточка для Hero секции
+const GlassHero = styled(Box)(({ theme }) => ({
+    background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.9) 0%, rgba(16, 185, 129, 0.85) 100%)',
+    backdropFilter: 'blur(10px)',
+    borderRadius: '28px',
+    padding: theme.spacing(4),
     color: '#FFFFFF',
     position: 'relative',
     overflow: 'hidden',
-    boxShadow: '0 4px 20px rgba(79, 70, 229, 0.3)',
-});
+    boxShadow: '0 25px 40px -12px rgba(79, 70, 229, 0.35)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    marginBottom: theme.spacing(3),
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: -50,
+        right: -30,
+        width: 250,
+        height: 250,
+        borderRadius: '50%',
+        background: 'rgba(255,255,255,0.1)',
+    },
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        bottom: -70,
+        left: -40,
+        width: 200,
+        height: 200,
+        borderRadius: '50%',
+        background: 'rgba(255,255,255,0.08)',
+    },
+}));
 
-const HeroMiniCard = styled(Box)({
-    backgroundColor: 'rgba(255,255,255,0.15)',
+// Glass-карточка-статистика в Hero
+const GlassStatCard = styled(Paper)(({ theme }) => ({
+    background: 'rgba(255, 255, 255, 0.15)',
+    backdropFilter: 'blur(12px)',
+    borderRadius: '20px',
+    padding: theme.spacing(2.5),
+    textAlign: 'center',
+    border: '1px solid rgba(255, 255, 255, 0.25)',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+        background: 'rgba(255, 255, 255, 0.25)',
+        transform: 'translateY(-4px)',
+    },
+}));
+
+// Основная Bento-карточка
+const BentoCard = styled(Paper)(({ theme }) => ({
+    background: 'rgba(255, 255, 255, 0.8)',
+    backdropFilter: 'blur(12px)',
+    borderRadius: '24px',
+    padding: theme.spacing(3),
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.04)',
+    border: '1px solid rgba(255, 255, 255, 0.5)',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+        boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.1)',
+        borderColor: 'rgba(255, 255, 255, 0.8)',
+    },
+}));
+
+// Мини-карточка для статистики
+const GlassMiniCard = styled(Paper)(({ theme }) => ({
+    background: 'rgba(255, 255, 255, 0.6)',
     backdropFilter: 'blur(8px)',
-    borderRadius: '12px',
-    padding: '16px 24px',
+    borderRadius: '20px',
+    padding: theme.spacing(2),
     textAlign: 'center',
-});
-
-const ChartCard = styled(Paper)({
-    padding: '24px',
-    borderRadius: '12px',
-    backgroundColor: '#FFFFFF',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-});
-
-const ForecastCard = styled(Paper)({
-    padding: '24px',
-    borderRadius: '12px',
-    backgroundColor: '#FFFFFF',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-});
-
-const ForecastResultCard = styled(Card)({
-    backgroundColor: '#ECFDF5',
-    marginBottom: '20px',
-    borderRadius: '12px',
-    border: '1px solid #A7F3D0',
     boxShadow: 'none',
-});
-
-const StatMiniCard = styled(Paper)({
-    padding: '20px',
-    borderRadius: '12px',
-    backgroundColor: '#FFFFFF',
-    textAlign: 'center',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.4)',
     transition: 'all 0.2s ease',
     '&:hover': {
-        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+        background: 'rgba(255, 255, 255, 0.8)',
         transform: 'translateY(-2px)',
     },
-});
+}));
 
+// Стеклянные вкладки
+const GlassTabsPaper = styled(Paper)(({ theme }) => ({
+    background: 'rgba(255, 255, 255, 0.6)',
+    backdropFilter: 'blur(12px)',
+    borderRadius: '20px',
+    overflow: 'hidden',
+    marginBottom: theme.spacing(3),
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)',
+    border: '1px solid rgba(255, 255, 255, 0.5)',
+}));
 
-const StyledTableContainer = styled(TableContainer)({
-    borderRadius: '8px',
-    border: '1px solid #E5E7EB',
+// Стеклянная таблица
+const GlassTableContainer = styled(TableContainer)(({ theme }) => ({
+    background: 'rgba(255, 255, 255, 0.5)',
+    backdropFilter: 'blur(8px)',
+    borderRadius: '20px',
+    border: '1px solid rgba(255, 255, 255, 0.4)',
     boxShadow: 'none',
     maxHeight: 400,
-});
+}));
 
-const TabsPaper = styled(Paper)({
-    borderRadius: '12px',
-    overflow: 'hidden',
-    marginBottom: '24px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-});
+// Стеклянный Select/DatePicker wrapper
+const GlassTextField = styled(TextField)(({ theme }) => ({
+    '& .MuiOutlinedInput-root': {
+        borderRadius: '16px',
+        backgroundColor: 'rgba(255, 255, 255, 0.6)',
+        backdropFilter: 'blur(8px)',
+        '& fieldset': {
+            borderColor: 'rgba(255, 255, 255, 0.5)',
+        },
+        '&:hover fieldset': {
+            borderColor: 'rgba(79, 70, 229, 0.4)',
+        },
+        '&.Mui-focused fieldset': {
+            borderColor: '#4F46E5',
+            borderWidth: '1px',
+        },
+    },
+}));
+
+// Стеклянная кнопка
+const GlassButton = styled(Button)(({ theme }) => ({
+    borderRadius: '40px',
+    padding: '8px 20px',
+    background: 'rgba(255, 255, 255, 0.9)',
+    backdropFilter: 'blur(4px)',
+    color: '#4F46E5',
+    fontWeight: 600,
+    textTransform: 'none',
+    boxShadow: 'none',
+    '&:hover': {
+        background: '#FFFFFF',
+        boxShadow: '0 8px 20px rgba(79, 70, 229, 0.15)',
+    },
+}));
+
+const GradientButton = styled(Button)(({ theme }) => ({
+    borderRadius: '40px',
+    padding: '8px 24px',
+    background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+    color: '#FFFFFF',
+    fontWeight: 600,
+    textTransform: 'none',
+    boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
+    '&:hover': {
+        background: 'linear-gradient(135deg, #4338CA 0%, #6D28D9 100%)',
+        boxShadow: '0 8px 20px rgba(79, 70, 229, 0.4)',
+    },
+}));
 
 // ========== TAB PANEL ==========
 function TabPanel({ children, value, index }) {
@@ -193,7 +284,6 @@ function Finance() {
             setAllPayments(payments);
             setStudents(studentsList);
 
-            // ========== ЕДИНАЯ ФУНКЦИЯ ПОДСЧЁТА ДОХОДА ЗА МЕСЯЦ ==========
             const calcMonthIncome = (monthStart, monthEnd) => {
                 const mPayments = payments.filter(p => {
                     const paymentDate = new Date(p.paymentDate);
@@ -392,92 +482,105 @@ function Finance() {
     const open = Boolean(anchorEl);
 
     if (loading && tabValue === 0) return (
-        <PageContainer>
+        <GlassPageContainer>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
                 <EdSpaceLoader text="Загрузка..." />
             </Box>
-        </PageContainer>
+        </GlassPageContainer>
     );
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
-            <PageContainer sx={{ px: { xs: 1, sm: 3 }, bgcolor: '#F9FAFB' }}>
-                {/* ========== HERO ========== */}
-                <Box sx={{
-                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                    borderRadius: '24px', p: { xs: 3, sm: 4 }, color: '#fff',
-                    mb: 3, position: 'relative', overflow: 'hidden',
-                    '&::before': { content: '""', position: 'absolute', top: -50, right: -30, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' },
-                    '&::after': { content: '""', position: 'absolute', bottom: -60, left: -20, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' },
-                }}>
+            <GlassPageContainer>
+                {/* ========== GLASS HERO SECTION ========== */}
+                <GlassHero>
                     <Box sx={{ position: 'relative', zIndex: 1 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 4 }}>
                             <Box>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                                    <PaymentsIcon sx={{ fontSize: 32 }} />
-                                    <Typography sx={{ fontSize: '28px', fontWeight: 700 }}>Финансы</Typography>
+                                    <PaymentsIcon sx={{ fontSize: 36, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }} />
+                                    <Typography sx={{ fontSize: '32px', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                                        Финансы
+                                    </Typography>
                                 </Box>
-                                <Typography sx={{ opacity: 0.85, fontSize: '15px' }}>Доходы, платежи и абонементы</Typography>
+                                <Typography sx={{ opacity: 0.85, fontSize: '15px' }}>
+                                    Доходы, платежи и абонементы в единой прозрачной системе
+                                </Typography>
                             </Box>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                                <StyledButton variant="contained" startIcon={<RefreshIcon />} onClick={fetchFinanceData}
-                                    sx={{ bgcolor: '#fff', color: '#059669', fontWeight: 600, '&:hover': { bgcolor: '#F3F4F6' } }}>
+                            <Box sx={{ display: 'flex', gap: 1.5 }}>
+                                <GlassButton startIcon={<RefreshIcon />} onClick={fetchFinanceData}>
                                     Обновить
-                                </StyledButton>
-                                <IconButton onClick={handleMenuOpen} sx={{ color: '#fff' }}><MoreVertIcon /></IconButton>
+                                </GlassButton>
+                                <IconButton onClick={handleMenuOpen} sx={{ color: '#fff', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', borderRadius: '12px' }}>
+                                    <MoreVertIcon />
+                                </IconButton>
                             </Box>
                         </Box>
+                        
                         <Grid container spacing={2}>
                             {[
-                                { label: 'Доход', value: `${monthlyStats.totalIncome.toLocaleString()} ₽`, icon: <PaymentsIcon sx={{ fontSize: 28, mb: 0.5 }} /> },
-                                { label: 'Абонементы', value: `${monthlyStats.subscriptionIncome.toLocaleString()} ₽`, icon: <CardGiftcardIcon sx={{ fontSize: 28, mb: 0.5 }} /> },
-                                { label: 'Поурочно', value: `${monthlyStats.singleIncome.toLocaleString()} ₽`, icon: <ReceiptIcon sx={{ fontSize: 28, mb: 0.5 }} /> },
-                                { label: 'Занятий', value: monthlyStats.totalLessons, icon: <CalendarIcon sx={{ fontSize: 28, mb: 0.5 }} /> },
+                                { label: 'Доход', value: `${monthlyStats.totalIncome.toLocaleString()} ₽`, icon: <PaymentsIcon sx={{ fontSize: 28 }} /> },
+                                { label: 'Абонементы', value: `${monthlyStats.subscriptionIncome.toLocaleString()} ₽`, icon: <CardGiftcardIcon sx={{ fontSize: 28 }} /> },
+                                { label: 'Поурочно', value: `${monthlyStats.singleIncome.toLocaleString()} ₽`, icon: <ReceiptIcon sx={{ fontSize: 28 }} /> },
+                                { label: 'Занятий', value: monthlyStats.totalLessons, icon: <CalendarIcon sx={{ fontSize: 28 }} /> },
                             ].map((s, i) => (
                                 <Grid item xs={6} md={3} key={i}>
-                                    <Paper sx={{ p: 2.5, borderRadius: '16px', bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', textAlign: 'center', border: '1px solid rgba(255,255,255,0.2)' }}>
-                                        {s.icon}
-                                        <Typography sx={{ fontSize: '22px', fontWeight: 700, fontFamily: '"Inter", "Roboto", sans-serif', letterSpacing: '-0.02em' }}>{s.value}</Typography>
+                                    <GlassStatCard elevation={0}>
+                                        <Box sx={{ mb: 1, opacity: 0.9 }}>{s.icon}</Box>
+                                        <Typography sx={{ fontSize: '26px', fontWeight: 700, fontFamily: '"Inter", sans-serif', letterSpacing: '-0.02em' }}>
+                                            {s.value}
+                                        </Typography>
                                         <Typography sx={{ fontSize: '13px', opacity: 0.8, fontWeight: 500 }}>{s.label}</Typography>
-                                    </Paper>
+                                    </GlassStatCard>
                                 </Grid>
                             ))}
                         </Grid>
                     </Box>
-                </Box>
+                </GlassHero>
 
-                {/* Выпадающее меню */}
                 <Menu 
                     anchorEl={anchorEl} 
                     open={open} 
                     onClose={handleMenuClose}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} 
                     transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                    PaperProps={{ sx: { borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' } }}
+                    PaperProps={{ 
+                        sx: { 
+                            borderRadius: '20px', 
+                            background: 'rgba(255, 255, 255, 0.9)',
+                            backdropFilter: 'blur(12px)',
+                            boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                        } 
+                    }}
                 >
-                    <MenuItem onClick={handleExport} sx={{ fontSize: '14px' }}>
+                    <MenuItem onClick={handleExport} sx={{ borderRadius: '12px', mx: 1, my: 0.5 }}>
                         <DownloadIcon sx={{ mr: 1, fontSize: 18 }} />Экспорт отчёта
                     </MenuItem>
                 </Menu>
 
-                {/* ========== ВКЛАДКИ ========== */}
-                <TabsPaper data-tour="finance-tabs" elevation={0}>
+                {/* ========== GLASS TABS ========== */}
+                <GlassTabsPaper elevation={0}>
                     <Tabs 
                         value={tabValue} 
                         onChange={handleTabChange} 
                         variant="fullWidth"
                         sx={{ 
                             '& .MuiTab-root': { 
-                                py: 1.5, 
+                                py: 1.8, 
                                 textTransform: 'none', 
-                                fontWeight: 500, 
-                                fontSize: '14px',
-                                color: '#6B7280', 
-                                '&.Mui-selected': { color: '#4F46E5' } 
+                                fontWeight: 600, 
+                                fontSize: '15px',
+                                color: '#4B5563', 
+                                '&.Mui-selected': { 
+                                    color: '#4F46E5',
+                                    background: 'rgba(79, 70, 229, 0.08)',
+                                } 
                             }, 
                             '& .MuiTabs-indicator': { 
                                 backgroundColor: '#4F46E5',
-                                height: '2px',
+                                height: '3px',
+                                borderRadius: '3px 3px 0 0',
                             } 
                         }}
                     >
@@ -486,12 +589,12 @@ function Finance() {
                         <Tab icon={<CardGiftcardIcon sx={{ fontSize: 20 }} />} label="Абонементы" iconPosition="start" />
                         <Tab icon={<AssessmentIcon sx={{ fontSize: 20 }} />} label="Отчёт" iconPosition="start" />
                     </Tabs>
-                </TabsPaper>
+                </GlassTabsPaper>
 
                 <TabPanel value={tabValue} index={0}>
-                    {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '16px', background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)' }}>{error}</Alert>}
                     
-                    {/* ========== ВЫБОР МЕСЯЦА + РОСТ ========== */}
+                    {/* ========== BENTO: ВЫБОР МЕСЯЦА + РОСТ ========== */}
                     <Box sx={{ 
                         display: 'flex', 
                         justifyContent: 'space-between', 
@@ -510,13 +613,11 @@ function Finance() {
                                 textField: { 
                                     size: 'small', 
                                     sx: { 
-                                        width: 200, 
+                                        width: 220,
                                         '& .MuiOutlinedInput-root': { 
-                                            borderRadius: '8px', 
-                                            backgroundColor: '#FFFFFF',
-                                            '& fieldset': { borderColor: '#E5E7EB' },
-                                            '&:hover fieldset': { borderColor: '#D1D5DB' },
-                                            '&.Mui-focused fieldset': { borderColor: '#4F46E5', boxShadow: '0 0 0 3px rgba(79,70,229,0.1)' },
+                                            borderRadius: '40px', 
+                                            background: 'rgba(255,255,255,0.6)',
+                                            backdropFilter: 'blur(8px)',
                                         },
                                     } 
                                 } 
@@ -526,22 +627,24 @@ function Finance() {
                             icon={monthlyStats.growth >= 0 ? <TrendingUpIcon sx={{ fontSize: 16 }} /> : <TrendingDownIcon sx={{ fontSize: 16 }} />}
                             label={`${monthlyStats.growth >= 0 ? '+' : ''}${monthlyStats.growth.toFixed(1)}% к прошлому`}
                             sx={{ 
-                                bgcolor: monthlyStats.growth >= 0 ? '#ECFDF5' : '#FEF2F2',
+                                bgcolor: monthlyStats.growth >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                backdropFilter: 'blur(4px)',
                                 color: monthlyStats.growth >= 0 ? '#065F46' : '#991B1B',
-                                fontWeight: 500, 
-                                borderRadius: '100px',
+                                fontWeight: 600, 
+                                borderRadius: '40px',
                                 fontSize: '13px',
-                                height: 32,
+                                height: 36,
+                                border: '1px solid rgba(255,255,255,0.3)',
                             }} 
                         />
                     </Box>
 
-                    {/* ========== ГРАФИК ДОХОДОВ ========== */}
-                    <ChartCard elevation={0} sx={{ mt: 3 }}>
+                    {/* ========== BENTO: ГРАФИК ДОХОДОВ ========== */}
+                    <BentoCard elevation={0}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <TimelineIcon sx={{ color: '#4F46E5', fontSize: 20 }} />
-                                <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937' }}>
+                                <TimelineIcon sx={{ color: '#4F46E5', fontSize: 22 }} />
+                                <Typography sx={{ fontSize: '20px', fontWeight: 600, color: '#1F2937' }}>
                                     Динамика доходов
                                 </Typography>
                             </Box>
@@ -551,14 +654,16 @@ function Finance() {
                                 variant="outlined" 
                                 sx={{ 
                                     color: '#6B7280', 
-                                    borderColor: '#D1D5DB', 
-                                    borderRadius: '8px',
+                                    borderColor: 'rgba(209, 213, 219, 0.6)',
+                                    borderRadius: '40px',
                                     fontSize: '12px',
+                                    background: 'rgba(255,255,255,0.4)',
                                 }} 
                             />
                         </Box>
                         
-                            <Box sx={{ height: { xs: 180, sm: 240 }, position: 'relative', mb: 2 }}>                            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: '2%', height: '100%', px: 1 }}>
+                        <Box sx={{ height: { xs: 180, sm: 240 }, position: 'relative', mb: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: '2%', height: '100%', px: 1 }}>
                                 {yearlyData.map((item, idx) => {
                                     const height = maxTrend > 0 ? (item.total / maxTrend) * 200 : 0;
                                     const isHighest = item.total === maxTrend && item.total > 0;
@@ -570,9 +675,10 @@ function Finance() {
                                                     background: isHighest 
                                                         ? 'linear-gradient(180deg, #4F46E5 0%, #7C3AED 100%)' 
                                                         : 'linear-gradient(180deg, #A5B4FC 0%, #C7D2FE 100%)',
-                                                    borderRadius: '8px 8px 4px 4px', 
+                                                    borderRadius: '12px 12px 8px 8px', 
                                                     transition: 'all 0.3s ease', 
                                                     cursor: 'pointer',
+                                                    boxShadow: '0 -2px 8px rgba(79,70,229,0.2)',
                                                     '&:hover': { 
                                                         opacity: 0.85, 
                                                         transform: 'scaleY(1.05)',
@@ -580,10 +686,10 @@ function Finance() {
                                                     } 
                                                 }} />
                                                 <Typography sx={{ 
-                                                    fontSize: '11px', 
-                                                    mt: 1, 
+                                                    fontSize: '12px', 
+                                                    mt: 1.5, 
                                                     display: 'block',
-                                                    fontWeight: isHighest ? 600 : 400,
+                                                    fontWeight: isHighest ? 700 : 500,
                                                     color: isHighest ? '#4F46E5' : '#6B7280',
                                                 }}>
                                                     {item.monthShort}
@@ -595,45 +701,45 @@ function Finance() {
                             </Box>
                         </Box>
                         
-                        <Divider sx={{ my: 2, borderColor: '#F3F4F6' }} />
+                        <Divider sx={{ my: 2, borderColor: 'rgba(0,0,0,0.06)' }} />
                         
                         <Grid container spacing={2}>
                             <Grid item xs={4}>
-                                <StatMiniCard elevation={0}>
-                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#4F46E5' }}>
+                                <GlassMiniCard elevation={0}>
+                                    <Typography sx={{ fontSize: '20px', fontWeight: 700, color: '#4F46E5' }}>
                                         {yearlyData[yearlyData.length - 1]?.total.toLocaleString()} ₽
                                     </Typography>
-                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5 }}>
+                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5, fontWeight: 500 }}>
                                         Текущий
                                     </Typography>
-                                </StatMiniCard>
+                                </GlassMiniCard>
                             </Grid>
                             <Grid item xs={4}>
-                                <StatMiniCard elevation={0}>
-                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#10B981' }}>
+                                <GlassMiniCard elevation={0}>
+                                    <Typography sx={{ fontSize: '20px', fontWeight: 700, color: '#10B981' }}>
                                         {Math.max(...yearlyData.map(d => d.total), 0).toLocaleString()} ₽
                                     </Typography>
-                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5 }}>
+                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5, fontWeight: 500 }}>
                                         Пиковый
                                     </Typography>
-                                </StatMiniCard>
+                                </GlassMiniCard>
                             </Grid>
                             <Grid item xs={4}>
-                                <StatMiniCard elevation={0}>
-                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#F59E0B' }}>
+                                <GlassMiniCard elevation={0}>
+                                    <Typography sx={{ fontSize: '20px', fontWeight: 700, color: '#F59E0B' }}>
                                         {Math.round(yearlyData.reduce((sum, d) => sum + d.total, 0) / Math.max(yearlyData.length, 1)).toLocaleString()} ₽
                                     </Typography>
-                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5 }}>
+                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5, fontWeight: 500 }}>
                                         Средний
                                     </Typography>
-                                </StatMiniCard>
+                                </GlassMiniCard>
                             </Grid>
                         </Grid>
-                    </ChartCard>
+                    </BentoCard>
 
-                    {/* ========== ПРОГНОЗ ========== */}
-                    <ForecastCard elevation={0} sx={{ mt: 3 }}>
-                        <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 3 }}>
+                    {/* ========== BENTO: ПРОГНОЗ ========== */}
+                    <BentoCard elevation={0} sx={{ mt: 3 }}>
+                        <Typography sx={{ fontSize: '20px', fontWeight: 600, color: '#1F2937', mb: 3 }}>
                             Прогноз дохода
                         </Typography>
                         
@@ -651,11 +757,9 @@ function Finance() {
                                             size: 'small', 
                                             sx: { 
                                                 '& .MuiOutlinedInput-root': { 
-                                                    borderRadius: '8px', 
-                                                    backgroundColor: '#FFFFFF',
-                                                    '& fieldset': { borderColor: '#E5E7EB' },
-                                                    '&:hover fieldset': { borderColor: '#D1D5DB' },
-                                                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                                                    borderRadius: '40px', 
+                                                    background: 'rgba(255,255,255,0.6)',
+                                                    backdropFilter: 'blur(8px)',
                                                 },
                                             } 
                                         } 
@@ -663,28 +767,29 @@ function Finance() {
                                 />
                             </Grid>
                             <Grid item xs={12} md={3}>
-                                <StyledButton 
-                                    variant="contained" 
+                                <GradientButton 
                                     startIcon={<CalculateIcon sx={{ fontSize: 18 }} />} 
                                     onClick={calculateForecast} 
                                     disabled={forecastLoading} 
                                     fullWidth
-                                    sx={{ 
-                                        bgcolor: '#4F46E5', 
-                                        '&:hover': { bgcolor: '#4338CA' },
-                                        height: '40px',
-                                    }}
                                 >
                                     {forecastLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Рассчитать'}
-                                </StyledButton>
+                                </GradientButton>
                             </Grid>
                         </Grid>
 
                         {forecastResult && (
                             <Fade in={true}>
                                 <Box>
-                                    <ForecastResultCard>
-                                        <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+                                    <Card sx={{ 
+                                        mb: 3, 
+                                        borderRadius: '24px', 
+                                        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(79, 70, 229, 0.08) 100%)',
+                                        backdropFilter: 'blur(8px)',
+                                        border: '1px solid rgba(255,255,255,0.4)',
+                                        boxShadow: 'none',
+                                    }}>
+                                        <CardContent sx={{ p: 3 }}>
                                             <Box sx={{ 
                                                 display: 'flex', 
                                                 justifyContent: 'space-between', 
@@ -692,31 +797,32 @@ function Finance() {
                                                 gap: 2 
                                             }}>
                                                 <Box>
-                                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mb: 0.5 }}>
+                                                    <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 0.5, fontWeight: 500 }}>
                                                         Прогнозируемый доход
                                                     </Typography>
                                                     <Typography sx={{ 
-                                                        fontWeight: 700, 
+                                                        fontWeight: 800, 
                                                         color: '#065F46',
-                                                        fontSize: { xs: '28px', md: '36px' },
+                                                        fontSize: { xs: '32px', md: '42px' },
+                                                        letterSpacing: '-0.02em',
                                                     }}>
                                                         {forecastResult.totalForecast.toLocaleString()} ₽
                                                     </Typography>
                                                 </Box>
                                                 <Box sx={{ textAlign: 'right' }}>
-                                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mb: 0.5 }}>
+                                                    <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 0.5, fontWeight: 500 }}>
                                                         Запланировано
                                                     </Typography>
-                                                    <Typography sx={{ fontSize: '24px', fontWeight: 600, color: '#1F2937' }}>
-                                                        {forecastResult.totalLessons} занятий
+                                                    <Typography sx={{ fontSize: '28px', fontWeight: 700, color: '#1F2937' }}>
+                                                        {forecastResult.totalLessons}
                                                     </Typography>
                                                     <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>
-                                                        в {forecastResult.daysWithLessons} дней
+                                                        занятий в {forecastResult.daysWithLessons} дней
                                                     </Typography>
                                                 </Box>
                                             </Box>
                                         </CardContent>
-                                    </ForecastResultCard>
+                                    </Card>
                                     
                                     {forecastResult.dailyForecast.length > 0 && (
                                         <>
@@ -725,10 +831,11 @@ function Finance() {
                                                 fontWeight: 600, 
                                                 color: '#1F2937',
                                                 mb: 2,
+                                                ml: 1,
                                             }}>
-                                                Детали по дням
+                                                📅 Детали по дням
                                             </Typography>
-                                            <StyledTableContainer>
+                                            <GlassTableContainer>
                                                 <Table stickyHeader size="small">
                                                     <TableHead>
                                                         <TableRow>
@@ -736,8 +843,8 @@ function Finance() {
                                                                 fontWeight: 600, 
                                                                 fontSize: '12px', 
                                                                 color: '#6B7280',
-                                                                backgroundColor: '#F9FAFB',
-                                                                borderBottom: '1px solid #E5E7EB',
+                                                                background: 'rgba(249, 250, 251, 0.7)',
+                                                                borderBottom: '1px solid rgba(229, 231, 235, 0.5)',
                                                             }}>
                                                                 Дата
                                                             </TableCell>
@@ -745,8 +852,8 @@ function Finance() {
                                                                 fontWeight: 600, 
                                                                 fontSize: '12px', 
                                                                 color: '#6B7280',
-                                                                backgroundColor: '#F9FAFB',
-                                                                borderBottom: '1px solid #E5E7EB',
+                                                                background: 'rgba(249, 250, 251, 0.7)',
+                                                                borderBottom: '1px solid rgba(229, 231, 235, 0.5)',
                                                             }}>
                                                                 День
                                                             </TableCell>
@@ -754,8 +861,8 @@ function Finance() {
                                                                 fontWeight: 600, 
                                                                 fontSize: '12px', 
                                                                 color: '#6B7280',
-                                                                backgroundColor: '#F9FAFB',
-                                                                borderBottom: '1px solid #E5E7EB',
+                                                                background: 'rgba(249, 250, 251, 0.7)',
+                                                                borderBottom: '1px solid rgba(229, 231, 235, 0.5)',
                                                             }}>
                                                                 Занятия
                                                             </TableCell>
@@ -763,8 +870,8 @@ function Finance() {
                                                                 fontWeight: 600, 
                                                                 fontSize: '12px', 
                                                                 color: '#6B7280',
-                                                                backgroundColor: '#F9FAFB',
-                                                                borderBottom: '1px solid #E5E7EB',
+                                                                background: 'rgba(249, 250, 251, 0.7)',
+                                                                borderBottom: '1px solid rgba(229, 231, 235, 0.5)',
                                                             }}>
                                                                 Сумма
                                                             </TableCell>
@@ -776,44 +883,44 @@ function Finance() {
                                                                 key={idx} 
                                                                 hover
                                                                 sx={{ 
-                                                                    '&:nth-of-type(even)': { backgroundColor: '#F9FAFB' },
-                                                                    '&:hover': { backgroundColor: '#EEF2FF' },
+                                                                    '&:nth-of-type(even)': { backgroundColor: 'rgba(249, 250, 251, 0.4)' },
+                                                                    '&:hover': { backgroundColor: 'rgba(238, 242, 255, 0.6)' },
                                                                 }}
                                                             >
-                                                                <TableCell sx={{ fontSize: '14px', color: '#1F2937', borderBottom: '1px solid #F3F4F6' }}>
+                                                                <TableCell sx={{ fontSize: '14px', color: '#1F2937', borderBottom: '1px solid rgba(243, 244, 246, 0.5)' }}>
                                                                     {day.date}
                                                                 </TableCell>
-                                                                <TableCell sx={{ fontSize: '14px', color: '#1F2937', borderBottom: '1px solid #F3F4F6' }}>
+                                                                <TableCell sx={{ fontSize: '14px', color: '#1F2937', borderBottom: '1px solid rgba(243, 244, 246, 0.5)' }}>
                                                                     {day.dayName}
                                                                 </TableCell>
-                                                                <TableCell sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                                                                <TableCell sx={{ borderBottom: '1px solid rgba(243, 244, 246, 0.5)' }}>
                                                                     {day.lessons.map((l, i) => (
-                                                                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                                                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                                                                             <Chip 
                                                                                 label={l.time} 
                                                                                 size="small" 
                                                                                 variant="outlined" 
                                                                                 sx={{ 
                                                                                     fontSize: '11px', 
-                                                                                    height: 20, 
-                                                                                    borderRadius: '6px',
-                                                                                    borderColor: '#E5E7EB',
-                                                                                    color: '#6B7280',
+                                                                                    height: 22, 
+                                                                                    borderRadius: '20px',
+                                                                                    borderColor: 'rgba(229, 231, 235, 0.8)',
+                                                                                    background: 'rgba(255,255,255,0.5)',
                                                                                 }} 
                                                                             />
-                                                                            <Typography sx={{ fontSize: '14px', color: '#1F2937' }}>
+                                                                            <Typography sx={{ fontSize: '14px', color: '#1F2937', fontWeight: 500 }}>
                                                                                 {l.studentName}
                                                                             </Typography>
                                                                             {l.course && (
-                                                                                <Typography sx={{ fontSize: '12px', color: '#9CA3AF' }}>
-                                                                                    ({l.course})
+                                                                                <Typography sx={{ fontSize: '11px', color: '#9CA3AF' }}>
+                                                                                    • {l.course}
                                                                                 </Typography>
                                                                             )}
                                                                         </Box>
                                                                     ))}
                                                                 </TableCell>
-                                                                <TableCell align="right" sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                                                                    <Typography sx={{ fontWeight: 600, color: '#10B981', fontSize: '14px' }}>
+                                                                <TableCell align="right" sx={{ borderBottom: '1px solid rgba(243, 244, 246, 0.5)' }}>
+                                                                    <Typography sx={{ fontWeight: 700, color: '#10B981', fontSize: '15px' }}>
                                                                         {day.dayTotal.toLocaleString()} ₽
                                                                     </Typography>
                                                                 </TableCell>
@@ -821,113 +928,129 @@ function Finance() {
                                                         ))}
                                                     </TableBody>
                                                 </Table>
-                                            </StyledTableContainer>
+                                            </GlassTableContainer>
                                         </>
                                     )}
                                 </Box>
                             </Fade>
                         )}
-                    </ForecastCard>
+                    </BentoCard>
                 </TabPanel>
 
                 <TabPanel value={tabValue} index={1}>
-                    <Payments />
+                    <BentoCard elevation={0}>
+                        <Payments />
+                    </BentoCard>
                 </TabPanel>
 
                 <TabPanel value={tabValue} index={2}>
-                    <Subscriptions />
+                    <BentoCard elevation={0}>
+                        <Subscriptions />
+                    </BentoCard>
                 </TabPanel>
+
                 <TabPanel value={tabValue} index={3}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-                        <Typography sx={{ fontSize: '20px', fontWeight: 600, color: '#1F2937' }}>
-                            Ежемесячный отчёт
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                            <TextField
-                                type="month"
-                                value={reportMonth}
-                                onChange={(e) => setReportMonth(e.target.value)}
-                                size="small"
-                                sx={{ 
-                                    '& .MuiOutlinedInput-root': { borderRadius: '8px', bgcolor: '#fff' }
-                                }}
-                            />
-                            <StyledButton 
-                                variant="contained" 
-                                startIcon={<RefreshIcon sx={{ fontSize: 16 }} />}
-                                onClick={fetchReport}
-                                disabled={reportLoading}
-                                sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}
-                            >
-                                {reportLoading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Загрузить'}
-                            </StyledButton>
+                    <BentoCard elevation={0}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                            <Typography sx={{ fontSize: '20px', fontWeight: 600, color: '#1F2937' }}>
+                                Ежемесячный отчёт
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                                <TextField
+                                    type="month"
+                                    value={reportMonth}
+                                    onChange={(e) => setReportMonth(e.target.value)}
+                                    size="small"
+                                    sx={{ 
+                                        '& .MuiOutlinedInput-root': { 
+                                            borderRadius: '40px', 
+                                            background: 'rgba(255,255,255,0.6)',
+                                        }
+                                    }}
+                                />
+                                <GlassButton 
+                                    startIcon={<RefreshIcon sx={{ fontSize: 16 }} />}
+                                    onClick={fetchReport}
+                                    disabled={reportLoading}
+                                >
+                                    {reportLoading ? <CircularProgress size={20} /> : 'Загрузить'}
+                                </GlassButton>
+                            </Box>
                         </Box>
-                    </Box>
 
-                    {reportData && (
-                        <Fade in={true}>
-                            <Box>
-                                <Grid container spacing={2} sx={{ mb: 3 }}>
-                                    {[
-                                        { label: 'Доход', value: `${reportData.totalIncome.toLocaleString()} ₽`, color: '#10B981', bg: '#ECFDF5' },
-                                        { label: 'Занятий', value: reportData.totalLessons, color: '#4F46E5', bg: '#EEF2FF' },
-                                        { label: 'Проведено', value: reportData.completedLessons, color: '#F59E0B', bg: '#FFFBEB' },
-                                        { label: 'Отменено', value: reportData.cancelledLessons, color: '#EF4444', bg: '#FEF2F2' },
-                                    ].map((stat, idx) => (
-                                        <Grid item xs={6} md={3} key={idx}>
-                                            <Paper sx={{ p: 2.5, borderRadius: '12px', textAlign: 'center', bgcolor: stat.bg, border: '1px solid #F3F4F6' }}>
-                                                <Typography sx={{ fontSize: '24px', fontWeight: 700, color: stat.color }}>{stat.value}</Typography>
-                                                <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5 }}>{stat.label}</Typography>
-                                            </Paper>
-                                        </Grid>
-                                    ))}
-                                </Grid>
+                        {reportData && (
+                            <Fade in={true}>
+                                <Box>
+                                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                                        {[
+                                            { label: 'Доход', value: `${reportData.totalIncome.toLocaleString()} ₽`, color: '#10B981', bg: 'rgba(16, 185, 129, 0.12)' },
+                                            { label: 'Занятий', value: reportData.totalLessons, color: '#4F46E5', bg: 'rgba(79, 70, 229, 0.12)' },
+                                            { label: 'Проведено', value: reportData.completedLessons, color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.12)' },
+                                            { label: 'Отменено', value: reportData.cancelledLessons, color: '#EF4444', bg: 'rgba(239, 68, 68, 0.12)' },
+                                        ].map((stat, idx) => (
+                                            <Grid item xs={6} md={3} key={idx}>
+                                                <Paper sx={{ 
+                                                    p: 2.5, 
+                                                    borderRadius: '20px', 
+                                                    textAlign: 'center', 
+                                                    background: stat.bg,
+                                                    backdropFilter: 'blur(8px)',
+                                                    border: '1px solid rgba(255,255,255,0.4)',
+                                                }}>
+                                                    <Typography sx={{ fontSize: '26px', fontWeight: 700, color: stat.color }}>{stat.value}</Typography>
+                                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', mt: 0.5, fontWeight: 500 }}>{stat.label}</Typography>
+                                                </Paper>
+                                            </Grid>
+                                        ))}
+                                    </Grid>
 
-                                <Paper sx={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #F3F4F6' }}>
-                                    <Box sx={{ p: 2, borderBottom: '1px solid #F3F4F6', bgcolor: '#F9FAFB' }}>
-                                        <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '16px' }}>
-                                            Доход по ученикам
-                                        </Typography>
-                                    </Box>
-                                    <TableContainer sx={{ maxHeight: 400 }}>
+                                    <GlassTableContainer>
                                         <Table stickyHeader size="small">
                                             <TableHead>
                                                 <TableRow>
-                                                    <TableCell sx={{ fontWeight: 600, color: '#6B7280', bgcolor: '#F9FAFB' }}>Ученик</TableCell>
-                                                    <TableCell align="center" sx={{ fontWeight: 600, color: '#6B7280', bgcolor: '#F9FAFB' }}>Всего занятий</TableCell>
-                                                    <TableCell align="center" sx={{ fontWeight: 600, color: '#6B7280', bgcolor: '#F9FAFB' }}>Оплачено</TableCell>
-                                                    <TableCell align="right" sx={{ fontWeight: 600, color: '#6B7280', bgcolor: '#F9FAFB' }}>Доход</TableCell>
+                                                    <TableCell sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Ученик</TableCell>
+                                                    <TableCell align="center" sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Всего занятий</TableCell>
+                                                    <TableCell align="center" sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Оплачено</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Доход</TableCell>
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
                                                 {reportData.studentBreakdown.map((s, idx) => (
-                                                    <TableRow key={idx} hover sx={{ '&:nth-of-type(even)': { bgcolor: '#F9FAFB' } }}>
+                                                    <TableRow key={idx} hover sx={{ '&:nth-of-type(even)': { bgcolor: 'rgba(249, 250, 251, 0.4)' } }}>
                                                         <TableCell sx={{ color: '#1F2937', fontWeight: 500 }}>{s.studentName}</TableCell>
                                                         <TableCell align="center" sx={{ color: '#1F2937' }}>{s.totalLessons}</TableCell>
                                                         <TableCell align="center" sx={{ color: '#1F2937' }}>{s.paidLessons}</TableCell>
-                                                        <TableCell align="right" sx={{ color: '#10B981', fontWeight: 600 }}>
+                                                        <TableCell align="right" sx={{ color: '#10B981', fontWeight: 700 }}>
                                                             {s.income.toLocaleString()} ₽
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
                                         </Table>
-                                    </TableContainer>
+                                    </GlassTableContainer>
                                     
-                                    <Box sx={{ p: 2, borderTop: '2px solid #E5E7EB', bgcolor: '#F9FAFB', display: 'flex', justifyContent: 'space-between' }}>
-                                        <Typography sx={{ fontWeight: 600, color: '#1F2937' }}>
+                                    <Box sx={{ 
+                                        p: 2.5, 
+                                        mt: 2, 
+                                        borderRadius: '20px', 
+                                        background: 'rgba(249, 250, 251, 0.6)',
+                                        display: 'flex', 
+                                        justifyContent: 'space-between',
+                                        border: '1px solid rgba(255,255,255,0.4)',
+                                    }}>
+                                        <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '16px' }}>
                                             Итого за месяц
                                         </Typography>
-                                        <Typography sx={{ fontWeight: 700, color: '#10B981', fontSize: '18px' }}>
+                                        <Typography sx={{ fontWeight: 800, color: '#10B981', fontSize: '22px' }}>
                                             {reportData.totalIncome.toLocaleString()} ₽
                                         </Typography>
                                     </Box>
-                                </Paper>
-                            </Box>
-                        </Fade>
-                    )}
+                                </Box>
+                            </Fade>
+                        )}
+                    </BentoCard>
                 </TabPanel>
-            </PageContainer>
+            </GlassPageContainer>
         </LocalizationProvider>
     );
 }

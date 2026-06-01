@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import com.example.demo.entity.Group;
+import com.example.demo.repository.GroupRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -389,49 +392,41 @@ public class LessonService {
 
         Lesson lesson = getLessonById(lessonId);
 
-        // ✅ Если у урока есть originalLesson — это перенесённый урок (любой статус)
+        // ✅ Если у урока есть originalLesson — это перенесённый урок
         if (lesson.getOriginalLesson() != null) {
             Lesson originalLesson = lesson.getOriginalLesson();
 
-            // Отменяем оригинал
-            originalLesson.setStatus("CANCELLED");
-            if (reason != null && !reason.isEmpty()) {
-                originalLesson.setNotes("❌ Отменено: перенесённый урок отменён. Причина: " + reason);
-            } else {
-                originalLesson.setNotes("❌ Отменено: перенесённый урок отменён");
-            }
+            // ✅ ВОССТАНАВЛИВАЕМ оригинальный урок
+            originalLesson.setStatus("SCHEDULED");
             originalLesson.setUpdatedAt(LocalDateTime.now());
+            if (reason != null && !reason.isEmpty()) {
+                originalLesson.setNotes((originalLesson.getNotes() != null ? originalLesson.getNotes() + "\n" : "") + "↩️ Перенос на " + lesson.getLessonDate() + " " + lesson.getStartTime().toString().substring(0,5) + " отменён. Причина: " + reason);
+            } else {
+                originalLesson.setNotes((originalLesson.getNotes() != null ? originalLesson.getNotes() + "\n" : "") + "↩️ Перенос отменён, занятие восстановлено");
+            }
             lessonRepository.save(originalLesson);
 
-            // Отменяем перенесённый урок
-            lesson.setStatus("CANCELLED");
-            if (reason != null && !reason.isEmpty()) {
-                lesson.setNotes("❌ Отменено: " + reason);
-            } else {
-                lesson.setNotes("❌ Отменено");
-            }
-            lesson.setUpdatedAt(LocalDateTime.now());
-
-            // ✅ НЕ добавляем долг — урок был перенесён/начат, это не вина ученика
-
-            Lesson savedLesson = lessonRepository.save(lesson);
-            log.info("✅ Перенесённое занятие и оригинал отменены: новое id={}, оригинал id={}", lessonId, originalLesson.getId());
+            // ✅ УДАЛЯЕМ перенесённый урок
+            lessonRepository.delete(lesson);
+            log.info("✅ Перенос отменён: оригинал id={} восстановлен, новый урок id={} удалён", originalLesson.getId(), lessonId);
 
             // Уведомление родителю
-            if (lesson.getStudent().getParent() != null) {
+            if (originalLesson.getStudent().getParent() != null) {
                 String message = String.format(
-                        "❌ Перенесённый урок %s %s отменён. Оригинальный урок также отменён.",
+                        "↩️ Перенос урока с %s %s на %s %s отменён. Занятие восстановлено в изначальное время.",
+                        originalLesson.getLessonDate().toString(),
+                        originalLesson.getStartTime().toString().substring(0, 5),
                         lesson.getLessonDate().toString(),
                         lesson.getStartTime().toString().substring(0, 5)
                 );
                 notificationService.createNotification(
-                        lesson.getStudent().getParent().getId(),
-                        lesson.getId(),
+                        originalLesson.getStudent().getParent().getId(),
+                        originalLesson.getId(),
                         message
                 );
             }
 
-            return savedLesson;
+            return originalLesson;
         }
 
         if ("PAID".equals(lesson.getStatus())) {
@@ -636,6 +631,42 @@ public class LessonService {
 
         log.info("Занятие успешно перенесено: исходное id={}, новое id={}", lessonId, savedNewLesson.getId());
         return savedNewLesson;
+    }
+
+    @Autowired
+    private GroupRepository groupRepository;
+
+    /**
+     * Завершить все уроки группы одной кнопкой.
+     * Если у урока есть groupId — завершает все SCHEDULED/IN_PROGRESS уроки этой группы.
+     */
+    @Transactional
+    public List<Lesson> completeGroupLessons(Long lessonId, String notes, String nextLessonPlan) {
+        Lesson lesson = getLessonById(lessonId);
+
+        if (lesson.getGroupId() == null) {
+            // Не групповой урок — завершаем обычным способом
+            Lesson completed = completeLesson(lessonId, notes, nextLessonPlan);
+            return List.of(completed);
+        }
+
+        // Находим все уроки этой группы
+        List<Lesson> groupLessons = lessonRepository.findByGroupId(lesson.getGroupId());
+        List<Lesson> completedLessons = new ArrayList<>();
+
+        for (Lesson l : groupLessons) {
+            if (l.getStatus().equals("SCHEDULED") || l.getStatus().equals("IN_PROGRESS")) {
+                Lesson completed = completeLesson(l.getId(), notes, nextLessonPlan);
+                completedLessons.add(completed);
+            }
+        }
+
+        log.info("✅ Завершено {} уроков группы {}", completedLessons.size(), lesson.getGroupId());
+        return completedLessons;
+    }
+
+    public Course getCourseById(Long id) {
+        return courseRepository.findById(id).orElse(null);
     }
 
     @Transactional

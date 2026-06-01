@@ -46,6 +46,13 @@ public class InvitationToken {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    // ✅ REG-1: Подтверждение email кодом
+    @Column(name = "verification_code", length = 10)
+    private String verificationCode;
+
+    @Column(name = "verification_code_expiry")
+    private LocalDateTime verificationCodeExpiry;
+
     public InvitationToken() {
         this.token = UUID.randomUUID().toString();
         this.createdAt = LocalDateTime.now();
@@ -93,4 +100,10 @@ public class InvitationToken {
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
     }
+
+    // ✅ REG-1: Геттеры и сеттеры для кода
+    public String getVerificationCode() { return verificationCode; }
+    public void setVerificationCode(String verificationCode) { this.verificationCode = verificationCode; }
+    public LocalDateTime getVerificationCodeExpiry() { return verificationCodeExpiry; }
+    public void setVerificationCodeExpiry(LocalDateTime verificationCodeExpiry) { this.verificationCodeExpiry = verificationCodeExpiry; }
 }

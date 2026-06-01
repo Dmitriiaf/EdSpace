@@ -43,6 +43,9 @@ public class Lesson {
     @Column(name = "weekly_template_id")
     private Long weeklyTemplateId;
 
+    @Column(name = "group_id")
+    private Long groupId;
+
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
 
@@ -135,6 +138,8 @@ public class Lesson {
     public Long getId() { return id; }
     public Tutor getTutor() { return tutor; }
     public Student getStudent() { return student; }
+    public Long getGroupId() { return groupId; }
+    public void setGroupId(Long groupId) { this.groupId = groupId; }
     public Course getCourse() { return course; }
     public LocalDate getLessonDate() { return lessonDate; }
     public LocalTime getStartTime() { return startTime; }

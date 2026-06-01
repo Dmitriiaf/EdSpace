@@ -1,45 +1,119 @@
+// ========== frontend/src/pages/Tools.js (РЕДИЗАЙН v2 — В СТИЛЕ БАНКА ЗАДАНИЙ) ==========
 import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Card, CardContent, CardActions,
     TextField, CircularProgress, Alert, Chip, IconButton, Grid,
     Tooltip, Paper, Avatar, Dialog, DialogTitle, DialogContent, DialogActions,
-    FormControl, InputLabel, Select, MenuItem
+    FormControl, InputLabel, Select, MenuItem, Button, Stack,
+    ListItemIcon, ListItemText
 } from '@mui/material';
-import { PageContainer, StyledButton, StyledDialog, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
-import { styled } from '@mui/material/styles';
+import { PageContainer, StyledButton, StyledDialog, ViewToggleBtn } from '../styles/shared';
+import { styled, alpha } from '@mui/material/styles';
 import {
-    Add as AddIcon, Edit as EditIcon,
-    OpenInNew as OpenInNewIcon,
-    Archive as ArchiveIcon,
-    Unarchive as UnarchiveIcon,
-    Delete as DeleteIcon,
-    Link as LinkIcon,
-    Draw as DrawIcon,
-    CalendarToday as CalendarIcon,
-    Person as PersonIcon,
-    Videocam as VideocamIcon,
-    Save as SaveIcon
+    Add as AddIcon, Edit as EditIcon, OpenInNew as OpenInNewIcon,
+    Archive as ArchiveIcon, Unarchive as UnarchiveIcon,
+    Delete as DeleteIcon, Link as LinkIcon,
+    Draw as DrawIcon, CalendarToday as CalendarIcon,
+    Person as PersonIcon, Videocam as VideocamIcon,
+    Save as SaveIcon, Search, KeyboardArrowDown,
+    ViewModule, ViewList, Close, Add,
+    School as SchoolIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import WhiteboardModal from '../components/WhiteboardModal';
 
-// ========== СТИЛИ ==========
-const BoardCard = styled(Card)({
-    borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-    border: '1px solid #F3F4F6',
-    transition: 'all 0.2s ease',
-    position: 'relative', overflow: 'hidden', backgroundColor: '#FFFFFF',
-    '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.08)', transform: 'translateY(-2px)' },
+// ========== СТИЛИ (В СТИЛЕ БАНКА ЗАДАНИЙ) ==========
+
+const CompactAppBar = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '16px 24px',
+    background: '#fff',
+    borderBottom: '1px solid #F3F4F6',
+    flexWrap: 'wrap',
 });
 
-const CardContentWrapper = styled(CardContent)({ position: 'relative', zIndex: 1 });
+const PageTitle = styled(Typography)({
+    fontSize: '24px',
+    fontWeight: 700,
+    color: '#1F2937',
+    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+});
 
-const UrlPreview = styled(Box)({
-    padding: '12px 16px', backgroundColor: '#F9FAFB', borderRadius: '8px', border: '1px solid #F3F4F6',
-    display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', cursor: 'pointer',
-    '&:hover': { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' },
+const ActionGroup = styled(Box)({
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+});
+
+const PrimaryActionButton = styled(Button)({
+    borderRadius: '12px',
+    textTransform: 'none',
+    fontWeight: 600,
+    padding: '8px 16px',
+    boxShadow: 'none',
+    '&:hover': { boxShadow: 'none' },
+});
+
+const SideNav = styled(Paper)({
+    width: '240px',
+    minWidth: '240px',
+    borderRadius: '16px',
+    border: '1px solid #F3F4F6',
+    overflow: 'hidden',
+    position: 'sticky',
+    top: '16px',
+    height: 'fit-content',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+});
+
+const NavItem = styled(Box)(({ active }) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 16px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    backgroundColor: active ? alpha('#764ba2', 0.08) : 'transparent',
+    borderLeft: active ? '3px solid #764ba2' : '3px solid transparent',
+    color: active ? '#764ba2' : '#6B7280',
+    fontWeight: active ? 600 : 400,
+    '&:hover': { backgroundColor: active ? alpha('#764ba2', 0.12) : '#F9FAFB' },
+}));
+
+const ToolCard = styled(Card)({
+    borderRadius: '16px',
+    overflow: 'visible',
+    border: '1px solid #F3F4F6',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    backgroundColor: '#fff',
+    '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: '0 12px 24px rgba(0,0,0,0.08)',
+    },
+});
+
+const HoverActions = styled(Box)({
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    display: 'flex',
+    gap: 4,
+    opacity: 0,
+    transform: 'translateY(-8px)',
+    transition: 'all 0.3s ease',
+    background: 'rgba(255,255,255,0.95)',
+    borderRadius: '12px',
+    padding: '4px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    zIndex: 10,
+    '.tool-card:hover &': { opacity: 1, transform: 'translateY(0)' },
 });
 
 // ========== УТИЛИТЫ ==========
@@ -50,12 +124,24 @@ function getAvatarColor(name) {
     return colors[Math.abs(hash) % colors.length];
 }
 
-const SERVICE_INFO = {
-    miro: { name: 'Miro', icon: '🔵' }, figma: { name: 'Figma', icon: '🟣' },
-    figjam: { name: 'FigJam', icon: '🟣' }, excalidraw: { name: 'Excalidraw', icon: '🟢' },
-    tldraw: { name: 'tldraw', icon: '🟠' }, google: { name: 'Jamboard', icon: '🟡' },
-    default: { name: 'Доска', icon: '🔗' },
+const VIDEO_PLATFORMS = {
+    JITSI: { label: 'Jitsi Meet', color: '#6366F1', icon: '🎥' },
+    ZOOM: { label: 'Zoom', color: '#2D8CFF', icon: '📹' },
+    TELEMOST: { label: 'Яндекс.Телемост', color: '#FC3F1D', icon: '📺' },
+    SKYPE: { label: 'Skype', color: '#00AFF0', icon: '💬' },
+    OTHER: { label: 'Другое', color: '#6366F1', icon: '🔗' },
 };
+
+const SERVICE_INFO = {
+    miro: { name: 'Miro', icon: '🔵', color: '#FFD02F' },
+    figma: { name: 'Figma', icon: '🟣', color: '#A259FF' },
+    figjam: { name: 'FigJam', icon: '🟣', color: '#A259FF' },
+    excalidraw: { name: 'Excalidraw', icon: '🟢', color: '#6965DB' },
+    tldraw: { name: 'tldraw', icon: '🟠', color: '#FA9C1B' },
+    google: { name: 'Jamboard', icon: '🟡', color: '#F9AB00' },
+    default: { name: 'Доска', icon: '🔗', color: '#9CA3AF' },
+};
+
 function getServiceInfo(url) {
     if (!url) return SERVICE_INFO.default;
     const l = url.toLowerCase();
@@ -67,22 +153,14 @@ function getServiceInfo(url) {
     return SERVICE_INFO.default;
 }
 
-const VIDEO_PLATFORMS = {
-    JITSI: { label: 'Jitsi Meet', color: '#6366F1' },
-    ZOOM: { label: 'Zoom', color: '#2D8CFF' },
-    TELEMOST: { label: 'Яндекс.Телемост', color: '#FC3F1D' },
-    SKYPE: { label: 'Skype', color: '#00AFF0' },
-    OTHER: { label: 'Другое', color: '#6366F1' },
-};
-
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function Tools() {
     const { user } = useAuth();
     useEffect(() => { document.title = 'EdSpace — Инструменты'; }, []);
     const isTutor = user?.role === 'TUTOR' || user?.role === 'ROLE_TUTOR' || user?.role === 'tutor';
     
-    const [tabValue, setTabValue] = useState(isTutor ? 0 : 1);    
-    // Состояния для досок
+    const [activeNav, setActiveNav] = useState(isTutor ? 'video' : 'boards');    
+    // Доски
     const [boards, setBoards] = useState([]);
     const [archivedBoards, setArchivedBoards] = useState([]);
     const [students, setStudents] = useState([]);
@@ -96,21 +174,21 @@ function Tools() {
     const [whiteboardOpen, setWhiteboardOpen] = useState(false);
     const [whiteboardData, setWhiteboardData] = useState({ roomName: '', boardId: null });
     
-    // Состояния для видео-комнат
+    // Видео-комнаты
     const [videoRooms, setVideoRooms] = useState([]);
     const [videoRoomsLoading, setVideoRoomsLoading] = useState(false);
     const [videoRoomDialogOpen, setVideoRoomDialogOpen] = useState(false);
     const [editingRoom, setEditingRoom] = useState(null);
     const [videoRoomForm, setVideoRoomForm] = useState({ name: '', platform: 'ZOOM', url: '' });
     const [videoRoomSaving, setVideoRoomSaving] = useState(false);
-
     useEffect(() => { 
         loadBoards(); 
-        if (isTutor) { loadStudents(); loadArchivedBoards(); loadVideoRooms(); } 
+        loadVideoRooms();
+        if (isTutor) { loadStudents(); loadArchivedBoards(); } 
     }, []);
     useEffect(() => { if (boardViewMode === 'archived' && isTutor) loadArchivedBoards(); }, [boardViewMode]);
 
-    // ========== ЗАГРУЗКА ДОСОК ==========
+    // ========== ЗАГРУЗКА ==========
     const loadBoards = async () => {
         setLoading(true);
         try { setBoards((await axiosInstance.get(isTutor ? '/boards/tutor' : '/boards/student')).data || []); } 
@@ -123,57 +201,46 @@ function Tools() {
     const loadStudents = async () => {
         try { setStudents((await axiosInstance.get(`/students/tutor/${user.id}`)).data || []); } catch (err) {}
     };
-
-    // ========== ЗАГРУЗКА ВИДЕО-КОМНАТ ==========
     const loadVideoRooms = async () => {
         setVideoRoomsLoading(true);
         try {
-            const res = await axiosInstance.get(`/video-rooms/tutor/${user.id}`);
-            setVideoRooms(res.data || []);
-        } catch (err) { console.error('Ошибка загрузки комнат:', err); }
+            if (isTutor) {
+                setVideoRooms((await axiosInstance.get(`/video-rooms/tutor/${user.id}`)).data || []);
+            } else {
+                // Для ученика — получаем комнаты его репетитора
+                try {
+                    const studentRes = await axiosInstance.get(`/students/${user.id}`);
+                    const tutorId = studentRes.data?.tutors?.[0]?.id;
+                    if (tutorId) {
+                        setVideoRooms((await axiosInstance.get(`/video-rooms/tutor/${tutorId}`)).data || []);
+                    }
+                } catch (e) { console.error(e); }
+            }
+        } catch (err) { console.error(err); } 
         finally { setVideoRoomsLoading(false); }
     };
 
-    // ========== СОХРАНЕНИЕ КОМНАТЫ ==========
+    // ========== ВИДЕО-КОМНАТЫ ==========
     const handleSaveVideoRoom = async () => {
         if (!videoRoomForm.name || !videoRoomForm.url) return;
         setVideoRoomSaving(true);
         try {
-            if (editingRoom) {
-                await axiosInstance.put(`/video-rooms/${editingRoom.id}`, videoRoomForm);
-            } else {
-                await axiosInstance.post('/video-rooms', videoRoomForm);
-            }
-            setVideoRoomDialogOpen(false);
-            setEditingRoom(null);
+            if (editingRoom) await axiosInstance.put(`/video-rooms/${editingRoom.id}`, videoRoomForm);
+            else await axiosInstance.post('/video-rooms', videoRoomForm);
+            setVideoRoomDialogOpen(false); setEditingRoom(null);
             setVideoRoomForm({ name: '', platform: 'ZOOM', url: '' });
             loadVideoRooms();
-        } catch (err) {
-            setError('Ошибка сохранения комнаты');
-        } finally {
-            setVideoRoomSaving(false);
-        }
+        } catch (err) { setError('Ошибка сохранения'); }
+        finally { setVideoRoomSaving(false); }
     };
 
-    // ========== РЕДАКТИРОВАНИЕ КОМНАТЫ ==========
-    const handleEditRoom = (room) => {
-        setEditingRoom(room);
-        setVideoRoomForm({ name: room.name, platform: room.platform, url: room.url });
-        setVideoRoomDialogOpen(true);
-    };
-
-    // ========== УДАЛЕНИЕ КОМНАТЫ ==========
     const handleDeleteRoom = async (id) => {
         if (!window.confirm('Удалить комнату?')) return;
-        try {
-            await axiosInstance.delete(`/video-rooms/${id}`);
-            loadVideoRooms();
-        } catch (err) {
-            setError('Ошибка удаления комнаты');
-        }
+        try { await axiosInstance.delete(`/video-rooms/${id}`); loadVideoRooms(); } 
+        catch (err) { setError('Ошибка удаления'); }
     };
 
-    // ========== МЕТОДЫ ДЛЯ ДОСОК ==========
+    // ========== ДОСКИ ==========
     const handleOpenDialog = (board = null) => {
         if (board) {
             setEditingBoard(board);
@@ -200,7 +267,7 @@ function Tools() {
     const handleToggleStudent = (id) => setFormData(p => ({ ...p, studentIds: p.studentIds.includes(id) ? p.studentIds.filter(i => i !== id) : [...p.studentIds, id] }));
     const handleArchive = async (id) => { try { await axiosInstance.put(`/boards/${id}/archive`); loadBoards(); loadArchivedBoards(); } catch (err) {} };
     const handleRestore = async (id) => { try { await axiosInstance.put(`/boards/${id}/restore`); loadBoards(); loadArchivedBoards(); } catch (err) {} };
-    const handleDelete = async (id) => { if (!window.confirm('Удалить?')) return; try { await axiosInstance.delete(`/boards/${id}`); loadBoards(); loadArchivedBoards(); } catch (err) {} };
+    const handleDeleteBoard = async (id) => { if (!window.confirm('Удалить?')) return; try { await axiosInstance.delete(`/boards/${id}`); loadBoards(); loadArchivedBoards(); } catch (err) {} };
     const handleOpen = (url) => window.open(url, '_blank', 'width=1200,height=800');
     const handleOpenWhiteboard = (board) => { 
         setWhiteboardData({ roomName: board.roomName, encryptionKey: board.encryptionKey, boardId: board.id }); 
@@ -209,307 +276,542 @@ function Tools() {
 
     const displayBoards = boardViewMode === 'active' ? boards : archivedBoards;
 
-    if (loading) return <PageContainer><Box sx={{ display: 'flex', justifyContent: 'center', minHeight: '60vh', alignItems: 'center' }}><CircularProgress /></Box></PageContainer>;
+    // ========== УЧЕНИК: ТОЛЬКО ДОСКИ (ПРОСМОТР) ==========
+    if (!isTutor) {
+        return (
+            <PageContainer sx={{ p: '0 !important', bgcolor: '#F9FAFB', minHeight: '100vh' }}>
+                <CompactAppBar>
+                    <PageTitle>
+                        <DrawIcon sx={{ color: '#764ba2' }} />
+                        Доски
+                    </PageTitle>
+                </CompactAppBar>
 
-    return (
-        <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-                <Box>
-                    <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
-                        {isTutor ? 'Видеоконференции и доски для совместной работы' : 'Доски для совместной работы'}
-                    </Typography>
-                </Box>
-            </Box>
-
-            {/* Вкладки */}
-            <Box sx={{ mb: 3 }}>
-                <ViewToggle>
-                    {isTutor && (
-                        <ViewToggleBtn active={tabValue === 0} onClick={() => setTabValue(0)}>
-                            <VideocamIcon sx={{ fontSize: 18, mr: 0.5 }} /> Видеоконференции
-                        </ViewToggleBtn>
-                    )}
-                    <ViewToggleBtn active={tabValue === 1 || (!isTutor && tabValue === 1)} onClick={() => setTabValue(1)}>
-                        <DrawIcon sx={{ fontSize: 18, mr: 0.5 }} /> Доски
-                    </ViewToggleBtn>
-                </ViewToggle>
-            </Box>
-
-            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }} onClose={() => setError(null)}>{error}</Alert>}
-
-            {/* ========== ВКЛАДКА: ВИДЕОКОНФЕРЕНЦИИ ========== */}
-            {tabValue === 0 && (
-                <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                        <Typography sx={{ fontWeight: 600, fontSize: '18px' }}>
-                            🎥 Мои комнаты ({videoRooms.length})
-                        </Typography>
-                        <StyledButton 
-                            variant="contained" 
-                            startIcon={<AddIcon />} 
-                            onClick={() => { setEditingRoom(null); setVideoRoomForm({ name: '', platform: 'ZOOM', url: '' }); setVideoRoomDialogOpen(true); }}
-                            sx={{ bgcolor: '#4F46E5' }}
-                        >
-                            Добавить комнату
-                        </StyledButton>
-                    </Box>
-
-                    {videoRoomsLoading ? (
-                        <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress /></Box>
-                    ) : videoRooms.length === 0 ? (
-                        <Paper sx={{ p: 5, textAlign: 'center', borderRadius: '12px' }}>
-                            <VideocamIcon sx={{ fontSize: 48, color: '#D1D5DB', mb: 2 }} />
-                            <Typography sx={{ fontSize: '16px', fontWeight: 500, mb: 1 }}>Нет комнат</Typography>
-                            <Typography sx={{ fontSize: '13px', color: '#6B7280', mb: 2 }}>
-                                Добавьте комнаты для разных платформ. При старте урока можно будет выбрать нужную.
-                            </Typography>
-                            <StyledButton variant="contained" startIcon={<AddIcon />}
-                                onClick={() => { setEditingRoom(null); setVideoRoomForm({ name: '', platform: 'ZOOM', url: '' }); setVideoRoomDialogOpen(true); }}
-                                sx={{ bgcolor: '#4F46E5' }}>
-                                Добавить комнату
-                            </StyledButton>
+                <Box sx={{ p: 3 }}>
+                    {loading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+                    ) : boards.length === 0 ? (
+                        <Paper sx={{ borderRadius: '16px', p: 6, textAlign: 'center', border: '1px solid #F3F4F6' }}>
+                            <DrawIcon sx={{ fontSize: 56, color: '#D1D5DB', mb: 2 }} />
+                            <Typography sx={{ fontSize: '18px', fontWeight: 600, mb: 1, color: '#6B7280' }}>Нет доступных досок</Typography>
+                            <Typography sx={{ color: '#9CA3AF' }}>Репетитор ещё не добавил ни одной доски</Typography>
                         </Paper>
                     ) : (
                         <Grid container spacing={2}>
-                            {videoRooms.map(room => {
-                                const platformInfo = VIDEO_PLATFORMS[room.platform] || { label: room.platform, color: '#6366F1' };
-                                return (
-                                    <Grid item xs={12} sm={6} md={4} key={room.id}>
-                                        <Card sx={{ 
-                                            borderRadius: '12px', 
-                                            border: '1px solid #F3F4F6',
-                                            borderLeft: `4px solid ${platformInfo.color}`,
-                                            '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }
-                                        }}>
-                                            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                                    <Chip 
-                                                        label={platformInfo.label} 
-                                                        size="small"
-                                                        sx={{ bgcolor: platformInfo.color, color: '#fff', fontWeight: 500, fontSize: '11px' }}
-                                                    />
-                                                    {room.isDefault && (
-                                                        <Chip label="По умолчанию" size="small" 
-                                                            sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontSize: '10px', height: 20 }} />
-                                                    )}
-                                                </Box>
-                                                <Typography sx={{ fontWeight: 600, fontSize: '15px', mb: 1 }}>{room.name}</Typography>
-                                                {room.url && (
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                                        <LinkIcon sx={{ fontSize: 14, color: '#6B7280' }} />
-                                                        <Typography sx={{ fontSize: '12px', color: '#4F46E5', wordBreak: 'break-all' }}>
-                                                            {room.url.replace(/^https?:\/\//, '').substring(0, 40)}...
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                            </CardContent>
-                                            <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 1.5 }}>
-                                                <IconButton size="small" onClick={() => handleEditRoom(room)}>
-                                                    <EditIcon sx={{ fontSize: 16 }} />
-                                                </IconButton>
-                                                <IconButton size="small" onClick={() => handleDeleteRoom(room.id)} sx={{ color: '#EF4444' }}>
-                                                    <DeleteIcon sx={{ fontSize: 16 }} />
-                                                </IconButton>
-                                            </CardActions>
-                                        </Card>
-                                    </Grid>
-                                );
-                            })}
-                        </Grid>
-                    )}
-
-                    {/* Диалог создания/редактирования комнаты */}
-                    <StyledDialog open={videoRoomDialogOpen} onClose={() => setVideoRoomDialogOpen(false)} maxWidth="sm" fullWidth>
-                        <DialogTitle sx={{ fontWeight: 600, px: 3, pt: 3, pb: 1 }}>
-                            {editingRoom ? 'Редактировать комнату' : 'Добавить комнату'}
-                        </DialogTitle>
-                        <DialogContent sx={{ px: 3 }}>
-                            <Box sx={{ pt: 2 }}>
-                                <TextField fullWidth label="Название" value={videoRoomForm.name} 
-                                    onChange={e => setVideoRoomForm({...videoRoomForm, name: e.target.value})}
-                                    placeholder="Например: Zoom Петя, Телемост Маша"
-                                    sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                                <FormControl fullWidth sx={{ mb: 2 }}>
-                                    <InputLabel>Платформа</InputLabel>
-                                    <Select value={videoRoomForm.platform} 
-                                        onChange={e => setVideoRoomForm({...videoRoomForm, platform: e.target.value})}
-                                        label="Платформа" sx={{ borderRadius: '8px' }}>
-                                        <MenuItem value="ZOOM">Zoom</MenuItem>
-                                        <MenuItem value="TELEMOST">Яндекс.Телемост</MenuItem>
-                                        <MenuItem value="SKYPE">Skype</MenuItem>
-                                        <MenuItem value="JITSI">Jitsi Meet</MenuItem>
-                                        <MenuItem value="OTHER">Другое</MenuItem>
-                                    </Select>
-                                </FormControl>
-                                <TextField fullWidth label="Ссылка на конференцию" value={videoRoomForm.url} 
-                                    onChange={e => setVideoRoomForm({...videoRoomForm, url: e.target.value})}
-                                    placeholder="https://zoom.us/j/123456789"
-                                    sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                                <Alert severity="info" sx={{ borderRadius: '8px', fontSize: '13px' }}>
-                                    💡 Добавьте несколько комнат для разных платформ. При старте урока вы сможете выбрать нужную.
-                                </Alert>
-                            </Box>
-                        </DialogContent>
-                        <DialogActions sx={{ px: 3, pb: 3 }}>
-                            <StyledButton onClick={() => setVideoRoomDialogOpen(false)}>Отмена</StyledButton>
-                            <StyledButton onClick={handleSaveVideoRoom} variant="contained" 
-                                disabled={!videoRoomForm.name || !videoRoomForm.url || videoRoomSaving}
-                                sx={{ bgcolor: '#4F46E5' }}>
-                                {videoRoomSaving ? <CircularProgress size={20} /> : editingRoom ? 'Сохранить' : 'Добавить'}
-                            </StyledButton>
-                        </DialogActions>
-                    </StyledDialog>
-                </Box>
-            )}
-
-            {/* ========== ВКЛАДКА: ДОСКИ ========== */}
-            {tabValue === 1 && (
-                <Box>
-                    {isTutor && (
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                            <ViewToggle>
-                                <ViewToggleBtn active={boardViewMode === 'active'} onClick={() => setBoardViewMode('active')}>
-                                    Активные ({boards.length})
-                                </ViewToggleBtn>
-                                <ViewToggleBtn active={boardViewMode === 'archived'} onClick={() => setBoardViewMode('archived')}>
-                                    Архив ({archivedBoards.length})
-                                </ViewToggleBtn>
-                            </ViewToggle>
-                            <StyledButton variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog(null)} sx={{ bgcolor: '#4F46E5' }}>
-                                Добавить доску
-                            </StyledButton>
-                        </Box>
-                    )}
-
-                    {displayBoards.length === 0 ? (
-                        <Paper sx={{ borderRadius: '12px', bgcolor: '#FFFFFF', p: 6, textAlign: 'center' }}>
-                            <EmptyStateIcon><DrawIcon sx={{ fontSize: 40, color: '#9CA3AF' }} /></EmptyStateIcon>
-                            <Typography sx={{ fontSize: '18px', fontWeight: 600, mb: 1 }}>
-                                {boardViewMode === 'archived' ? 'Архив пуст' : 'Нет активных досок'}
-                            </Typography>
-                            {isTutor && boardViewMode === 'active' && (
-                                <StyledButton variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog(null)} sx={{ mt: 2, bgcolor: '#4F46E5' }}>
-                                    Добавить доску
-                                </StyledButton>
-                            )}
-                        </Paper>
-                    ) : (
-                        <Grid container spacing={2.5}>
-                            {displayBoards.map(board => {
-                                const isArchived = boardViewMode === 'archived';
+                            {boards.map(board => {
                                 const isBuiltin = !board.url;
-                                const studentCount = board.studentCount || (board.studentName ? 1 : 0);
                                 const service = getServiceInfo(board.url);
                                 return (
                                     <Grid item xs={12} sm={6} md={4} key={board.id}>
-                                        <BoardCard sx={{ ...(isArchived ? { opacity: 0.7 } : {}), borderLeft: isBuiltin ? '4px solid #7C3AED' : '1px solid #F3F4F6' }}>
-                                            <CardContentWrapper sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                                    <Typography sx={{ fontWeight: 600, fontSize: '16px' }}>{board.title}</Typography>
-                                                    <Chip icon={isBuiltin ? <DrawIcon sx={{ fontSize: 14 }} /> : <LinkIcon sx={{ fontSize: 14 }} />}
-                                                        label={isBuiltin ? 'Доска' : 'Ссылка'} size="small"
-                                                        sx={{ bgcolor: isBuiltin ? '#F5F3FF' : '#F3F4F6', color: isBuiltin ? '#7C3AED' : '#6B7280', borderRadius: '8px', height: 26, fontSize: '11px' }} />
+                                        <ToolCard sx={{ borderLeft: isBuiltin ? '4px solid #7C3AED' : '1px solid #F3F4F6' }}>
+                                            <CardContent sx={{ p: 2.5 }}>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                                                    <Typography sx={{ fontWeight: 600, fontSize: '15px' }}>{board.title}</Typography>
+                                                    <Chip 
+                                                        icon={isBuiltin ? <DrawIcon sx={{ fontSize: 14 }} /> : <LinkIcon sx={{ fontSize: 14 }} />}
+                                                        label={isBuiltin ? 'Встроенная' : 'Ссылка'} 
+                                                        size="small"
+                                                        sx={{ bgcolor: isBuiltin ? '#F5F3FF' : '#F3F4F6', color: isBuiltin ? '#7C3AED' : '#6B7280', borderRadius: '8px', height: 24, fontSize: '11px' }} />
                                                 </Box>
-                                                {studentCount > 0 && (
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-                                                        <PersonIcon sx={{ fontSize: 14, color: '#9CA3AF' }} />
-                                                        <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{studentCount > 1 ? `${studentCount} ученика` : board.studentName}</Typography>
-                                                    </Box>
-                                                )}
                                                 {isBuiltin ? (
-                                                    <Box sx={{ p: 2, mb: 1.5, bgcolor: '#F5F3FF', borderRadius: '8px', textAlign: 'center' }}>
-                                                        <DrawIcon sx={{ fontSize: 32, color: '#7C3AED', mb: 0.5 }} />
-                                                        <Typography sx={{ fontSize: '12px', color: '#7C3AED' }}>Встроенная доска</Typography>
+                                                    <Box sx={{ p: 2.5, mb: 1.5, bgcolor: '#F5F3FF', borderRadius: '10px', textAlign: 'center' }}>
+                                                        <DrawIcon sx={{ fontSize: 36, color: '#7C3AED', mb: 1 }} />
+                                                        <Typography sx={{ fontSize: '12px', color: '#7C3AED', fontWeight: 500 }}>Встроенная доска EdSpace</Typography>
                                                     </Box>
                                                 ) : (
-                                                    <>
-                                                        <Box sx={{ mb: 1 }}><Chip icon={<Typography>{service.icon}</Typography>} label={service.name} size="small" variant="outlined" sx={{ borderRadius: '6px' }} /></Box>
-                                                        <UrlPreview onClick={() => handleOpen(board.url)}>
-                                                            <LinkIcon sx={{ fontSize: 16, color: '#4F46E5' }} />
-                                                            <Typography sx={{ fontSize: '13px', color: '#4F46E5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    <Box onClick={() => handleOpen(board.url)}
+                                                        sx={{ mb: 1.5, p: 1.5, bgcolor: '#F9FAFB', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1, '&:hover': { bgcolor: '#EEF2FF' } }}>
+                                                        <Typography sx={{ fontSize: '20px' }}>{service.icon}</Typography>
+                                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                            <Typography sx={{ fontSize: '13px', fontWeight: 500 }}>{service.name}</Typography>
+                                                            <Typography sx={{ fontSize: '11px', color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                 {board.url?.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                                                             </Typography>
-                                                            <OpenInNewIcon sx={{ fontSize: 14, color: '#9CA3AF', ml: 'auto' }} />
-                                                        </UrlPreview>
-                                                    </>
-                                                )}
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <CalendarIcon sx={{ fontSize: 14, color: '#9CA3AF' }} />
-                                                    <Typography sx={{ fontSize: '12px', color: '#9CA3AF' }}>
-                                                        {isArchived && board.archivedAt 
-                                                            ? `Архив: ${new Date(board.archivedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}` 
-                                                            : `Создана: ${new Date(board.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`}
-                                                    </Typography>
-                                                </Box>
-                                            </CardContentWrapper>
-                                            <CardActions sx={{ justifyContent: 'space-between', px: 2.5, pb: 2, pt: 0, zIndex: 1 }}>
-                                                {isArchived ? (
-                                                    <>
-                                                        <StyledButton variant="outlined" startIcon={<UnarchiveIcon />} onClick={() => handleRestore(board.id)} sx={{ fontSize: '13px' }}>Восстановить</StyledButton>
-                                                        <IconButton size="small" onClick={() => handleDelete(board.id)} sx={{ color: '#9CA3AF', '&:hover': { color: '#EF4444' } }}><DeleteIcon /></IconButton>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                            {isBuiltin ? (
-                                                                <StyledButton variant="contained" startIcon={<DrawIcon />} onClick={() => handleOpenWhiteboard(board)} sx={{ bgcolor: '#7C3AED', '&:hover': { bgcolor: '#6D28D9' }, fontSize: '13px' }}>Открыть</StyledButton>
-                                                            ) : (
-                                                                <StyledButton variant="contained" startIcon={<OpenInNewIcon />} onClick={() => handleOpen(board.url)} sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' }, fontSize: '13px' }}>Открыть</StyledButton>
-                                                            )}
-                                                            {isTutor && <IconButton size="small" onClick={() => handleOpenDialog(board)}><EditIcon /></IconButton>}
                                                         </Box>
-                                                        {isTutor && (
-                                                            <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                                <IconButton size="small" onClick={() => handleArchive(board.id)}><ArchiveIcon /></IconButton>
-                                                                <IconButton size="small" onClick={() => handleDelete(board.id)} sx={{ '&:hover': { color: '#EF4444' } }}><DeleteIcon /></IconButton>
-                                                            </Box>
-                                                        )}
-                                                    </>
+                                                        <OpenInNewIcon sx={{ fontSize: 14, color: '#9CA3AF', flexShrink: 0 }} />
+                                                    </Box>
+                                                )}
+                                            </CardContent>
+                                            <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
+                                                {isBuiltin ? (
+                                                    <StyledButton variant="contained" startIcon={<DrawIcon />} onClick={() => handleOpenWhiteboard(board)}
+                                                        sx={{ bgcolor: '#7C3AED', '&:hover': { bgcolor: '#6D28D9' } }}>
+                                                        Открыть доску
+                                                    </StyledButton>
+                                                ) : (
+                                                    <StyledButton variant="contained" startIcon={<OpenInNewIcon />} onClick={() => handleOpen(board.url)}
+                                                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
+                                                        Открыть
+                                                    </StyledButton>
                                                 )}
                                             </CardActions>
-                                        </BoardCard>
+                                        </ToolCard>
                                     </Grid>
                                 );
                             })}
                         </Grid>
                     )}
                 </Box>
-            )}
 
-            {/* Диалог создания/редактирования доски */}
-            <StyledDialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontWeight: 600, px: 3, pt: 3, pb: 1 }}>{editingBoard ? 'Редактировать' : 'Добавить доску'}</DialogTitle>
-                <DialogContent sx={{ px: 3 }}>
-                    <Box sx={{ pt: 2 }}>
-                        <Typography sx={{ fontSize: '14px', fontWeight: 500, mb: 1 }}>Тип доски</Typography>
-                        <Box sx={{ display: 'flex', gap: 1, mb: 2.5 }}>
-                            <Chip icon={<LinkIcon />} label="Ссылка на сервис" onClick={() => setFormData({...formData, boardType: 'link'})}
-                                variant={formData.boardType === 'link' ? 'filled' : 'outlined'}
-                                sx={{ borderRadius: '10px', px: 1, py: 2.5, cursor: 'pointer', bgcolor: formData.boardType === 'link' ? '#EEF2FF' : 'transparent', color: formData.boardType === 'link' ? '#4F46E5' : '#6B7280' }} />
-                            <Chip icon={<DrawIcon />} label="Встроенная доска" onClick={() => setFormData({...formData, boardType: 'builtin'})}
-                                variant={formData.boardType === 'builtin' ? 'filled' : 'outlined'}
-                                sx={{ borderRadius: '10px', px: 1, py: 2.5, cursor: 'pointer', bgcolor: formData.boardType === 'builtin' ? '#F5F3FF' : 'transparent', color: formData.boardType === 'builtin' ? '#7C3AED' : '#6B7280' }} />
+                <WhiteboardModal 
+                    open={whiteboardOpen} 
+                    onClose={() => setWhiteboardOpen(false)} 
+                    roomName={whiteboardData.roomName} 
+                    encryptionKey={whiteboardData.encryptionKey}
+                    boardId={whiteboardData.boardId} 
+                    username={user?.fullName || 'Ученик'} 
+                />
+            </PageContainer>
+        );
+    }
+
+
+    if (loading) return <PageContainer><Box sx={{ display: 'flex', justifyContent: 'center', minHeight: '60vh', alignItems: 'center' }}><CircularProgress /></Box></PageContainer>;
+
+    return (
+        <PageContainer sx={{ p: '0 !important', bgcolor: '#F9FAFB', minHeight: '100vh' }}>
+            
+            {/* ========== КОМПАКТНЫЙ APP BAR ========== */}
+            <CompactAppBar>
+                <PageTitle>
+                    <VideocamIcon sx={{ color: '#764ba2' }} />
+                    Инструменты
+                </PageTitle>
+                
+                <Box sx={{ flex: 1 }} />
+                
+                <ActionGroup>
+                    {isTutor && (
+                        <PrimaryActionButton
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={() => {
+                                if (activeNav === 'video') {
+                                    setEditingRoom(null);
+                                    setVideoRoomForm({ name: '', platform: 'ZOOM', url: '' });
+                                    setVideoRoomDialogOpen(true);
+                                } else {
+                                    handleOpenDialog(null);
+                                }
+                            }}
+                            sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#5a3782' } }}
+                        >
+                            {activeNav === 'video' ? 'Добавить комнату' : 'Добавить доску'}
+                        </PrimaryActionButton>
+                    )}
+                    {!isTutor && (
+                        <PrimaryActionButton
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={() => handleOpenDialog(null)}
+                            sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#5a3782' } }}
+                        >
+                            Добавить доску
+                        </PrimaryActionButton>
+                    )}
+                </ActionGroup>
+            </CompactAppBar>
+
+            {/* ========== ОСНОВНАЯ ОБЛАСТЬ ========== */}
+            <Box sx={{ display: 'flex', gap: 3, p: 3 }}>
+                
+                {/* ========== БОКОВАЯ ПАНЕЛЬ ========== */}
+                <SideNav>
+                    <Box sx={{ p: 2, borderBottom: '1px solid #F3F4F6' }}>
+                        <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', mb: 1 }}>
+                            Инструменты
+                        </Typography>
+                        <Stack spacing={0.5}>
+                            {isTutor && (
+                                <NavItem active={activeNav === 'video'} onClick={() => setActiveNav('video')}>
+                                    <VideocamIcon fontSize="small" />
+                                    Видеоконференции
+                                    <Chip label={videoRooms.length} size="small" sx={{ ml: 'auto', fontSize: '11px', height: 20 }} />
+                                </NavItem>
+                            )}
+                            <NavItem active={activeNav === 'boards'} onClick={() => setActiveNav('boards')}>
+                                <DrawIcon fontSize="small" />
+                                Доски
+                                <Chip label={boards.length} size="small" sx={{ ml: 'auto', fontSize: '11px', height: 20 }} />
+                            </NavItem>
+                            {isTutor && (
+                                <NavItem active={activeNav === 'archive'} onClick={() => { setActiveNav('archive'); setBoardViewMode('archived'); }}>
+                                    <ArchiveIcon fontSize="small" />
+                                    Архив досок
+                                    <Chip label={archivedBoards.length} size="small" sx={{ ml: 'auto', fontSize: '11px', height: 20 }} />
+                                </NavItem>
+                            )}
+                        </Stack>
+                    </Box>
+                    
+                    {isTutor && (
+                        <Box sx={{ p: 2 }}>
+                            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', mb: 1 }}>
+                                Быстрые ссылки
+                            </Typography>
+                            <Stack spacing={0.5}>
+                                <NavItem onClick={() => window.open('https://meet.ed-space.ru', '_blank')}>
+                                    <VideocamIcon fontSize="small" />
+                                    Jitsi Meet
+                                </NavItem>
+                                <NavItem onClick={() => window.open('https://zoom.us', '_blank')}>
+                                    <OpenInNewIcon fontSize="small" />
+                                    Zoom
+                                </NavItem>
+                                <NavItem onClick={() => window.open('https://telemost.yandex.ru', '_blank')}>
+                                    <OpenInNewIcon fontSize="small" />
+                                    Яндекс.Телемост
+                                </NavItem>
+                            </Stack>
                         </Box>
-                        <TextField fullWidth label="Название" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
+                    )}
+                </SideNav>
+
+                {/* ========== КОНТЕНТ ========== */}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+
+                    {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }} onClose={() => setError(null)}>{error}</Alert>}
+
+                    {/* ========== ВИДЕОКОНФЕРЕНЦИИ ========== */}
+                    {(activeNav === 'video') && (
+                        <Box>
+                            {videoRoomsLoading ? (
+                                <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress /></Box>
+                            ) : videoRooms.length === 0 ? (
+                                <Paper sx={{ borderRadius: '16px', p: 6, textAlign: 'center', border: '1px solid #F3F4F6' }}>
+                                    <VideocamIcon sx={{ fontSize: 56, color: '#D1D5DB', mb: 2 }} />
+                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, mb: 1, color: '#6B7280' }}>Нет комнат</Typography>
+                                    <Typography sx={{ color: '#9CA3AF', mb: 3 }}>
+                                        Добавьте постоянные ссылки на конференции для разных платформ
+                                    </Typography>
+                                    <PrimaryActionButton variant="contained" startIcon={<Add />}
+                                        onClick={() => { setEditingRoom(null); setVideoRoomForm({ name: '', platform: 'ZOOM', url: '' }); setVideoRoomDialogOpen(true); }}
+                                        sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#5a3782' } }}>
+                                        Добавить комнату
+                                    </PrimaryActionButton>
+                                </Paper>
+                            ) : (
+                                <Grid container spacing={2}>
+                                    {videoRooms.map(room => {
+                                        const platformInfo = VIDEO_PLATFORMS[room.platform] || { label: room.platform, color: '#6366F1', icon: '🔗' };
+                                        return (
+                                            <Grid item xs={12} sm={6} md={4} key={room.id}>
+                                                <Box className="tool-card" sx={{ position: 'relative' }}>
+                                                    <ToolCard sx={{ borderLeft: `4px solid ${platformInfo.color}` }}>
+                                                        {isTutor && (
+                                                            <HoverActions>
+                                                                <Tooltip title="Редактировать">
+                                                                    <IconButton size="small" onClick={() => { setEditingRoom(room); setVideoRoomForm({ name: room.name, platform: room.platform, url: room.url }); setVideoRoomDialogOpen(true); }}>
+                                                                        <EditIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                                <Tooltip title="Удалить">
+                                                                    <IconButton size="small" onClick={() => handleDeleteRoom(room.id)} sx={{ color: '#EF4444' }}>
+                                                                        <DeleteIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                            </HoverActions>
+                                                        )}
+                                                        
+                                                        <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                                                <Typography sx={{ fontSize: '28px' }}>{platformInfo.icon}</Typography>
+                                                                <Box>
+                                                                    <Chip label={platformInfo.label} size="small"
+                                                                        sx={{ bgcolor: platformInfo.color, color: '#fff', fontWeight: 600, fontSize: '10px', height: 20 }} />
+                                                                    {room.isDefault && (
+                                                                        <Chip label="По умолчанию" size="small" 
+                                                                            sx={{ ml: 0.5, bgcolor: '#ECFDF5', color: '#065F46', fontSize: '10px', height: 20 }} />
+                                                                    )}
+                                                                </Box>
+                                                            </Box>
+                                                            <Typography sx={{ fontWeight: 600, fontSize: '15px', mb: 1 }}>{room.name}</Typography>
+                                                            {room.url && (
+                                                                <Box 
+                                                                    onClick={() => window.open(room.url, '_blank')}
+                                                                    sx={{ 
+                                                                        p: 1.5, bgcolor: '#F9FAFB', borderRadius: '8px', cursor: 'pointer',
+                                                                        display: 'flex', alignItems: 'center', gap: 1,
+                                                                        '&:hover': { bgcolor: '#EEF2FF' }
+                                                                    }}>
+                                                                    <LinkIcon sx={{ fontSize: 14, color: '#4F46E5' }} />
+                                                                    <Typography sx={{ fontSize: '12px', color: '#4F46E5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {room.url.replace(/^https?:\/\//, '').substring(0, 35)}...
+                                                                    </Typography>
+                                                                    <OpenInNewIcon sx={{ fontSize: 14, color: '#9CA3AF', ml: 'auto', flexShrink: 0 }} />
+                                                                </Box>
+                                                            )}
+                                                        </CardContent>
+                                                    </ToolCard>
+                                                </Box>
+                                            </Grid>
+                                        );
+                                    })}
+                                </Grid>
+                            )}
+                        </Box>
+                    )}
+
+                    {/* ========== ДОСКИ ========== */}
+                    {(activeNav === 'boards' || activeNav === 'archive') && (
+                        <Box>
+                            {/* Под-вкладки для досок */}
+                            {activeNav === 'boards' && (
+                                <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
+                                    <Chip 
+                                        label={`Активные (${boards.length})`}
+                                        onClick={() => setBoardViewMode('active')}
+                                        variant={boardViewMode === 'active' ? 'filled' : 'outlined'}
+                                        sx={{ 
+                                            borderRadius: '10px', fontWeight: 600, px: 1,
+                                            bgcolor: boardViewMode === 'active' ? '#4F46E5' : 'transparent',
+                                            color: boardViewMode === 'active' ? '#fff' : '#6B7280',
+                                        }}
+                                    />
+                                    <Chip 
+                                        label={`Архив (${archivedBoards.length})`}
+                                        onClick={() => setBoardViewMode('archived')}
+                                        variant={boardViewMode === 'archived' ? 'filled' : 'outlined'}
+                                        sx={{ 
+                                            borderRadius: '10px', fontWeight: 600, px: 1,
+                                            bgcolor: boardViewMode === 'archived' ? '#4F46E5' : 'transparent',
+                                            color: boardViewMode === 'archived' ? '#fff' : '#6B7280',
+                                        }}
+                                    />
+                                </Box>
+                            )}
+
+                            {displayBoards.length === 0 ? (
+                                <Paper sx={{ borderRadius: '16px', p: 6, textAlign: 'center', border: '1px solid #F3F4F6' }}>
+                                    <DrawIcon sx={{ fontSize: 56, color: '#D1D5DB', mb: 2 }} />
+                                    <Typography sx={{ fontSize: '18px', fontWeight: 600, mb: 1, color: '#6B7280' }}>
+                                        {boardViewMode === 'archived' ? 'Архив пуст' : 'Нет активных досок'}
+                                    </Typography>
+                                    {boardViewMode === 'active' && (
+                                        <PrimaryActionButton variant="contained" startIcon={<Add />}
+                                            onClick={() => handleOpenDialog(null)}
+                                            sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#5a3782' } }}>
+                                            Добавить доску
+                                        </PrimaryActionButton>
+                                    )}
+                                </Paper>
+                            ) : (
+                                <Grid container spacing={2}>
+                                    {displayBoards.map(board => {
+                                        const isArchived = boardViewMode === 'archived';
+                                        const isBuiltin = !board.url;
+                                        const service = getServiceInfo(board.url);
+                                        return (
+                                            <Grid item xs={12} sm={6} md={4} key={board.id}>
+                                                <Box className="tool-card" sx={{ position: 'relative' }}>
+                                                    <ToolCard sx={{ 
+                                                        opacity: isArchived ? 0.7 : 1,
+                                                        borderLeft: isBuiltin ? '4px solid #7C3AED' : '1px solid #F3F4F6'
+                                                    }}>
+                                                        <HoverActions>
+                                                            {!isArchived && (
+                                                                <>
+                                                                    {isTutor && (
+                                                                        <Tooltip title="Редактировать">
+                                                                            <IconButton size="small" onClick={() => handleOpenDialog(board)}>
+                                                                                <EditIcon fontSize="small" />
+                                                                            </IconButton>
+                                                                        </Tooltip>
+                                                                    )}
+                                                                    {isBuiltin ? (
+                                                                        <Tooltip title="Открыть доску">
+                                                                            <IconButton size="small" onClick={() => handleOpenWhiteboard(board)} sx={{ color: '#7C3AED' }}>
+                                                                                <DrawIcon fontSize="small" />
+                                                                            </IconButton>
+                                                                        </Tooltip>
+                                                                    ) : (
+                                                                        <Tooltip title="Открыть ссылку">
+                                                                            <IconButton size="small" onClick={() => handleOpen(board.url)} sx={{ color: '#4F46E5' }}>
+                                                                                <OpenInNewIcon fontSize="small" />
+                                                                            </IconButton>
+                                                                        </Tooltip>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </HoverActions>
+                                                        
+                                                        <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                                                                <Typography sx={{ fontWeight: 600, fontSize: '15px' }}>{board.title}</Typography>
+                                                                <Chip 
+                                                                    icon={isBuiltin ? <DrawIcon sx={{ fontSize: 14 }} /> : <LinkIcon sx={{ fontSize: 14 }} />}
+                                                                    label={isBuiltin ? 'Встроенная' : 'Ссылка'} 
+                                                                    size="small"
+                                                                    sx={{ 
+                                                                        bgcolor: isBuiltin ? '#F5F3FF' : '#F3F4F6', 
+                                                                        color: isBuiltin ? '#7C3AED' : '#6B7280', 
+                                                                        borderRadius: '8px', height: 24, fontSize: '11px' 
+                                                                    }} />
+                                                            </Box>
+                                                            
+                                                            {isBuiltin ? (
+                                                                <Box sx={{ p: 2.5, mb: 1.5, bgcolor: '#F5F3FF', borderRadius: '10px', textAlign: 'center' }}>
+                                                                    <DrawIcon sx={{ fontSize: 36, color: '#7C3AED', mb: 1 }} />
+                                                                    <Typography sx={{ fontSize: '12px', color: '#7C3AED', fontWeight: 500 }}>
+                                                                        Встроенная доска EdSpace
+                                                                    </Typography>
+                                                                </Box>
+                                                            ) : (
+                                                                <Box 
+                                                                    onClick={() => handleOpen(board.url)}
+                                                                    sx={{ 
+                                                                        mb: 1.5, p: 1.5, bgcolor: '#F9FAFB', borderRadius: '8px', 
+                                                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1,
+                                                                        '&:hover': { bgcolor: '#EEF2FF' }
+                                                                    }}>
+                                                                    <Typography sx={{ fontSize: '20px' }}>{service.icon}</Typography>
+                                                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                                        <Typography sx={{ fontSize: '13px', fontWeight: 500 }}>{service.name}</Typography>
+                                                                        <Typography sx={{ fontSize: '11px', color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            {board.url?.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                                                                        </Typography>
+                                                                    </Box>
+                                                                    <OpenInNewIcon sx={{ fontSize: 14, color: '#9CA3AF', flexShrink: 0 }} />
+                                                                </Box>
+                                                            )}
+                                                            
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <CalendarIcon sx={{ fontSize: 14, color: '#9CA3AF' }} />
+                                                                <Typography sx={{ fontSize: '11px', color: '#9CA3AF' }}>
+                                                                    {isArchived && board.archivedAt 
+                                                                        ? `В архиве с ${new Date(board.archivedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long' })}` 
+                                                                        : `Создана ${new Date(board.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long' })}`}
+                                                                </Typography>
+                                                            </Box>
+                                                        </CardContent>
+                                                        
+                                                        {isTutor && (
+                                                            isArchived ? (
+                                                                <CardActions sx={{ px: 2, pb: 2, pt: 0, justifyContent: 'space-between' }}>
+                                                                    <StyledButton size="small" variant="outlined" startIcon={<UnarchiveIcon />} 
+                                                                        onClick={() => handleRestore(board.id)}>
+                                                                        Восстановить
+                                                                    </StyledButton>
+                                                                    <IconButton size="small" onClick={() => handleDeleteBoard(board.id)} sx={{ color: '#EF4444' }}>
+                                                                        <DeleteIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </CardActions>
+                                                            ) : (
+                                                                <CardActions sx={{ px: 2, pb: 2, pt: 0, justifyContent: 'flex-end' }}>
+                                                                    <IconButton size="small" onClick={() => handleArchive(board.id)}>
+                                                                        <ArchiveIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                    <IconButton size="small" onClick={() => handleDeleteBoard(board.id)} sx={{ color: '#EF4444' }}>
+                                                                        <DeleteIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </CardActions>
+                                                            )
+                                                        )}
+                                                    </ToolCard>
+                                                </Box>
+                                            </Grid>
+                                        );
+                                    })}
+                                </Grid>
+                            )}
+                        </Box>
+                    )}
+                </Box>
+            </Box>
+
+            {/* ========== ДИАЛОГ ВИДЕО-КОМНАТЫ ========== */}
+            <StyledDialog open={videoRoomDialogOpen} onClose={() => setVideoRoomDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 700, px: 3, pt: 3, pb: 1 }}>
+                    {editingRoom ? 'Редактировать комнату' : 'Новая комната'}
+                </DialogTitle>
+                <DialogContent sx={{ px: 3 }}>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <TextField fullWidth label="Название" value={videoRoomForm.name} 
+                            onChange={e => setVideoRoomForm({...videoRoomForm, name: e.target.value})}
+                            placeholder="Например: Zoom Петя"
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} />
+                        <FormControl fullWidth>
+                            <InputLabel>Платформа</InputLabel>
+                            <Select value={videoRoomForm.platform} 
+                                onChange={e => setVideoRoomForm({...videoRoomForm, platform: e.target.value})}
+                                label="Платформа" sx={{ borderRadius: '12px' }}>
+                                <MenuItem value="ZOOM">📹 Zoom</MenuItem>
+                                <MenuItem value="TELEMOST">📺 Яндекс.Телемост</MenuItem>
+                                <MenuItem value="SKYPE">💬 Skype</MenuItem>
+                                <MenuItem value="JITSI">🎥 Jitsi Meet</MenuItem>
+                                <MenuItem value="OTHER">🔗 Другое</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <TextField fullWidth label="Ссылка на конференцию" value={videoRoomForm.url} 
+                            onChange={e => setVideoRoomForm({...videoRoomForm, url: e.target.value})}
+                            placeholder="https://zoom.us/j/..."
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} />
+                        <Alert severity="info" sx={{ borderRadius: '10px', fontSize: '13px' }}>
+                            💡 Добавьте несколько комнат. При старте урока вы сможете выбрать нужную.
+                        </Alert>
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 3 }}>
+                    <StyledButton onClick={() => setVideoRoomDialogOpen(false)}>Отмена</StyledButton>
+                    <StyledButton onClick={handleSaveVideoRoom} variant="contained" 
+                        disabled={!videoRoomForm.name || !videoRoomForm.url || videoRoomSaving}
+                        sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#5a3782' } }}>
+                        {videoRoomSaving ? <CircularProgress size={20} /> : editingRoom ? 'Сохранить' : 'Добавить'}
+                    </StyledButton>
+                </DialogActions>
+            </StyledDialog>
+
+            {/* ========== ДИАЛОГ ДОСКИ ========== */}
+            <StyledDialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 700, px: 3, pt: 3, pb: 1 }}>
+                    {editingBoard ? 'Редактировать доску' : 'Новая доска'}
+                </DialogTitle>
+                <DialogContent sx={{ px: 3 }}>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Chip icon={<LinkIcon />} label="Ссылка" 
+                                onClick={() => setFormData({...formData, boardType: 'link'})}
+                                variant={formData.boardType === 'link' ? 'filled' : 'outlined'}
+                                sx={{ borderRadius: '10px', px: 1, py: 2.5, cursor: 'pointer', 
+                                    bgcolor: formData.boardType === 'link' ? '#EEF2FF' : 'transparent', 
+                                    color: formData.boardType === 'link' ? '#4F46E5' : '#6B7280' }} />
+                            <Chip icon={<DrawIcon />} label="Встроенная доска" 
+                                onClick={() => setFormData({...formData, boardType: 'builtin'})}
+                                variant={formData.boardType === 'builtin' ? 'filled' : 'outlined'}
+                                sx={{ borderRadius: '10px', px: 1, py: 2.5, cursor: 'pointer', 
+                                    bgcolor: formData.boardType === 'builtin' ? '#F5F3FF' : 'transparent', 
+                                    color: formData.boardType === 'builtin' ? '#7C3AED' : '#6B7280' }} />
+                        </Box>
+                        <TextField fullWidth label="Название" value={formData.title} 
+                            onChange={e => setFormData({...formData, title: e.target.value})}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} />
                         {formData.boardType === 'link' && (
-                            <>
-                                <TextField fullWidth label="Ссылка" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                                <Alert severity="info" sx={{ borderRadius: '8px', fontSize: '13px', mb: 2 }}>💡 Miro, FigJam, Excalidraw и др. Убедитесь, что у учеников есть доступ.</Alert>
-                            </>
+                            <TextField fullWidth label="Ссылка" value={formData.url} 
+                                onChange={e => setFormData({...formData, url: e.target.value})}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} />
                         )}
-                        <Typography sx={{ fontSize: '14px', fontWeight: 500, mb: 1 }}>Ученики ({formData.studentIds.length})</Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                        <Typography sx={{ fontSize: '14px', fontWeight: 500 }}>
+                            Ученики ({formData.studentIds.length})
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                             {students.map(s => {
                                 const sel = formData.studentIds.includes(s.id);
-                                return <Chip key={s.id} avatar={<Avatar sx={{ bgcolor: getAvatarColor(s.fullName), width: 24, height: 24, fontSize: 11 }}>{s.fullName[0]}</Avatar>} label={s.fullName} onClick={() => handleToggleStudent(s.id)} variant={sel ? 'filled' : 'outlined'}
-                                    sx={{ borderRadius: '8px', cursor: 'pointer', bgcolor: sel ? '#EEF2FF' : 'transparent', color: sel ? '#4F46E5' : '#6B7280', fontWeight: sel ? 600 : 400 }} />;
+                                return <Chip key={s.id} 
+                                    avatar={<Avatar sx={{ bgcolor: getAvatarColor(s.fullName), width: 24, height: 24, fontSize: 11 }}>{s.fullName[0]}</Avatar>} 
+                                    label={s.fullName} onClick={() => handleToggleStudent(s.id)} 
+                                    variant={sel ? 'filled' : 'outlined'}
+                                    sx={{ borderRadius: '8px', cursor: 'pointer', 
+                                        bgcolor: sel ? '#EEF2FF' : 'transparent', 
+                                        color: sel ? '#4F46E5' : '#6B7280', fontWeight: sel ? 600 : 400 }} />;
                             })}
                         </Box>
-                    </Box>
+                    </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 3 }}>
                     <StyledButton onClick={() => setOpenDialog(false)}>Отмена</StyledButton>
-                    <StyledButton onClick={handleSave} variant="contained" disabled={!formData.title || (formData.boardType === 'link' && !formData.url) || saving} sx={{ bgcolor: '#4F46E5' }}>
+                    <StyledButton onClick={handleSave} variant="contained" 
+                        disabled={!formData.title || (formData.boardType === 'link' && !formData.url) || saving}
+                        sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#5a3782' } }}>
                         {saving ? <CircularProgress size={20} /> : editingBoard ? 'Сохранить' : 'Добавить'}
                     </StyledButton>
                 </DialogActions>

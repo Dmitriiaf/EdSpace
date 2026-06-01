@@ -21,6 +21,7 @@ import {
     Menu as MenuIcon,
     TrendingUp as TrendingUpIcon,
     Notifications as NotificationsIcon,
+    Group as GroupIcon,
     Draw as DrawIcon,
     School,
     AutoAwesome,
@@ -51,7 +52,7 @@ const ICON_COLORS = {
 const SidebarContainer = styled(Box)(({ collapsed }) => ({
     width: collapsed ? 68 : 260,
     height: '100vh',
-    background: 'linear-gradient(180deg, #111827 0%, #1F2937 100%)',
+    background: 'linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%)',
     display: 'flex',
     flexDirection: 'column',
     position: 'fixed',
@@ -211,6 +212,7 @@ const Sidebar = () => {
             { path: '/dashboard', label: 'Главная' },
             { path: '/weekly-schedule', label: 'Расписание' },
             { path: '/students', label: 'Ученики' },
+            { path: '/groups', label: 'Группы' },
             { path: '/finance', label: 'Финансы' },
         ]},
         { title: 'Обучение', items: [
@@ -245,6 +247,7 @@ const Sidebar = () => {
         'Расписание': <CalendarIcon />,
         'Ученики': <PeopleIcon />,
         'Финансы': <MoneyIcon />,
+        'Группы': <GroupIcon />,
         'Курсы': <BookIcon />,
         'Банк заданий': <AssignmentIcon />,
         'Материалы': <FolderIcon />,

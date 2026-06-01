@@ -56,13 +56,38 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Map<String, String> request) {
         try {
+            String email = request.get("email");
+
+            // ✅ Проверяем, что email не занят ни в одной из таблиц
+            if (tutorService.findByEmail(email) != null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Этот email уже зарегистрирован как репетитор"));
+            }
+            if (studentRepository.findByEmail(email).stream().findFirst().isPresent()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Этот email уже зарегистрирован как ученик"));
+            }
+            if (parentRepository.findByEmail(email).isPresent()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Этот email уже зарегистрирован как родитель"));
+            }
+
             Tutor tutor = tutorService.registerTutor(
-                    request.get("email"),
+                    email,
                     request.get("password"),
                     request.get("fullName"),
                     request.get("phone"),
                     request.getOrDefault("timezone", "Asia/Krasnoyarsk")
             );
+
+            // Генерируем код подтверждения
+            String code = String.format("%06d", (int)(Math.random() * 1000000));
+            tutor.setVerificationCode(code);
+            tutor.setVerificationCodeExpiry(LocalDateTime.now().plusMinutes(10));
+            tutor.setEmailVerified(false);
+            tutorService.save(tutor);
+
+            // Отправляем код на email
+            emailService.sendVerificationCode(tutor.getEmail(), tutor.getFullName(), code);
+
+            log.info("📧 Код подтверждения отправлен для {}", tutor.getEmail());
 
             // Обработка реферального кода
             String refCode = request.get("ref");
@@ -71,20 +96,14 @@ public class AuthController {
                 if (referrer != null) {
                     tutor.setReferredBy(referrer.getId());
                     tutorService.save(tutor);
-                    log.info("🎁 Репетитор {} пришёл по реферальной ссылке от {}",
-                            tutor.getEmail(), referrer.getEmail());
                 }
             }
 
-            String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR");
-
+            // НЕ ВЫДАЁМ ТОКЕН — аккаунт не подтверждён
             return ResponseEntity.ok(Map.of(
-                    "token", token,
-                    "id", tutor.getId(),
+                    "message", "Код подтверждения отправлен на email",
                     "email", tutor.getEmail(),
-                    "fullName", tutor.getFullName(),
-                    "role", "tutor",
-                    "referralCode", tutor.getReferralCode()
+                    "requiresVerification", true
             ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -230,6 +249,81 @@ public class AuthController {
         if (parentOpt.isPresent()) return new Object[]{"parent", parentOpt.get()};
 
         return null;
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<?> verifyEmail(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String code = request.get("code");
+
+        if (email == null || code == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email и код обязательны"));
+        }
+
+        Tutor tutor = tutorService.findByEmail(email);
+        if (tutor == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Пользователь не найден"));
+        }
+
+        if (tutor.getEmailVerified()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email уже подтверждён"));
+        }
+
+        if (tutor.getVerificationCodeExpiry() != null &&
+                tutor.getVerificationCodeExpiry().isBefore(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Код истёк. Запросите новый."));
+        }
+
+        if (!code.equals(tutor.getVerificationCode())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Неверный код"));
+        }
+
+        // Подтверждаем
+        tutor.setEmailVerified(true);
+        tutor.setVerificationCode(null);
+        tutor.setVerificationCodeExpiry(null);
+        tutorService.save(tutor);
+
+        // Выдаём токен
+        String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR");
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Email подтверждён",
+                "token", token,
+                "id", tutor.getId(),
+                "email", tutor.getEmail(),
+                "fullName", tutor.getFullName(),
+                "role", "tutor",
+                "referralCode", tutor.getReferralCode()
+        ));
+    }
+
+    @PostMapping("/resend-code")
+    public ResponseEntity<?> resendCode(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+
+        if (email == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email обязателен"));
+        }
+
+        Tutor tutor = tutorService.findByEmail(email);
+        if (tutor == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Пользователь не найден"));
+        }
+
+        if (tutor.getEmailVerified()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email уже подтверждён"));
+        }
+
+        // Генерируем новый код
+        String code = String.format("%06d", (int)(Math.random() * 1000000));
+        tutor.setVerificationCode(code);
+        tutor.setVerificationCodeExpiry(LocalDateTime.now().plusMinutes(10));
+        tutorService.save(tutor);
+
+        emailService.sendVerificationCode(tutor.getEmail(), tutor.getFullName(), code);
+
+        return ResponseEntity.ok(Map.of("message", "Новый код отправлен"));
     }
 
     @PostMapping("/forgot-password")

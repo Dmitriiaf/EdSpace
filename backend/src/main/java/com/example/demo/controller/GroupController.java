@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.util.ArrayList;
 
 import java.util.List;
 import java.util.Map;
@@ -25,24 +26,31 @@ public class GroupController {
     public ResponseEntity<?> createGroup(@RequestBody Map<String, Object> request,
                                          @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
-            Long tutorId = Long.parseLong(request.get("tutorId").toString());
-
-            // ✅ IDOR FIX: Проверяем, что репетитор создаёт группу для себя
-            if (!tutorId.equals(currentUserId)) {
-                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
-            }
+            String name = (String) request.get("name");
+            Long courseId = request.get("courseId") != null ?
+                    Long.parseLong(request.get("courseId").toString()) : null;
 
             Group group = groupService.createGroup(
-                    tutorId,
-                    Long.parseLong(request.get("courseId").toString()),
-                    (String) request.get("name"),
+                    currentUserId,
+                    courseId,
+                    name,
                     (String) request.get("description"),
                     request.get("maxStudents") != null ?
                             Integer.parseInt(request.get("maxStudents").toString()) : null,
                     request.get("pricePerStudent") != null ?
                             Double.parseDouble(request.get("pricePerStudent").toString()) : null,
-                    (String) request.get("status")
+                    (String) request.getOrDefault("status", "active")
             );
+
+            // ✅ Добавляем учеников, если переданы
+            if (request.containsKey("studentIds")) {
+                List<Integer> studentIds = (List<Integer>) request.get("studentIds");
+                for (Integer sid : studentIds) {
+                    groupService.addStudentToGroup(group.getId(), sid.longValue());
+                }
+                group = groupService.getGroupById(group.getId()); // обновляем с учениками
+            }
+
             return ResponseEntity.ok(group);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -94,8 +102,6 @@ public class GroupController {
                                          @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
             Group group = groupService.getGroupById(id);
-
-            // ✅ IDOR FIX: Проверяем, что группа принадлежит текущему репетитору
             if (!group.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
@@ -104,12 +110,33 @@ public class GroupController {
                     id,
                     (String) request.get("name"),
                     (String) request.get("description"),
-                    request.get("maxStudents") != null ?
-                            Integer.parseInt(request.get("maxStudents").toString()) : null,
-                    request.get("pricePerStudent") != null ?
-                            Double.parseDouble(request.get("pricePerStudent").toString()) : null,
+                    request.get("maxStudents") != null ? Integer.parseInt(request.get("maxStudents").toString()) : null,
+                    request.get("pricePerStudent") != null ? Double.parseDouble(request.get("pricePerStudent").toString()) : null,
                     (String) request.get("status")
             );
+
+            // ✅ Синхронизируем учеников
+            if (request.containsKey("studentIds")) {
+                List<Integer> newStudentIds = (List<Integer>) request.get("studentIds");
+
+                // Удаляем тех, кого нет в новом списке
+                List<Student> currentStudents = new ArrayList<>(updatedGroup.getStudents());
+                for (Student s : currentStudents) {
+                    if (!newStudentIds.contains(s.getId().intValue())) {
+                        groupService.removeStudentFromGroup(id, s.getId());
+                    }
+                }
+
+                // Добавляем новых
+                for (Integer sid : newStudentIds) {
+                    if (updatedGroup.getStudents().stream().noneMatch(s -> s.getId().equals(sid.longValue()))) {
+                        groupService.addStudentToGroup(id, sid.longValue());
+                    }
+                }
+
+                updatedGroup = groupService.getGroupById(id);
+            }
+
             return ResponseEntity.ok(updatedGroup);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

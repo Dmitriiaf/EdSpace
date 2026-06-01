@@ -16,8 +16,7 @@ import {
     Add, Edit, Delete, School, AttachMoney,
     People, CalendarToday, TrendingUp, MoreVert,
     BarChart, ShowChart, ArrowUpward, ArrowDownward,
-    ColorLens, Close, Info, Bookmark as BookIcon,
-    GroupWork as GroupIcon, ExpandMore, ExpandLess
+    ColorLens, Close, Info, Bookmark as BookIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import ColorPicker from '../components/ColorPicker';
@@ -126,12 +125,6 @@ function Courses() {
     });
 
     const [courseStats, setCourseStats] = useState({});
-    const [expandedGroups, setExpandedGroups] = useState({});
-    const [courseGroups, setCourseGroups] = useState({});
-    const [openGroupDialog, setOpenGroupDialog] = useState(false);
-    const [groupForm, setGroupForm] = useState({ name: '', studentIds: [] });
-    const [editingGroup, setEditingGroup] = useState(null);
-    const [activeGroupCourseId, setActiveGroupCourseId] = useState(null);
     useEffect(() => {
         if (user) {
             fetchData();
@@ -176,55 +169,7 @@ function Courses() {
         }
     };
 
-    const fetchGroups = async (courseId) => {
-        try {
-            const res = await axiosInstance.get(`/groups/course/${courseId}`);
-            setCourseGroups(prev => ({ ...prev, [courseId]: res.data }));
-        } catch (err) { console.error('Ошибка загрузки групп:', err); }
-    };
 
-    const toggleGroups = (courseId) => {
-        if (!courseGroups[courseId]) fetchGroups(courseId);
-        setExpandedGroups(prev => ({ ...prev, [courseId]: !prev[courseId] }));
-    };
-
-    const handleCreateGroup = (courseId) => {
-        setActiveGroupCourseId(courseId);
-        setEditingGroup(null);
-        setGroupForm({ name: '', studentIds: [] });
-        setOpenGroupDialog(true);
-    };
-
-    const handleEditGroup = (group) => {
-        setActiveGroupCourseId(group.courseId);
-        setEditingGroup(group);
-        setGroupForm({ name: group.name, studentIds: group.studentIds || [] });
-        setOpenGroupDialog(true);
-    };
-
-    const handleSaveGroup = async () => {
-        if (!groupForm.name) return;
-        try {
-            const payload = { name: groupForm.name, courseId: activeGroupCourseId, studentIds: groupForm.studentIds };
-            if (editingGroup) {
-                await axiosInstance.put(`/groups/${editingGroup.id}`, payload);
-            } else {
-                await axiosInstance.post('/groups', payload);
-            }
-            setOpenGroupDialog(false);
-            fetchGroups(activeGroupCourseId);
-            showSnackbar(editingGroup ? 'Группа обновлена' : 'Группа создана', 'success');
-        } catch (err) { showSnackbar('Ошибка сохранения группы', 'error'); }
-    };
-
-    const handleDeleteGroup = async (groupId, courseId) => {
-        if (!window.confirm('Удалить группу?')) return;
-        try {
-            await axiosInstance.delete(`/groups/${groupId}`);
-            fetchGroups(courseId);
-            showSnackbar('Группа удалена', 'success');
-        } catch (err) { showSnackbar('Ошибка удаления', 'error'); }
-    };
 
     const calculateCourseStats = (coursesData, studentsData, lessonsData, paymentsData) => {
         const stats = {};
@@ -429,17 +374,7 @@ function Courses() {
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                    <StyledButton
-                        variant="outlined"
-                        startIcon={<GroupIcon sx={{ fontSize: 18 }} />}
-                        onClick={() => {
-                            if (courses.length > 0) handleCreateGroup(courses[0].id);
-                            else showSnackbar('Сначала создайте курс', 'warning');
-                        }}
-                        sx={{ color: '#4F46E5', borderColor: '#C7D2FE', '&:hover': { bgcolor: '#EEF2FF', borderColor: '#4F46E5' } }}
-                    >
-                        Создать группу
-                    </StyledButton>
+        
                     <StyledButton
                         variant="contained"
                         startIcon={<Add sx={{ fontSize: 18 }} />}
@@ -663,40 +598,6 @@ function Courses() {
                                                 </Box>
                                             </Box>
                                         )}
-                                        {/* Группы */}
-                                        <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #F3F4F6' }}>
-                                            <Button size="small" onClick={() => toggleGroups(course.id)}
-                                                endIcon={expandedGroups[course.id] ? <ExpandLess /> : <ExpandMore />}
-                                                sx={{ color: '#6B7280', textTransform: 'none', fontSize: '12px', p: 0.5 }}>
-                                                <GroupIcon sx={{ fontSize: 16, mr: 0.5 }} />
-                                                Группы ({courseGroups[course.id]?.length || 0})
-                                            </Button>
-                                            {expandedGroups[course.id] && (
-                                                <Box sx={{ mt: 1, pl: 1, borderLeft: '2px solid #E5E7EB' }}>
-                                                    {courseGroups[course.id]?.length > 0 ? (
-                                                        courseGroups[course.id].map(g => (
-                                                            <Box key={g.id} sx={{ mb: 1, p: 1, bgcolor: '#F9FAFB', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <Box>
-                                                                    <Typography sx={{ fontSize: '13px', fontWeight: 600 }}>{g.name}</Typography>
-                                                                    <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>{g.studentCount} учеников</Typography>
-                                                                </Box>
-                                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                                    <IconButton size="small" onClick={() => handleEditGroup(g)}><Edit sx={{ fontSize: 14 }} /></IconButton>
-                                                                    <IconButton size="small" onClick={() => handleDeleteGroup(g.id, course.id)}><Delete sx={{ fontSize: 14, color: '#EF4444' }} /></IconButton>
-                                                                </Box>
-                                                            </Box>
-                                                        ))
-                                                    ) : (
-                                                        <Typography sx={{ fontSize: '12px', color: '#9CA3AF', mb: 1 }}>Нет групп</Typography>
-                                                    )}
-                                                    <Button size="small" variant="outlined" startIcon={<Add />}
-                                                        onClick={() => handleCreateGroup(course.id)}
-                                                        sx={{ borderRadius: '8px', fontSize: '12px', textTransform: 'none' }}>
-                                                        Создать группу
-                                                    </Button>
-                                                </Box>
-                                            )}
-                                        </Box>
                                     </CardContent>
                                 </CourseCard>
                             </Grid>
@@ -717,9 +618,7 @@ function Courses() {
                 <MenuItem onClick={() => { handleMenuClose(); handleOpenDialog(selectedCourse); }} sx={{ fontSize: '14px', gap: 1 }}>
                     <Edit sx={{ fontSize: 18, color: '#6B7280' }} /> Редактировать
                 </MenuItem>
-                <MenuItem onClick={() => { handleMenuClose(); handleCreateGroup(selectedCourse.id); }} sx={{ fontSize: '14px', gap: 1 }}>
-                    <GroupIcon sx={{ fontSize: 18, color: '#4F46E5' }} /> Группы
-                </MenuItem>
+                
             </Menu>
 
             {/* ========== ДИАЛОГ ДОБАВЛЕНИЯ/РЕДАКТИРОВАНИЯ ========== */}
@@ -817,36 +716,7 @@ function Courses() {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-            {/* Диалог создания/редактирования группы */}
-            <StyledDialog open={openGroupDialog} onClose={() => setOpenGroupDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>{editingGroup ? 'Редактировать группу' : 'Создать группу'}</DialogTitle>
-                <DialogContent>
-                    <Box sx={{ pt: 2 }}>
-                        <TextField fullWidth label="Название группы" value={groupForm.name}
-                            onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
-                            sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
-                        <Typography sx={{ fontSize: '14px', fontWeight: 500, mb: 1 }}>Ученики</Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                            {students.map(s => {
-                                const sel = groupForm.studentIds.includes(s.id);
-                                return (
-                                    <Chip key={s.id} label={s.fullName} variant={sel ? 'filled' : 'outlined'}
-                                        onClick={() => setGroupForm(prev => ({
-                                            ...prev, studentIds: sel ? prev.studentIds.filter(id => id !== s.id) : [...prev.studentIds, s.id]
-                                        }))}
-                                        sx={{ cursor: 'pointer', borderRadius: '8px', bgcolor: sel ? '#EEF2FF' : 'transparent', color: sel ? '#4F46E5' : '#6B7280' }} />
-                                );
-                            })}
-                        </Box>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenGroupDialog(false)}>Отмена</Button>
-                    <Button onClick={handleSaveGroup} variant="contained" disabled={!groupForm.name}>
-                        {editingGroup ? 'Сохранить' : 'Создать'}
-                    </Button>
-                </DialogActions>
-            </StyledDialog>
+            
         </PageContainer>
     );
 }

@@ -133,11 +133,10 @@ public class GroupService {
     @Transactional
     public void deleteGroup(Long id) {
         Group group = getGroupById(id);
-
-        if (!group.getStudents().isEmpty()) {
-            throw new RuntimeException("Нельзя удалить группу с учениками");
-        }
-
+        // Сначала удаляем связи с учениками
+        group.getStudents().clear();
+        groupRepository.save(group);
+        // Потом удаляем группу
         groupRepository.delete(group);
     }
 

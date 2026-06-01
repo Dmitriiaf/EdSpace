@@ -10,7 +10,8 @@ import {
     Stack, Divider, Pagination, Button, Snackbar,
     Menu, ListItemIcon, ListItemText, ToggleButtonGroup, ToggleButton,
     Fab, Zoom, Badge, Avatar, LinearProgress, Breadcrumbs,
-    Popover, List, ListItem, Fade, ListItemAvatar, Skeleton
+    Popover, List, ListItem, Fade, ListItemAvatar, Skeleton,
+    Checkbox, FormControlLabel
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
 import {
@@ -191,6 +192,24 @@ const AssemblyFAB = styled(Zoom)(({ theme }) => ({
 // ========== КОНСТАНТЫ ==========
 const SUBJECTS = ['Информатика', 'Математика', 'Русский язык', 'Физика'];
 const EXAM_TYPES = ['ЕГЭ', 'ОГЭ'];
+const TASK_NUMBERS_BY_SUBJECT = {
+    'Информатика': {
+        'ЕГЭ': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27],
+        'ОГЭ': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    },
+    'Математика': {
+        'ЕГЭ': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],
+        'ОГЭ': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26]
+    },
+    'Русский язык': {
+        'ЕГЭ': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27],
+        'ОГЭ': [1,2,3,4,5,6,7,8,9,10,11,12,13]
+    },
+    'Физика': {
+        'ЕГЭ': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32],
+        'ОГЭ': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
+    }
+};
 
 const TYPE_CONFIG = {
     task: { color: '#4F46E5', label: 'Задание', icon: '📝', bgLight: '#EEF2FF' },
@@ -259,6 +278,7 @@ function TaskBank() {
     const [aiPrompt, setAiPrompt] = useState('');
     const [aiSubject, setAiSubject] = useState('Информатика');
     const [aiExamType, setAiExamType] = useState('ЕГЭ');
+    const [aiTaskNumber, setAiTaskNumber] = useState('');
     const [generating, setGenerating] = useState(false);
     const [generatedTask, setGeneratedTask] = useState(null);
     const [quickUploadOpen, setQuickUploadOpen] = useState(false);
@@ -268,8 +288,7 @@ function TaskBank() {
     const [ocrResult, setOcrResult] = useState(null);
     const [ocrLoading, setOcrLoading] = useState(false);
     const [manualDialogOpen, setManualDialogOpen] = useState(false);
-    const [manualForm, setManualForm] = useState({ question: '', answer: '', explanation: '', topic: '', difficulty: 3 });
-    const [savingManual, setSavingManual] = useState(false);
+    const [manualForm, setManualForm] = useState({ question: '', answer: '', explanation: '', topic: '', difficulty: 3, subject: 'Информатика', examType: 'ЕГЭ', taskNumber: '', isPublic: false });    const [savingManual, setSavingManual] = useState(false);
     const [variantDialogOpen, setVariantDialogOpen] = useState(false);
     const [variantForm, setVariantForm] = useState({ title: '', url: '', subject: '', examType: '', taskIds: [] });
     const [variantSource, setVariantSource] = useState('url');
@@ -609,10 +628,12 @@ function TaskBank() {
                 explanation: manualForm.explanation || '',
                 topic: manualForm.topic || '',
                 difficulty: manualForm.difficulty || 3,
+                taskNumber: manualForm.taskNumber ? parseInt(manualForm.taskNumber) : null,
                 source: 'MANUAL',
-                subject: 'Информатика',
-                examType: 'ЕГЭ',
-                type: 'problem'
+                subject: manualForm.subject || 'Информатика',
+                examType: manualForm.examType || 'ЕГЭ',
+                type: 'problem',
+                isPublic: manualForm.isPublic || false
             });
             showSnackbar('✅ Задание создано!', 'success');
             setManualDialogOpen(false);
@@ -1270,7 +1291,7 @@ function TaskBank() {
 
                 {/* ========== ДИАЛОГИ (оставлены как были, с улучшенными стилями) ========== */}
                 
-                {/* ========== ИИ-ГЕНЕРАЦИЯ (ОБНОВЛЁННАЯ) ========== */}
+                                {/* ========== ИИ-ГЕНЕРАЦИЯ (v3 — Предмет → Экзамен → Задание) ========== */}
                 <StyledDialog open={aiDialogOpen} onClose={() => { setAiDialogOpen(false); setGeneratedTask(null); setAiPrompt(''); }} maxWidth="md" fullWidth>
                     <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
                         <Box sx={{ 
@@ -1283,69 +1304,102 @@ function TaskBank() {
                         <Box>
                             <Typography sx={{ fontSize: '20px', fontWeight: 700 }}>ИИ-генерация задания</Typography>
                             <Typography sx={{ fontSize: '13px', color: '#6B7280', fontWeight: 400 }}>
-                                Нейросеть создаст уникальное задание по вашему описанию
+                                Выберите предмет, экзамен и номер задания
                             </Typography>
                         </Box>
                     </DialogTitle>
 
                     <DialogContent sx={{ p: 3 }}>
                         <Stack spacing={2.5}>
-                            {/* ===== ШАБЛОНЫ ЗАДАНИЙ ===== */}
                             {!generatedTask && (
-                                <Paper sx={{ p: 2.5, borderRadius: '16px', bgcolor: '#F9FAFB', border: '1px solid #F3F4F6' }}>
-                                    <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <SmartToy sx={{ color: '#8B5CF6', fontSize: 20 }} />
-                                        Быстрые шаблоны
-                                    </Typography>
-                                    <Grid container spacing={1}>
-                                        {[
-                                            { 
-                                                label: '📊 Задание 27 ЕГЭ', 
-                                                desc: 'Анализ программ',
-                                                prompt: 'Сгенерируй задание 27 ЕГЭ по информатике на анализ программы с циклом и условием. Программа должна выводить результат в зависимости от входного параметра. Добавь таблицу трассировки.',
-                                                color: '#4F46E5'
-                                            },
-                                            { 
-                                                label: '🔢 Задание 5 ЕГЭ', 
-                                                desc: 'Кодирование чисел',
-                                                prompt: 'Сгенерируй задание 5 ЕГЭ по информатике на перевод чисел между системами счисления. Должно быть двоичное, восьмеричное и шестнадцатеричное представление.',
-                                                color: '#10B981'
-                                            },
-                                            { 
-                                                label: '🧮 Задание 12 ЕГЭ', 
-                                                desc: 'Логика и множества',
-                                                prompt: 'Сгенерируй задание 12 ЕГЭ по информатике на логические выражения. Используй операторы AND, OR, NOT. Добавь таблицу истинности.',
-                                                color: '#F59E0B'
-                                            },
-                                            { 
-                                                label: '📝 Свой запрос', 
-                                                desc: 'Опишите задачу',
-                                                prompt: '',
-                                                color: '#764ba2'
-                                            },
-                                        ].map((template, i) => (
-                                            <Grid item xs={6} key={i}>
-                                                <Paper 
-                                                    onClick={() => setAiPrompt(template.prompt)}
-                                                    sx={{ 
-                                                        p: 2, borderRadius: '12px', cursor: 'pointer',
-                                                        border: `2px solid ${aiPrompt === template.prompt ? template.color : '#E5E7EB'}`,
-                                                        bgcolor: aiPrompt === template.prompt ? alpha(template.color, 0.05) : '#fff',
-                                                        transition: 'all 0.2s ease',
-                                                        '&:hover': { borderColor: template.color, bgcolor: alpha(template.color, 0.03) }
+                                <Box>
+                                    <Grid container spacing={2}>
+                                        <Grid item xs={4}>
+                                            <FormControl fullWidth>
+                                                <InputLabel>Предмет</InputLabel>
+                                                <Select
+                                                    value={aiSubject}
+                                                    onChange={(e) => {
+                                                        setAiSubject(e.target.value);
+                                                        setAiExamType('ЕГЭ');
+                                                        setAiTaskNumber('');
+                                                        setAiPrompt('');
                                                     }}
+                                                    sx={{ borderRadius: '12px', bgcolor: '#fff' }}
                                                 >
-                                                    <Typography sx={{ fontWeight: 600, fontSize: '14px', color: template.color }}>
-                                                        {template.label}
-                                                    </Typography>
-                                                    <Typography sx={{ fontSize: '12px', color: '#9CA3AF', mt: 0.5 }}>
-                                                        {template.desc}
-                                                    </Typography>
-                                                </Paper>
-                                            </Grid>
-                                        ))}
+                                                    {SUBJECTS.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+                                        <Grid item xs={4}>
+                                            <FormControl fullWidth>
+                                                <InputLabel>Экзамен</InputLabel>
+                                                <Select
+                                                    value={aiExamType}
+                                                    onChange={(e) => {
+                                                        setAiExamType(e.target.value);
+                                                        setAiTaskNumber('');
+                                                        setAiPrompt('');
+                                                    }}
+                                                    sx={{ borderRadius: '12px', bgcolor: '#fff' }}
+                                                >
+                                                    {EXAM_TYPES.map(e => <MenuItem key={e} value={e}>{e}</MenuItem>)}
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+                                        <Grid item xs={4}>
+                                            <FormControl fullWidth>
+                                                <InputLabel>Номер задания</InputLabel>
+                                                <Select
+                                                    value={aiTaskNumber}
+                                                    onChange={(e) => {
+                                                        setAiTaskNumber(e.target.value);
+                                                        if (aiSubject === 'Информатика' && aiExamType === 'ЕГЭ') {
+                                                            const prompts = {
+                                                                1: 'Задание 1 ЕГЭ по информатике: анализ информационных моделей. Графы, таблицы, диаграммы. Создай уникальное задание.',
+                                                                2: 'Задание 2 ЕГЭ по информатике: таблицы истинности логических выражений. Создай уникальное задание.',
+                                                                3: 'Задание 3 ЕГЭ по информатике: поиск информации в базах данных. Создай уникальное задание.',
+                                                                4: 'Задание 4 ЕГЭ по информатике: кодирование и декодирование информации. Условие Фано.',
+                                                                5: 'Задание 5 ЕГЭ по информатике: анализ алгоритмов. Программа с простым циклом.',
+                                                                6: 'Задание 6 ЕГЭ по информатике: анализ программ с циклами. Вложенные циклы.',
+                                                                7: 'Задание 7 ЕГЭ по информатике: кодирование графической и звуковой информации.',
+                                                                8: 'Задание 8 ЕГЭ по информатике: комбинаторика. Перебор слов и системы счисления.',
+                                                                9: 'Задание 9 ЕГЭ по информатике: электронные таблицы. Формулы и функции.',
+                                                                10: 'Задание 10 ЕГЭ по информатике: информационный поиск средствами ОС.',
+                                                                11: 'Задание 11 ЕГЭ по информатике: кодирование информации. Вычисление объёма памяти.',
+                                                                12: 'Задание 12 ЕГЭ по информатике: логические выражения. Поиск количества решений.',
+                                                                13: 'Задание 13 ЕГЭ по информатике: представление чисел в компьютере. Системы счисления.',
+                                                                14: 'Задание 14 ЕГЭ по информатике: алгоритмы обработки чисел. Побитовые операции.',
+                                                                15: 'Задание 15 ЕГЭ по информатике: теория игр. Одна куча камней.',
+                                                                16: 'Задание 16 ЕГЭ по информатике: рекурсивные алгоритмы.',
+                                                                17: 'Задание 17 ЕГЭ по информатике: обработка целочисленных данных из файла.',
+                                                                18: 'Задание 18 ЕГЭ по информатике: динамическое программирование. Матрица.',
+                                                                19: 'Задание 19 ЕГЭ по информатике: теория игр. Одна куча.',
+                                                                20: 'Задание 20 ЕГЭ по информатике: теория игр. Две кучи.',
+                                                                21: 'Задание 21 ЕГЭ по информатике: теория игр. Усложнённая.',
+                                                                22: 'Задание 22 ЕГЭ по информатике: многопроцессорные системы.',
+                                                                23: 'Задание 23 ЕГЭ по информатике: системы логических уравнений.',
+                                                                24: 'Задание 24 ЕГЭ по информатике: обработка символьных строк из файла.',
+                                                                25: 'Задание 25 ЕГЭ по информатике: поиск чисел с заданными свойствами.',
+                                                                26: 'Задание 26 ЕГЭ по информатике: обработка данных сортировкой.',
+                                                                27: 'Задание 27 ЕГЭ по информатике: анализ программ с циклами и условиями.'
+                                                            };
+                                                            setAiPrompt(prompts[e.target.value] || '');
+                                                        } else {
+                                                            setAiPrompt(`Задание ${e.target.value} ${aiExamType} по ${aiSubject}. Создай уникальное задание как в реальном экзамене.`);
+                                                        }
+                                                    }}
+                                                    sx={{ borderRadius: '12px', bgcolor: '#fff' }}
+                                                >
+                                                    <MenuItem value=""><em>Выберите номер</em></MenuItem>
+                                                    {(TASK_NUMBERS_BY_SUBJECT[aiSubject]?.[aiExamType] || []).map(num => (
+                                                        <MenuItem key={num} value={num}>Задание {num}</MenuItem>
+                                                    ))}
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
                                     </Grid>
-                                </Paper>
+                                </Box>
                             )}
 
                             {/* ===== ПОЛЯ ВВОДА ===== */}
@@ -1356,26 +1410,11 @@ function TaskBank() {
                                         value={aiPrompt} 
                                         onChange={(e) => setAiPrompt(e.target.value)}
                                         fullWidth multiline rows={4}
-                                        placeholder="Например: Задание 27 ЕГЭ по информатике. Дана программа на Python с циклом while. Необходимо определить, при каком наименьшем значении x программа выведет число 42. Добавь таблицу трассировки и пояснение."
+                                        placeholder="Промт заполнится автоматически после выбора номера задания. Вы можете его отредактировать."
                                         sx={{ '& .MuiOutlinedInput-root': { borderRadius: '14px', bgcolor: '#fff', fontSize: '14px' } }}
                                         helperText={`${aiPrompt.length} / 1000 символов`}
                                         inputProps={{ maxLength: 1000 }}
                                     />
-
-                                    <Box sx={{ display: 'flex', gap: 2 }}>
-                                        <FormControl fullWidth>
-                                            <InputLabel>Предмет</InputLabel>
-                                            <Select value={aiSubject} onChange={(e) => setAiSubject(e.target.value)} sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
-                                                {SUBJECTS.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                                            </Select>
-                                        </FormControl>
-                                        <FormControl fullWidth>
-                                            <InputLabel>Экзамен</InputLabel>
-                                            <Select value={aiExamType} onChange={(e) => setAiExamType(e.target.value)} sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
-                                                {EXAM_TYPES.map(e => <MenuItem key={e} value={e}>{e}</MenuItem>)}
-                                            </Select>
-                                        </FormControl>
-                                    </Box>
                                 </>
                             )}
 
@@ -1386,15 +1425,11 @@ function TaskBank() {
                                         width: 80, height: 80, borderRadius: '50%', mx: 'auto', mb: 3,
                                         background: 'linear-gradient(135deg, #8B5CF6, #6366F1)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        animation: 'pulse 2s infinite'
                                     }}>
                                         <SmartToy sx={{ color: '#fff', fontSize: 40 }} />
                                     </Box>
                                     <Typography sx={{ fontWeight: 600, fontSize: '16px', mb: 1 }}>
                                         Генерирую задание...
-                                    </Typography>
-                                    <Typography sx={{ color: '#6B7280', fontSize: '14px' }}>
-                                        {aiPrompt.substring(0, 60)}...
                                     </Typography>
                                     <LinearProgress sx={{ mt: 3, borderRadius: 4, height: 6, maxWidth: 300, mx: 'auto' }} />
                                 </Box>
@@ -1618,11 +1653,37 @@ function TaskBank() {
                             />
                             <Grid container spacing={2}>
                                 <Grid item xs={6}>
+                                    <FormControl fullWidth>
+                                        <InputLabel>Предмет</InputLabel>
+                                        <Select
+                                            value={manualForm.subject || 'Информатика'}
+                                            onChange={(e) => setManualForm({...manualForm, subject: e.target.value})}
+                                            sx={{ borderRadius: '12px', bgcolor: '#fff' }}
+                                        >
+                                            {SUBJECTS.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <FormControl fullWidth>
+                                        <InputLabel>Экзамен</InputLabel>
+                                        <Select
+                                            value={manualForm.examType || 'ЕГЭ'}
+                                            onChange={(e) => setManualForm({...manualForm, examType: e.target.value})}
+                                            sx={{ borderRadius: '12px', bgcolor: '#fff' }}
+                                        >
+                                            {EXAM_TYPES.map(e => <MenuItem key={e} value={e}>{e}</MenuItem>)}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                <Grid item xs={6}>
                                     <TextField 
-                                        label="Тема" 
-                                        value={manualForm.topic} 
-                                        onChange={(e) => setManualForm({...manualForm, topic: e.target.value})}
+                                        label="Номер задания (1-27)" 
+                                        type="number"
+                                        value={manualForm.taskNumber || ''} 
+                                        onChange={(e) => setManualForm({...manualForm, taskNumber: e.target.value})}
                                         fullWidth 
+                                        inputProps={{ min: 1, max: 27 }}
                                         sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} 
                                     />
                                 </Grid>
@@ -1644,6 +1705,23 @@ function TaskBank() {
                                     </FormControl>
                                 </Grid>
                             </Grid>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox 
+                                        checked={manualForm.isPublic || false}
+                                        onChange={(e) => setManualForm({...manualForm, isPublic: e.target.checked})}
+                                    />
+                                }
+                                label="📢 Опубликовать для всех репетиторов"
+                                sx={{ mt: 1 }}
+                            />
+                            <TextField 
+                                label="Тема" 
+                                value={manualForm.topic} 
+                                onChange={(e) => setManualForm({...manualForm, topic: e.target.value})}
+                                fullWidth 
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} 
+                            />
                             <TextField 
                                 label="Пояснение" 
                                 value={manualForm.explanation} 

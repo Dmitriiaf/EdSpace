@@ -213,6 +213,9 @@ public class WeeklyTemplateService {
         // Удаляем разовые занятия на 4 недели вперёд
         deleteConflictingSingleLessons(tutorId, dayOfWeek, startTime, endTime, studentId);
 
+        // ✅ МГНОВЕННАЯ ГЕНЕРАЦИЯ УРОКОВ на 4 недели вперёд
+        generateLessonsForTemplate(savedTemplate);
+
         recalculateSubscriptionsForStudent(studentId);
 
         log.info("✅ Шаблон создан: ученик={}, день={}, время={}-{}",
@@ -262,6 +265,10 @@ public class WeeklyTemplateService {
             throw new RuntimeException("Нельзя обновить шаблон: " + conflict);
         }
 
+        // Сохраняем старые значения для сравнения
+        boolean timeChanged = !template.getStartTime().equals(startTime) || !template.getEndTime().equals(endTime);
+        boolean studentChanged = !template.getStudent().getId().equals(studentId);
+
         template.setStudent(student);
         template.setCourse(course);
         template.setDayOfWeek(dayOfWeek);
@@ -270,11 +277,94 @@ public class WeeklyTemplateService {
 
         WeeklyTemplate updatedTemplate = templateRepository.save(template);
 
+        // ✅ ОБНОВЛЯЕМ БУДУЩИЕ УРОКИ, если изменилось время или ученик
+        if (timeChanged || studentChanged) {
+            updateFutureLessonsFromTemplate(updatedTemplate, timeChanged, studentChanged);
+        }
+
         recalculateSubscriptionsForStudent(studentId);
 
         log.info("✅ Шаблон обновлён: ID={}, ученик={}, день={}, время={}-{}",
                 id, student.getFullName(), dayOfWeek, startTime, endTime);
         return updatedTemplate;
+    }
+
+    /**
+     * Обновляет все будущие SCHEDULED уроки этого шаблона.
+     */
+    private void updateFutureLessonsFromTemplate(WeeklyTemplate template, boolean timeChanged, boolean studentChanged) {
+        LocalDate today = LocalDate.now();
+        List<Lesson> futureLessons = lessonRepository.findByTemplateIdAndLessonDateAfterAndStatus(
+                template.getId(), today, Lesson.STATUS_SCHEDULED);
+
+        if (futureLessons.isEmpty()) {
+            log.info("  → Нет будущих уроков для обновления");
+            return;
+        }
+
+        for (Lesson lesson : futureLessons) {
+            if (timeChanged) {
+                lesson.setStartTime(template.getStartTime());
+                lesson.setEndTime(template.getEndTime());
+                lesson.setDuration((int) java.time.Duration.between(template.getStartTime(), template.getEndTime()).toMinutes());
+            }
+            if (studentChanged) {
+                lesson.setStudent(template.getStudent());
+            }
+            if (template.getCourse() != null) {
+                lesson.setCourse(template.getCourse());
+            }
+        }
+
+        lessonRepository.saveAll(futureLessons);
+        log.info("  ✅ Обновлено {} будущих уроков", futureLessons.size());
+    }
+
+    /**
+     * Генерирует уроки по шаблону на 4 недели вперёд.
+     */
+    private void generateLessonsForTemplate(WeeklyTemplate template) {
+        LocalDate today = LocalDate.now();
+        LocalDate endDate = today.plusWeeks(4);
+        int generated = 0;
+
+        LocalDate current = today;
+        while (!current.isAfter(endDate)) {
+            if (current.getDayOfWeek().getValue() == template.getDayOfWeek()) {
+                // Проверяем, нет ли уже урока на эту дату
+                if (!lessonRepository.existsByTemplateIdAndLessonDate(template.getId(), current)) {
+                    // Проверяем конфликт
+                    String conflict = conflictChecker.checkConflicts(
+                            template.getTutor().getId(),
+                            template.getStudent().getEmail(),
+                            current,
+                            template.getStartTime(),
+                            template.getEndTime()
+                    );
+
+                    if (conflict == null) {
+                        Lesson lesson = new Lesson(
+                                template.getTutor(),
+                                template.getStudent(),
+                                template.getCourse(),
+                                current,
+                                template.getStartTime(),
+                                template.getEndTime()
+                        );
+                        lesson.setWeeklyTemplateId(template.getId());
+                        lesson.setDuration((int) java.time.Duration.between(template.getStartTime(), template.getEndTime()).toMinutes());
+                        lessonRepository.save(lesson);
+                        generated++;
+                    } else {
+                        log.warn("  ⚠️ Пропущена дата {} из-за конфликта: {}", current, conflict);
+                    }
+                }
+            }
+            current = current.plusDays(1);
+        }
+
+        log.info("📅 Сгенерировано {} уроков по шаблону ID={} ({} - {})",
+                generated, template.getId(), today, endDate);
     }
 
     @Transactional

@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Materials.js (v6 — БЫСТРЫЕ ПРАВКИ) ==========
+// ========== frontend/src/pages/Materials.js (v7 — В СТИЛЕ БАНКА ЗАДАНИЙ) ==========
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
 import axiosInstance from '../services/api';
@@ -8,90 +8,158 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions, Alert, Snackbar,
     FormControl, InputLabel, Select, MenuItem, Breadcrumbs, Link as MuiLink,
     LinearProgress, ToggleButtonGroup, ToggleButton, CircularProgress, Fab,
-    Divider
+    Divider, Stack, ListItemIcon, ListItemText, Menu, ListItemAvatar, List, ListItem
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
-import { PageContainer, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
+import { PageContainer, StyledButton, StyledDialog } from '../styles/shared';
 import {
     CloudUpload, Search, Refresh, Folder as FolderIcon,
-    CreateNewFolder, InsertDriveFile, PictureAsPdf, Image, VideoFile, AudioFile,
+    CreateNewFolder, InsertDriveFile, PictureAsPdf, Image, VideoFile,
     Delete, Edit, Download, NavigateNext, DriveFolderUpload, Home,
     ViewList, ViewModule, School, Person, Description, TableChart,
     GridView, CleaningServices, SortByAlpha, UploadFile, FolderOpen,
-    OpenInNew, Close, Add, ArrowBack, Dns as StorageIcon
+    OpenInNew, Close, Add, ArrowBack, Dns as StorageIcon,
+    KeyboardArrowDown, CloudUpload as CloudUploadIcon, FilterList,
+    Star, StarBorder, MoreVert, Send
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
 // ========== ЦВЕТА ==========
 const FOLDER_COLORS = ['#F59E0B', '#EF4444', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'];
 
-// ========== СТИЛИ ==========
-const GradientHero = styled(Box)({
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    borderRadius: '20px', padding: '28px 32px', color: '#fff',
-    marginBottom: '24px', position: 'relative', overflow: 'hidden',
-    '&::before': { content: '""', position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.1)' },
-    '&::after': { content: '""', position: 'absolute', bottom: -80, left: -30, width: 250, height: 250, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' },
+// ========== СТИЛИ (в стиле Банка заданий) ==========
+
+const CompactAppBar = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '16px 24px',
+    background: '#fff',
+    borderBottom: '1px solid #F3F4F6',
+    flexWrap: 'wrap',
 });
 
-const GlassStat = styled(Paper)({
-    background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)',
-    borderRadius: '16px', padding: '16px 20px', textAlign: 'center',
-    border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-    transition: 'all 0.3s ease',
-    '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 12px 30px rgba(0,0,0,0.1)' },
+const PageTitle = styled(Typography)({
+    fontSize: '24px',
+    fontWeight: 700,
+    color: '#1F2937',
+    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
 });
 
-const FileCard = styled(Card)({
-    borderRadius: '18px', overflow: 'hidden', border: '1px solid #F3F4F6',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    cursor: 'grab',
-    '&:hover': { transform: 'translateY(-6px)', boxShadow: '0 16px 40px rgba(0,0,0,0.1)', '& .file-actions': { opacity: 1, transform: 'translateY(0)' } },
-    '&:active': { cursor: 'grabbing', opacity: 0.7 },
-});
-
-const FolderCardNew = styled(Card)(({ folderColor, isDragOver }) => ({
-    borderRadius: '18px', overflow: 'hidden', border: `2px solid ${isDragOver ? '#764ba2' : '#F3F4F6'}`,
-    boxShadow: isDragOver ? '0 0 0 4px rgba(118,75,162,0.2)' : '0 2px 8px rgba(0,0,0,0.04)',
-    cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    transform: isDragOver ? 'scale(1.03)' : 'scale(1)',
-    '&:hover': { transform: 'translateY(-6px) scale(1.02)', boxShadow: '0 16px 40px rgba(0,0,0,0.12)' },
-}));
-
-const FilePreview = styled(Box)(({ bgColor }) => ({
-    height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: `linear-gradient(135deg, ${bgColor}22, ${bgColor}44)`, position: 'relative',
-}));
-
-const FloatingActions = styled(Box)({
-    position: 'absolute', bottom: 12, right: 12, display: 'flex', gap: 4,
-    opacity: 0, transform: 'translateY(10px)', transition: 'all 0.3s ease',
-    background: 'rgba(255,255,255,0.95)', borderRadius: '12px', padding: '4px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-});
-
-const DragOverlay = styled(Box)({
-    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    background: 'rgba(118,75,162,0.08)', zIndex: 9999,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    pointerEvents: 'none',
-});
-
-const AssignmentToggle = styled(ToggleButtonGroup)({
-    backgroundColor: '#F9FAFB', borderRadius: '12px', padding: '4px',
-    '& .MuiToggleButton-root': {
-        borderRadius: '10px', border: 'none', textTransform: 'none',
-        px: 2, py: 1, fontSize: '13px', fontWeight: 500,
-        '&.Mui-selected': { backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', color: '#764ba2' },
+const SmartSearchInput = styled(TextField)({
+    flex: 1,
+    minWidth: '280px',
+    '& .MuiOutlinedInput-root': {
+        borderRadius: '14px',
+        bgcolor: '#F9FAFB',
+        transition: 'all 0.2s ease',
+        '& fieldset': { borderColor: '#E5E7EB' },
+        '&:hover fieldset': { borderColor: '#D1D5DB' },
+        '&.Mui-focused fieldset': { 
+            borderColor: '#764ba2', 
+            boxShadow: '0 0 0 3px rgba(118,75,162,0.1)',
+            bgcolor: '#fff'
+        },
     },
 });
 
-const QuickAssignFab = styled(Fab)({
-    position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: '#fff', boxShadow: '0 8px 25px rgba(118,75,162,0.4)',
-    '&:hover': { background: 'linear-gradient(135deg, #5a6fd6 0%, #6a3f8f 100%)' },
+const ActionGroup = styled(Box)({
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+});
+
+const PrimaryActionButton = styled(Button)({
+    borderRadius: '12px',
+    textTransform: 'none',
+    fontWeight: 600,
+    padding: '8px 16px',
+    boxShadow: 'none',
+    '&:hover': { boxShadow: 'none' },
+});
+
+const SideNav = styled(Paper)({
+    width: '260px',
+    minWidth: '260px',
+    borderRadius: '16px',
+    border: '1px solid #F3F4F6',
+    overflow: 'hidden',
+    position: 'sticky',
+    top: '16px',
+    height: 'fit-content',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+});
+
+const NavItem = styled(Box)(({ active }) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 16px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    backgroundColor: active ? alpha('#764ba2', 0.08) : 'transparent',
+    borderLeft: active ? '3px solid #764ba2' : '3px solid transparent',
+    color: active ? '#764ba2' : '#6B7280',
+    fontWeight: active ? 600 : 400,
+    '&:hover': {
+        backgroundColor: active ? alpha('#764ba2', 0.12) : '#F9FAFB',
+    },
+}));
+
+const FileCard = styled(Card)({
+    borderRadius: '16px',
+    overflow: 'visible',
+    border: '1px solid #F3F4F6',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    cursor: 'pointer',
+    backgroundColor: '#fff',
+    '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: '0 12px 24px rgba(0,0,0,0.08)',
+    },
+});
+
+const FolderCard = styled(Card)(({ folderColor }) => ({
+    borderRadius: '16px',
+    overflow: 'visible',
+    border: '1px solid #F3F4F6',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    cursor: 'pointer',
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    backgroundColor: '#fff',
+    '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: '0 12px 24px rgba(0,0,0,0.08)',
+    },
+}));
+
+const FilePreview = styled(Box)(({ bgColor }) => ({
+    height: 120,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: `linear-gradient(135deg, ${bgColor}22, ${bgColor}44)`,
+    position: 'relative',
+}));
+
+const HoverActions = styled(Box)({
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    display: 'flex',
+    gap: 4,
+    opacity: 0,
+    transform: 'translateY(10px)',
+    transition: 'all 0.3s ease',
+    background: 'rgba(255,255,255,0.95)',
+    borderRadius: '12px',
+    padding: '4px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    '.file-card:hover &': { opacity: 1, transform: 'translateY(0)' },
 });
 
 // ========== ИКОНКА ФАЙЛА ==========
@@ -101,7 +169,6 @@ const FileIconWithColor = ({ fileName, size = 48 }) => {
     if (ext === 'pdf') return <PictureAsPdf {...props} sx={{ color: '#EF4444', fontSize: size }} />;
     if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext)) return <Image {...props} sx={{ color: '#10B981', fontSize: size }} />;
     if (['mp4','avi','mov','mkv','webm'].includes(ext)) return <VideoFile {...props} sx={{ color: '#3B82F6', fontSize: size }} />;
-    if (['mp3','wav','ogg','flac'].includes(ext)) return <AudioFile {...props} sx={{ color: '#F59E0B', fontSize: size }} />;
     if (['doc','docx'].includes(ext)) return <Description {...props} sx={{ color: '#3B82F6', fontSize: size }} />;
     if (['xls','xlsx','csv'].includes(ext)) return <TableChart {...props} sx={{ color: '#10B981', fontSize: size }} />;
     return <InsertDriveFile {...props} sx={{ color: '#9CA3AF', fontSize: size }} />;
@@ -112,8 +179,14 @@ const getFileColor = (name) => {
     if (ext === 'pdf') return '#EF4444';
     if (['jpg','jpeg','png','gif','webp'].includes(ext)) return '#10B981';
     if (['mp4','avi','mov'].includes(ext)) return '#3B82F6';
-    if (['mp3','wav'].includes(ext)) return '#F59E0B';
     return '#9CA3AF';
+};
+
+const formatSize = (b) => {
+    if (!b) return '—';
+    if (b < 1024) return `${b} B`;
+    if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / 1048576).toFixed(1)} MB`;
 };
 
 // ========== КОМПОНЕНТ ==========
@@ -124,6 +197,7 @@ function Materials() {
     const [materials, setMaterials] = useState([]);
     const [folders, setFolders] = useState([]);
     const [allFolders, setAllFolders] = useState([]);
+    const [allMaterials, setAllMaterials] = useState([]);
     const [students, setStudents] = useState([]);
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -133,10 +207,7 @@ function Materials() {
     const [folderPath, setFolderPath] = useState([]);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
     const [sortBy, setSortBy] = useState('date');
-
-    const [draggedFile, setDraggedFile] = useState(null);
-    const [dragOverFolder, setDragOverFolder] = useState(null);
-    const [isDragOverUpload, setIsDragOverUpload] = useState(false);
+    const [activeNav, setActiveNav] = useState('all');
 
     const [openUpload, setOpenUpload] = useState(false);
     const [openPreview, setOpenPreview] = useState(false);
@@ -147,6 +218,7 @@ function Materials() {
 
     const [assignmentType, setAssignmentType] = useState('course');
     const [formData, setFormData] = useState({ title: '', description: '', studentId: '', courseId: '' });
+    const [createMenuAnchor, setCreateMenuAnchor] = useState(null);
 
     const fileInputRef = useRef(null);
 
@@ -163,13 +235,12 @@ function Materials() {
         } catch (err) { showSnackbar('Ошибка загрузки', 'error'); }
     }, [user]);
 
-    const [allMaterials, setAllMaterials] = useState([]);
     const loadAllMaterials = useCallback(async () => {
         if (!user?.id) return;
         try {
             const res = await axiosInstance.get('/materials');
             setAllMaterials(res.data.materials || []);
-        } catch (err) { /* тихо */ }
+        } catch (err) {}
     }, [user]);
 
     useEffect(() => {
@@ -187,45 +258,35 @@ function Materials() {
 
     // ========== НАВИГАЦИЯ ==========
     const enterFolder = (f) => { setCurrentFolder(f.id); setFolderPath([...folderPath, f]); loadContent(f.id); };
-    const goToRoot = () => { setCurrentFolder(null); setFolderPath([]); loadContent(); };
+    const goToRoot = () => { setCurrentFolder(null); setFolderPath([]); loadContent(); setActiveNav('all'); };
 
-    // ========== DRAG & DROP ==========
-    const handleFileDragStart = (e, material) => {
-        setDraggedFile(material);
-        e.dataTransfer.effectAllowed = 'move';
-        e.currentTarget.style.opacity = '0.4';
-    };
-    const handleFileDragEnd = (e) => {
-        setDraggedFile(null); setDragOverFolder(null);
-        e.currentTarget.style.opacity = '1';
-    };
-    const handleFolderDragOver = (e, folder) => {
-        e.preventDefault(); e.stopPropagation();
-        if (draggedFile) { setDragOverFolder(folder.id); e.dataTransfer.dropEffect = 'move'; }
-    };
-    const handleFolderDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setDragOverFolder(null); };
-    const handleFolderDrop = async (e, targetFolder) => {
-        e.preventDefault(); e.stopPropagation(); setDragOverFolder(null);
-        if (!draggedFile) return;
+    // ========== ДЕЙСТВИЯ ==========
+    const handleDelete = async (id, isFolder = false) => {
+        if (!window.confirm(isFolder ? 'Удалить папку и всё внутри?' : 'Удалить файл?')) return;
         try {
-            await axiosInstance.put(`/materials/${draggedFile.id}/move`, { folderId: targetFolder.id });
-            showSnackbar(`📁 Перемещено в «${targetFolder.name}»`, 'success');
-            setDraggedFile(null); loadContent(currentFolder); loadAllMaterials();
-        } catch (err) { showSnackbar(err.response?.data?.error || 'Ошибка перемещения', 'error'); }
+            await axiosInstance.delete(isFolder ? `/materials/folder/${id}` : `/materials/${id}`);
+            showSnackbar('Удалено', 'success'); loadContent(currentFolder); loadAllMaterials();
+        } catch (err) { showSnackbar('Ошибка', 'error'); }
     };
 
-    // ========== ЗАГРУЗКА ==========
-    const openUploadDialog = (file) => {
-        if (file.size > 50 * 1024 * 1024) { showSnackbar('Файл больше 50 МБ', 'error'); return; }
-        setSelectedFile(file);
-        setFormData(prev => ({ ...prev, title: file.name.replace(/\.[^/.]+$/, ''), courseId: '', studentId: '' }));
-        setOpenUpload(true);
+    const handleDownload = async (m) => {
+        try {
+            const res = await axiosInstance.get(`/materials/download/${m.id}`, { responseType: 'blob' });
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a'); a.href = url; a.download = m.fileName; a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) { showSnackbar('Ошибка скачивания', 'error'); }
     };
-    const handleUploadDrop = (e) => {
-        e.preventDefault(); setIsDragOverUpload(false);
-        const file = e.dataTransfer.files[0];
-        if (file) openUploadDialog(file);
+
+    const handleCreateFolder = async () => {
+        const name = window.prompt('Название папки:');
+        if (!name) return;
+        try {
+            await axiosInstance.post('/materials/folder', { name, parentFolderId: currentFolder });
+            showSnackbar('Папка создана', 'success'); loadContent(currentFolder);
+        } catch (err) { showSnackbar('Ошибка', 'error'); }
     };
+
     const handleUpload = async () => {
         if (!selectedFile) return;
         setUploading(true);
@@ -246,68 +307,35 @@ function Materials() {
         finally { setUploading(false); }
     };
 
-    // ========== ДЕЙСТВИЯ ==========
-    const handleDelete = async (id, isFolder = false) => {
-        if (!window.confirm(isFolder ? 'Удалить папку и всё внутри?' : 'Удалить файл?')) return;
-        try {
-            await axiosInstance.delete(isFolder ? `/materials/folder/${id}` : `/materials/${id}`);
-            showSnackbar('Удалено', 'success'); loadContent(currentFolder); loadAllMaterials();
-        } catch (err) { showSnackbar('Ошибка', 'error'); }
-    };
-    const handleDownload = async (m) => {
-        try {
-            const res = await axiosInstance.get(`/materials/download/${m.id}`, { responseType: 'blob' });
-            const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement('a'); a.href = url; a.download = m.fileName; a.click();
-            URL.revokeObjectURL(url);
-        } catch (err) { showSnackbar('Ошибка скачивания', 'error'); }
-    };
-    const handleCreateFolder = async () => {
-        const name = window.prompt('Название папки:');
-        if (!name) return;
-        try {
-            await axiosInstance.post('/materials/folder', { name, parentFolderId: currentFolder });
-            showSnackbar('Папка создана', 'success'); loadContent(currentFolder);
-        } catch (err) { showSnackbar('Ошибка', 'error'); }
-    };
-    const handleRename = async (folder) => {
-        const name = window.prompt('Новое название:', folder.name);
-        if (!name) return;
-        try {
-            await axiosInstance.put(`/materials/folder/${folder.id}`, { name });
-            showSnackbar('Переименовано', 'success'); loadContent(currentFolder);
-        } catch (err) { showSnackbar('Ошибка', 'error'); }
-    };
-
     const showSnackbar = (m, s) => setSnackbar({ open: true, message: m, severity: s });
-    const formatSize = (b) => {
-        if (!b) return '—';
-        if (b < 1024) return `${b} B`;
-        if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
-        return `${(b / 1048576).toFixed(1)} MB`;
-    };
-    const formatDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU') : '';
 
     // ========== ФИЛЬТРАЦИЯ ==========
-    let filteredMaterials = materials.filter(m =>
-        m.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (m.description || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    let filteredFolders = folders.filter(f => f.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+    let filteredMaterials = materials;
+    let filteredFolders = folders;
+
+    if (activeNav === 'files') filteredFolders = [];
+    if (activeNav === 'folders') filteredMaterials = [];
+
+    if (searchTerm) {
+        filteredMaterials = filteredMaterials.filter(m =>
+            (m.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (m.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        filteredFolders = filteredFolders.filter(f => f.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
 
     if (sortBy === 'name') {
-        filteredMaterials.sort((a, b) => a.title.localeCompare(b.title));
+        filteredMaterials.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
     } else if (sortBy === 'size') {
         filteredMaterials.sort((a, b) => (b.fileSize || 0) - (a.fileSize || 0));
     } else {
-        filteredMaterials.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        filteredMaterials.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     }
 
     const stats = {
         files: allMaterials.length,
         folders: allFolders.length,
         totalSize: allMaterials.reduce((s, m) => s + (m.fileSize || 0), 0),
-        recentUploads: allMaterials.filter(m => (new Date() - new Date(m.createdAt)) < 7 * 24 * 3600 * 1000).length,
     };
 
     if (loading) return (
@@ -319,280 +347,335 @@ function Materials() {
     );
 
     return (
-        <PageContainer>
-            {draggedFile && (
-                <DragOverlay>
-                    <Paper sx={{ p: 3, borderRadius: '20px', bgcolor: '#fff', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center' }}>
-                        <DriveFolderUpload sx={{ fontSize: 48, color: '#764ba2', mb: 1 }} />
-                        <Typography sx={{ fontWeight: 600 }}>Перетащите в папку</Typography>
-                        <Typography sx={{ color: '#6B7280', fontSize: '14px' }}>{draggedFile.title}</Typography>
-                    </Paper>
-                </DragOverlay>
-            )}
+        <PageContainer sx={{ p: '0 !important', bgcolor: '#F9FAFB', minHeight: '100vh' }}>
+            
+            {/* ========== КОМПАКТНЫЙ APP BAR ========== */}
+            <CompactAppBar>
+                <PageTitle>
+                    <FolderOpen sx={{ color: '#764ba2' }} />
+                    Материалы
+                </PageTitle>
+                
+                <SmartSearchInput
+                    placeholder="Поиск по файлам и папкам..."
+                    size="small"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{
+                        startAdornment: <InputAdornment position="start"><Search sx={{ color: '#9CA3AF' }} /></InputAdornment>,
+                        endAdornment: searchTerm && (
+                            <InputAdornment position="end">
+                                <IconButton size="small" onClick={() => setSearchTerm('')}><Close fontSize="small" /></IconButton>
+                            </InputAdornment>
+                        ),
+                    }}
+                />
+                
+                <ActionGroup>
+                    <PrimaryActionButton
+                        variant="contained"
+                        startIcon={<Add />}
+                        endIcon={<KeyboardArrowDown />}
+                        onClick={(e) => setCreateMenuAnchor(e.currentTarget)}
+                        sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#5a3782' } }}
+                    >
+                        Создать
+                    </PrimaryActionButton>
+                    <Menu
+                        anchorEl={createMenuAnchor}
+                        open={Boolean(createMenuAnchor)}
+                        onClose={() => setCreateMenuAnchor(null)}
+                        PaperProps={{ sx: { borderRadius: '14px', mt: 1, minWidth: 200 } }}
+                    >
+                        <MenuItem onClick={() => { setCreateMenuAnchor(null); handleCreateFolder(); }}>
+                            <ListItemIcon><CreateNewFolder sx={{ color: '#F59E0B' }} /></ListItemIcon>
+                            <ListItemText>Новая папка</ListItemText>
+                        </MenuItem>
+                        <MenuItem onClick={() => { setCreateMenuAnchor(null); fileInputRef.current?.click(); }}>
+                            <ListItemIcon><CloudUpload sx={{ color: '#764ba2' }} /></ListItemIcon>
+                            <ListItemText>Загрузить файл</ListItemText>
+                        </MenuItem>
+                    </Menu>
+                    
+                    <ToggleButtonGroup
+                        value={viewMode}
+                        exclusive
+                        onChange={(e, val) => val && setViewMode(val)}
+                        size="small"
+                        sx={{ '& .MuiToggleButton-root': { borderRadius: '8px', border: '1px solid #E5E7EB', px: 1 } }}
+                    >
+                        <ToggleButton value="grid"><GridView fontSize="small" /></ToggleButton>
+                        <ToggleButton value="list"><ViewList fontSize="small" /></ToggleButton>
+                    </ToggleButtonGroup>
+                </ActionGroup>
+            </CompactAppBar>
 
-            <GradientHero>
-                <Box sx={{ position: 'relative', zIndex: 1 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 3, mb: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            {currentFolder && (
-                                <StyledButton variant="contained" startIcon={<ArrowBack />} onClick={goToRoot}
-                                    sx={{ bgcolor: '#fff', color: '#764ba2', fontWeight: 600, borderRadius: '12px', px: 2.5, py: 1, '&:hover': { bgcolor: '#F3F4F6' } }}>
-                                    Главная
-                                </StyledButton>
-                            )}
-                            <Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                    <FolderOpen sx={{ fontSize: 28 }} />
-                                    <Typography sx={{ fontSize: '28px', fontWeight: 700 }}>
-                                        {currentFolder ? folderPath[folderPath.length - 1]?.name : 'Материалы'}
+            {/* ========== ОСНОВНАЯ ОБЛАСТЬ ========== */}
+            <Box sx={{ display: 'flex', gap: 3, p: 3 }}>
+                
+                {/* ========== БОКОВАЯ ПАНЕЛЬ ========== */}
+                <SideNav>
+                    {/* Хлебные крошки */}
+                    {folderPath.length > 0 && (
+                        <Box sx={{ p: 2, borderBottom: '1px solid #F3F4F6' }}>
+                            <Button startIcon={<ArrowBack />} onClick={goToRoot} fullWidth
+                                sx={{ borderRadius: '10px', textTransform: 'none', color: '#764ba2', fontWeight: 600 }}>
+                                ← На главную
+                            </Button>
+                            <Breadcrumbs separator={<NavigateNext sx={{ fontSize: 12 }} />} sx={{ mt: 1, '& .MuiBreadcrumbs-li': { fontSize: '12px' } }}>
+                                <MuiLink component="button" onClick={goToRoot} underline="hover" sx={{ fontSize: '12px', color: '#9CA3AF' }}>Главная</MuiLink>
+                                {folderPath.map((f, i) => (
+                                    <Typography key={f.id} sx={{ fontSize: '12px', color: i === folderPath.length - 1 ? '#1F2937' : '#9CA3AF', fontWeight: i === folderPath.length - 1 ? 600 : 400 }}>
+                                        {f.name}
                                     </Typography>
-                                </Box>
-                                {folderPath.length > 0 && (
-                                    <Breadcrumbs separator={<NavigateNext sx={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }} />} sx={{ mt: 0.5 }}>
-                                        <MuiLink component="button" onClick={goToRoot} underline="hover" sx={{ color: '#fff', opacity: 0.7, fontSize: '13px' }}>Главная</MuiLink>
-                                        {folderPath.map((f, i) => (
-                                            <MuiLink key={f.id} component="button" onClick={() => { setFolderPath(folderPath.slice(0, i + 1)); setCurrentFolder(f.id); loadContent(f.id); }} underline="hover"
-                                                sx={{ color: '#fff', fontWeight: i === folderPath.length - 1 ? 600 : 400, fontSize: '13px', opacity: i === folderPath.length - 1 ? 1 : 0.7 }}>{f.name}</MuiLink>
-                                        ))}
-                                    </Breadcrumbs>
-                                )}
-                            </Box>
+                                ))}
+                            </Breadcrumbs>
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 1.5 }}>
-                            <StyledButton variant="outlined" startIcon={<CreateNewFolder />} onClick={handleCreateFolder}
-                                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.4)', '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' } }}>Папка</StyledButton>
-                            <StyledButton variant="contained" startIcon={<CloudUpload />} onClick={() => fileInputRef.current?.click()}
-                                sx={{ bgcolor: '#fff', color: '#764ba2', fontWeight: 600, '&:hover': { bgcolor: '#F3F4F6' } }}>Загрузить</StyledButton>
-                            <input type="file" ref={fileInputRef} hidden onChange={(e) => { const f = e.target.files[0]; if (f) openUploadDialog(f); }} />
-                        </Box>
+                    )}
+
+                    <Box sx={{ p: 2, borderBottom: '1px solid #F3F4F6' }}>
+                        <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', mb: 1 }}>
+                            Разделы
+                        </Typography>
+                        <Stack spacing={0.5}>
+                            <NavItem active={activeNav === 'all'} onClick={() => { setActiveNav('all'); goToRoot(); }}>
+                                <FolderOpen fontSize="small" />
+                                Все материалы
+                                <Chip label={allMaterials.length + allFolders.length} size="small" sx={{ ml: 'auto', fontSize: '11px', height: 20 }} />
+                            </NavItem>
+                            <NavItem active={activeNav === 'folders'} onClick={() => setActiveNav('folders')}>
+                                <FolderIcon fontSize="small" />
+                                Папки
+                                <Chip label={allFolders.length} size="small" sx={{ ml: 'auto', fontSize: '11px', height: 20 }} />
+                            </NavItem>
+                            <NavItem active={activeNav === 'files'} onClick={() => setActiveNav('files')}>
+                                <InsertDriveFile fontSize="small" />
+                                Файлы
+                                <Chip label={allMaterials.length} size="small" sx={{ ml: 'auto', fontSize: '11px', height: 20 }} />
+                            </NavItem>
+                        </Stack>
                     </Box>
-                    <Grid container spacing={2} sx={{ mt: 2 }}>
+
+                    <Box sx={{ p: 2 }}>
+                        <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', mb: 1.5 }}>
+                            Сортировка
+                        </Typography>
+                        <FormControl size="small" fullWidth>
+                            <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} sx={{ borderRadius: '10px', bgcolor: '#fff' }}>
+                                <MenuItem value="date">📅 По дате</MenuItem>
+                                <MenuItem value="name">🔤 По имени</MenuItem>
+                                <MenuItem value="size">📏 По размеру</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Box>
+
+                    <Divider />
+                    
+                    <Box sx={{ p: 2 }}>
+                        <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', mb: 1 }}>
+                            Статистика
+                        </Typography>
                         {[
-                            { label: 'Всего файлов', value: stats.files, icon: <Description /> },
-                            { label: 'Папок', value: stats.folders, icon: <FolderIcon /> },
-                            { label: 'Общий размер', value: formatSize(stats.totalSize), icon: <StorageIcon />, highlight: stats.totalSize > 0 },
-                            { label: 'За неделю', value: stats.recentUploads, icon: <UploadFile /> },
+                            { label: 'Файлов', value: stats.files, icon: '📄' },
+                            { label: 'Папок', value: stats.folders, icon: '📁' },
+                            { label: 'Объём', value: formatSize(stats.totalSize), icon: '💾' },
                         ].map((s, i) => (
-                            <Grid item xs={6} md={3} key={i}>
-                                <GlassStat elevation={0}>
-                                    <Box sx={{ color: s.highlight ? '#10B981' : '#764ba2', mb: 0.5 }}>{s.icon}</Box>
-                                    <Typography sx={{ fontSize: '22px', fontWeight: 700, color: '#1F2937' }}>{s.value}</Typography>
-                                    <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{s.label}</Typography>
-                                </GlassStat>
-                            </Grid>
+                            <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                                <Typography sx={{ fontSize: '13px', color: '#6B7280' }}>{s.icon} {s.label}</Typography>
+                                <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#1F2937' }}>{s.value}</Typography>
+                            </Box>
                         ))}
-                    </Grid>
-                </Box>
-            </GradientHero>
-
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, border: '1px solid #F3F4F6' }}>
-                <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                    <TextField placeholder="Поиск..." size="small" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                        InputProps={{
-                            startAdornment: <InputAdornment position="start"><Search sx={{ color: '#9CA3AF' }} /></InputAdornment>,
-                            endAdornment: searchTerm && <InputAdornment position="end"><IconButton size="small" onClick={() => setSearchTerm('')}><CleaningServices fontSize="small" /></IconButton></InputAdornment>,
-                        }}
-                        sx={{ width: 280, '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#F9FAFB' } }} />
-                    <FormControl size="small" sx={{ minWidth: 130 }}>
-                        <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} sx={{ borderRadius: '12px', bgcolor: '#F9FAFB', '& fieldset': { borderColor: 'transparent' } }}>
-                            <MenuItem value="date"><SortByAlpha sx={{ mr: 1, fontSize: 18 }} />По дате</MenuItem>
-                            <MenuItem value="name">По имени</MenuItem>
-                            <MenuItem value="size">По размеру</MenuItem>
-                        </Select>
-                    </FormControl>
-                    {draggedFile && <Chip label={`«${draggedFile.title}» → в папку`} color="secondary" onDelete={() => setDraggedFile(null)} sx={{ fontWeight: 500, borderRadius: '10px' }} />}
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Tooltip title="Обновить"><IconButton onClick={() => { loadContent(currentFolder); loadAllMaterials(); }}><Refresh /></IconButton></Tooltip>
-                    <ViewToggle>
-                        <ViewToggleBtn active={viewMode === 'grid'} onClick={() => setViewMode('grid')}><GridView sx={{ fontSize: 18 }} /></ViewToggleBtn>
-                        <ViewToggleBtn active={viewMode === 'list'} onClick={() => setViewMode('list')}><ViewList sx={{ fontSize: 18 }} /></ViewToggleBtn>
-                    </ViewToggle>
-                </Box>
-            </Paper>
-
-            <Paper
-                onDragOver={(e) => { e.preventDefault(); if (!draggedFile) setIsDragOverUpload(true); }}
-                onDragLeave={() => setIsDragOverUpload(false)}
-                onDrop={(e) => { if (draggedFile) return; handleUploadDrop(e); }}
-                onClick={() => !draggedFile && fileInputRef.current?.click()}
-                sx={{ mb: 3, p: 3, textAlign: 'center', cursor: 'pointer', borderRadius: '16px', border: `2px dashed ${isDragOverUpload ? '#764ba2' : '#E5E7EB'}`, bgcolor: isDragOverUpload ? alpha('#764ba2', 0.04) : '#F9FAFB', transition: 'all 0.3s ease', opacity: draggedFile ? 0.4 : 1, '&:hover': { borderColor: '#764ba2' } }}>
-                <CloudUpload sx={{ fontSize: 40, color: '#9CA3AF', mb: 1 }} />
-                <Typography sx={{ fontWeight: 500, color: '#374151' }}>{draggedFile ? 'Перетащите файл в папку ниже' : '📎 Перетащите новые файлы сюда'}</Typography>
-            </Paper>
-
-            {filteredFolders.length === 0 && filteredMaterials.length === 0 && (
-                <Paper sx={{ borderRadius: '20px', p: 6, textAlign: 'center', border: '1px solid #F3F4F6' }}>
-                    <FolderOpen sx={{ fontSize: 64, color: '#D1D5DB', mb: 2 }} />
-                    <Typography sx={{ fontSize: '20px', fontWeight: 600 }}>Пусто</Typography>
-                    <Typography sx={{ color: '#6B7280', mb: 3 }}>Загрузите файл или создайте папку</Typography>
-                    <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-                        <StyledButton variant="contained" startIcon={<CloudUpload />} onClick={() => fileInputRef.current?.click()} sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#667eea' } }}>Загрузить</StyledButton>
-                        <StyledButton variant="outlined" startIcon={<CreateNewFolder />} onClick={handleCreateFolder} sx={{ borderColor: '#D1D5DB' }}>Папка</StyledButton>
                     </Box>
-                </Paper>
-            )}
+                </SideNav>
 
-            {viewMode === 'grid' && (
-                <Grid container spacing={2.5}>
-                    {filteredFolders.map((f, idx) => (
-                        <Grid item xs={12} sm={6} md={3} key={f.id}>
-                            <FolderCardNew folderColor={FOLDER_COLORS[idx % FOLDER_COLORS.length]} isDragOver={dragOverFolder === f.id}
-                                onClick={() => enterFolder(f)}
-                                onDragOver={(e) => handleFolderDragOver(e, f)} onDragLeave={handleFolderDragLeave} onDrop={(e) => handleFolderDrop(e, f)}>
-                                <Box sx={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', background: `linear-gradient(135deg, ${FOLDER_COLORS[idx % FOLDER_COLORS.length]}22, ${FOLDER_COLORS[idx % FOLDER_COLORS.length]}44)` }}>
-                                    <FolderIcon sx={{ fontSize: 48, color: FOLDER_COLORS[idx % FOLDER_COLORS.length] }} />
-                                    {dragOverFolder === f.id && (
-                                        <Box sx={{ position: 'absolute', inset: 0, bgcolor: alpha('#764ba2', 0.15), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Typography sx={{ fontWeight: 700, color: '#764ba2' }}>Отпустите</Typography>
+                {/* ========== КОНТЕНТ ========== */}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    
+                    {/* Зона загрузки */}
+                    <Paper
+                        onClick={() => fileInputRef.current?.click()}
+                        sx={{ 
+                            mb: 3, p: 2.5, textAlign: 'center', cursor: 'pointer', 
+                            borderRadius: '14px', border: '2px dashed #E5E7EB', 
+                            bgcolor: '#F9FAFB', transition: 'all 0.2s',
+                            '&:hover': { borderColor: '#764ba2', bgcolor: alpha('#764ba2', 0.02) }
+                        }}>
+                        <CloudUploadIcon sx={{ fontSize: 32, color: '#764ba2', mb: 0.5 }} />
+                        <Typography sx={{ fontWeight: 500, color: '#374151', fontSize: '14px' }}>
+                            📎 Перетащите файлы сюда или нажмите для загрузки
+                        </Typography>
+                        <Typography sx={{ fontSize: '12px', color: '#9CA3AF' }}>
+                            PDF, Word, изображения, видео — до 50 МБ
+                        </Typography>
+                    </Paper>
+
+                    {/* Пустое состояние */}
+                    {filteredFolders.length === 0 && filteredMaterials.length === 0 && (
+                        <Paper sx={{ borderRadius: '16px', p: 6, textAlign: 'center', border: '1px solid #F3F4F6' }}>
+                            <FolderOpen sx={{ fontSize: 64, color: '#D1D5DB', mb: 2 }} />
+                            <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#6B7280' }}>Пусто</Typography>
+                            <Typography sx={{ color: '#9CA3AF', mb: 3 }}>Загрузите первый файл или создайте папку</Typography>
+                            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                                <PrimaryActionButton variant="contained" startIcon={<CloudUpload />} onClick={() => fileInputRef.current?.click()}
+                                    sx={{ bgcolor: '#764ba2', '&:hover': { bgcolor: '#5a3782' } }}>Загрузить</PrimaryActionButton>
+                                <PrimaryActionButton variant="outlined" startIcon={<CreateNewFolder />} onClick={handleCreateFolder}
+                                    sx={{ borderColor: '#D1D5DB', color: '#374151' }}>Папка</PrimaryActionButton>
+                            </Box>
+                        </Paper>
+                    )}
+
+                    {/* Сетка */}
+                    {viewMode === 'grid' && (
+                        <Grid container spacing={2}>
+                            {filteredFolders.map((f, idx) => (
+                                <Grid item xs={6} sm={4} md={3} key={f.id}>
+                                    <FolderCard folderColor={FOLDER_COLORS[idx % FOLDER_COLORS.length]} onClick={() => enterFolder(f)}>
+                                        <Box sx={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${FOLDER_COLORS[idx % FOLDER_COLORS.length]}22, ${FOLDER_COLORS[idx % FOLDER_COLORS.length]}44)` }}>
+                                            <FolderIcon sx={{ fontSize: 48, color: FOLDER_COLORS[idx % FOLDER_COLORS.length] }} />
                                         </Box>
-                                    )}
-                                </Box>
-                                <CardContent sx={{ p: 2 }}><Typography sx={{ fontWeight: 600, fontSize: '15px' }} noWrap>{f.name}</Typography></CardContent>
-                                <Divider />
-                                <CardActions sx={{ justifyContent: 'flex-end', gap: 0.5, px: 1.5, py: 1 }}>
-                                    <Tooltip title="Открыть"><IconButton size="small" onClick={(e) => { e.stopPropagation(); enterFolder(f); }}><FolderOpen fontSize="small" /></IconButton></Tooltip>
-                                    <Tooltip title="Переименовать"><IconButton size="small" onClick={(e) => { e.stopPropagation(); handleRename(f); }}><Edit fontSize="small" /></IconButton></Tooltip>
-                                    <Tooltip title="Удалить"><IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDelete(f.id, true); }}><Delete fontSize="small" /></IconButton></Tooltip>
-                                </CardActions>
-                            </FolderCardNew>
+                                        <CardContent sx={{ p: 2, pb: 1 }}>
+                                            <Typography sx={{ fontWeight: 600, fontSize: '14px' }} noWrap>{f.name}</Typography>
+                                        </CardContent>
+                                        <CardActions sx={{ justifyContent: 'flex-end', px: 1.5, py: 0.5 }}>
+                                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDelete(f.id, true); }}><Delete fontSize="small" sx={{ color: '#EF4444' }} /></IconButton>
+                                        </CardActions>
+                                    </FolderCard>
+                                </Grid>
+                            ))}
+                            {filteredMaterials.map(m => {
+                                const color = getFileColor(m.fileName);
+                                return (
+                                    <Grid item xs={6} sm={4} md={3} key={m.id}>
+                                        <Box className="file-card" sx={{ position: 'relative' }}>
+                                            <FileCard onClick={() => { setPreviewMaterial(m); setOpenPreview(true); }}>
+                                                <FilePreview bgColor={color}>
+                                                    <FileIconWithColor fileName={m.fileName} size={48} />
+                                                    <HoverActions>
+                                                        <Tooltip title="Скачать"><IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDownload(m); }}><Download fontSize="small" /></IconButton></Tooltip>
+                                                        <Tooltip title="Удалить"><IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}><Delete fontSize="small" /></IconButton></Tooltip>
+                                                    </HoverActions>
+                                                </FilePreview>
+                                                <CardContent sx={{ p: 2 }}>
+                                                    <Typography sx={{ fontWeight: 600, fontSize: '13px', mb: 0.5 }} noWrap>{m.title}</Typography>
+                                                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                                        <Chip label={formatSize(m.fileSize)} size="small" sx={{ fontSize: '10px', height: 20, borderRadius: '6px', bgcolor: '#F3F4F6' }} />
+                                                        <Chip label={m.fileName?.split('.').pop()?.toUpperCase()} size="small" sx={{ fontSize: '10px', height: 20, borderRadius: '6px', bgcolor: '#F3F4F6' }} />
+                                                    </Box>
+                                                    {(m.student || m.course) && (
+                                                        <Box sx={{ display: 'flex', gap: 0.5, mt: 1, alignItems: 'center' }}>
+                                                            {m.student && <Avatar sx={{ width: 20, height: 20, fontSize: 10 }}>{m.student.fullName?.[0]}</Avatar>}
+                                                            {m.course && <Chip label={m.course.name} size="small" sx={{ fontSize: '10px', height: 18 }} />}
+                                                        </Box>
+                                                    )}
+                                                </CardContent>
+                                            </FileCard>
+                                        </Box>
+                                    </Grid>
+                                );
+                            })}
                         </Grid>
-                    ))}
-                    {filteredMaterials.map(m => {
-                        const color = getFileColor(m.fileName);
-                        return (
-                            <Grid item xs={12} sm={6} md={4} key={m.id}>
-                                <FileCard fileColor={color} draggable onDragStart={(e) => handleFileDragStart(e, m)} onDragEnd={handleFileDragEnd}
+                    )}
+
+                    {/* Список */}
+                    {viewMode === 'list' && (
+                        <Paper sx={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid #F3F4F6' }}>
+                            {filteredFolders.map(f => (
+                                <Box key={f.id} sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #F3F4F6', cursor: 'pointer', '&:hover': { bgcolor: '#F9FAFB' } }}
+                                    onClick={() => enterFolder(f)}>
+                                    <FolderIcon sx={{ color: '#F59E0B', fontSize: 28, mr: 2 }} />
+                                    <Typography sx={{ flex: 1, fontWeight: 500 }}>{f.name}</Typography>
+                                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDelete(f.id, true); }}><Delete fontSize="small" sx={{ color: '#EF4444' }} /></IconButton>
+                                </Box>
+                            ))}
+                            {filteredMaterials.map(m => (
+                                <Box key={m.id} sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #F3F4F6', cursor: 'pointer', '&:hover': { bgcolor: '#F9FAFB' } }}
                                     onClick={() => { setPreviewMaterial(m); setOpenPreview(true); }}>
-                                    <FilePreview bgColor={color}>
-                                        <FileIconWithColor fileName={m.fileName} size={56} />
-                                        <FloatingActions className="file-actions">
-                                            <Tooltip title="Скачать"><IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDownload(m); }}><Download fontSize="small" /></IconButton></Tooltip>
-                                            <Tooltip title="Удалить"><IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}><Delete fontSize="small" /></IconButton></Tooltip>
-                                        </FloatingActions>
-                                    </FilePreview>
-                                    <CardContent sx={{ p: 2 }}>
-                                        <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 0.5 }} noWrap>{m.title}</Typography>
-                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
-                                            <Chip label={formatSize(m.fileSize)} size="small" sx={{ fontSize: '10px', height: 20, borderRadius: '6px', bgcolor: '#F3F4F6' }} />
-                                            <Chip label={m.fileName?.split('.').pop()?.toUpperCase()} size="small" sx={{ fontSize: '10px', height: 20, borderRadius: '6px', bgcolor: '#F3F4F6' }} />
-                                        </Box>
-                                        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                                            {m.student && <Avatar sx={{ width: 24, height: 24, fontSize: 12 }}>{m.student.fullName?.[0]}</Avatar>}
-                                            {m.course && <Chip label={m.course.name} size="small" icon={<School sx={{ fontSize: 12 }} />} sx={{ fontSize: '10px', height: 22, borderRadius: '6px' }} />}
-                                        </Box>
-                                    </CardContent>
-                                </FileCard>
-                            </Grid>
-                        );
-                    })}
-                </Grid>
-            )}
+                                    <FileIconWithColor fileName={m.fileName} size={28} />
+                                    <Box sx={{ flex: 1, ml: 2 }}>
+                                        <Typography sx={{ fontWeight: 500, fontSize: '14px' }}>{m.title}</Typography>
+                                        <Typography sx={{ fontSize: '12px', color: '#9CA3AF' }}>{formatSize(m.fileSize)}</Typography>
+                                    </Box>
+                                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDownload(m); }}><Download fontSize="small" /></IconButton>
+                                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}><Delete fontSize="small" sx={{ color: '#EF4444' }} /></IconButton>
+                                </Box>
+                            ))}
+                        </Paper>
+                    )}
+                </Box>
+            </Box>
 
-            {viewMode === 'list' && (
-                <Paper sx={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid #F3F4F6' }}>
-                    {filteredFolders.map(f => (
-                        <Box key={f.id} sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #F3F4F6', cursor: 'pointer', '&:hover': { bgcolor: '#F9FAFB' } }}
-                            onClick={() => enterFolder(f)} onDragOver={(e) => handleFolderDragOver(e, f)} onDragLeave={handleFolderDragLeave} onDrop={(e) => handleFolderDrop(e, f)}>
-                            <FolderIcon sx={{ color: '#F59E0B', fontSize: 32, mr: 2 }} />
-                            <Box sx={{ flex: 1 }}><Typography sx={{ fontWeight: 600 }}>{f.name}</Typography></Box>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleRename(f); }}><Edit fontSize="small" /></IconButton>
-                                <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDelete(f.id, true); }}><Delete fontSize="small" /></IconButton>
-                            </Box>
-                        </Box>
-                    ))}
-                    {filteredMaterials.map(m => (
-                        <Box key={m.id} sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #F3F4F6', cursor: 'grab', '&:hover': { bgcolor: '#F9FAFB' } }}
-                            draggable onDragStart={(e) => handleFileDragStart(e, m)} onDragEnd={handleFileDragEnd}
-                            onClick={() => { setPreviewMaterial(m); setOpenPreview(true); }}>
-                            <FileIconWithColor fileName={m.fileName} size={32} />
-                            <Box sx={{ flex: 1, ml: 2 }}>
-                                <Typography sx={{ fontWeight: 500 }}>{m.title}</Typography>
-                                <Typography sx={{ fontSize: '12px', color: '#9CA3AF' }}>{formatSize(m.fileSize)} · {formatDate(m.createdAt)}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDownload(m); }}><Download fontSize="small" /></IconButton>
-                                <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}><Delete fontSize="small" /></IconButton>
-                            </Box>
-                        </Box>
-                    ))}
-                </Paper>
-            )}
+            <input type="file" ref={fileInputRef} hidden onChange={(e) => {
+                const f = e.target.files[0];
+                if (f) {
+                    setSelectedFile(f);
+                    setFormData({ title: f.name.replace(/\.[^/.]+$/, ''), description: '', studentId: '', courseId: '' });
+                    setOpenUpload(true);
+                }
+            }} />
 
-            <Tooltip title="Загрузить материал" placement="left">
-                <QuickAssignFab onClick={() => fileInputRef.current?.click()}><Add /></QuickAssignFab>
-            </Tooltip>
-
+            {/* Диалог загрузки */}
             <StyledDialog open={openUpload} onClose={() => setOpenUpload(false)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <CloudUpload sx={{ color: '#764ba2' }} />Загрузить файл
-                    {currentFolder && <Chip label={`📁 ${folderPath[folderPath.length - 1]?.name}`} size="small" sx={{ ml: 'auto', borderRadius: '8px', bgcolor: '#F5F3FF' }} />}
-                </DialogTitle>
+                <DialogTitle sx={{ fontWeight: 700 }}>📤 Загрузить файл</DialogTitle>
                 <DialogContent>
-                    <Box sx={{ pt: 2 }}>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
                         {selectedFile && (
-                            <Paper sx={{ p: 2, mb: 2, borderRadius: '14px', bgcolor: '#F9FAFB', display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Paper sx={{ p: 2, borderRadius: '12px', bgcolor: '#F9FAFB', display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <FileIconWithColor fileName={selectedFile.name} size={40} />
                                 <Box><Typography sx={{ fontWeight: 600 }}>{selectedFile.name}</Typography><Typography sx={{ fontSize: '13px', color: '#6B7280' }}>{formatSize(selectedFile.size)}</Typography></Box>
                             </Paper>
                         )}
-                        <TextField fullWidth label="Название" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} />
-                        <TextField fullWidth label="Описание" multiline rows={2} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} sx={{ mb: 3, '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} />
-                        <Paper sx={{ p: 2.5, borderRadius: '14px', bgcolor: '#F9FAFB', border: '1px solid #F3F4F6' }}>
-                            <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 2 }}>👤 Кому доступен материал?</Typography>
-                            <AssignmentToggle value={assignmentType} exclusive onChange={(e, val) => { if (val) { setAssignmentType(val); setFormData({ ...formData, courseId: '', studentId: '' }); } }} sx={{ mb: 2, width: '100%', justifyContent: 'center' }}>
-                                <ToggleButton value="course" sx={{ flex: 1 }}><School sx={{ mr: 1, fontSize: 18 }} />Курсу</ToggleButton>
-                                <ToggleButton value="student" sx={{ flex: 1 }}><Person sx={{ mr: 1, fontSize: 18 }} />Ученику</ToggleButton>
-                            </AssignmentToggle>
-                            {assignmentType === 'course' ? (
-                                <FormControl fullWidth><InputLabel>Выберите курс</InputLabel>
-                                    <Select value={formData.courseId} onChange={(e) => setFormData({ ...formData, courseId: e.target.value, studentId: '' })} label="Выберите курс" sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
-                                        {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
-                                    </Select>
-                                </FormControl>
-                            ) : (
-                                <FormControl fullWidth><InputLabel>Выберите ученика</InputLabel>
-                                    <Select value={formData.studentId} onChange={(e) => setFormData({ ...formData, studentId: e.target.value, courseId: '' })} label="Выберите ученика" sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
-                                        {students.map(s => <MenuItem key={s.id} value={s.id}>{s.fullName}</MenuItem>)}
-                                    </Select>
-                                </FormControl>
-                            )}
-                            <Alert severity="info" sx={{ mt: 2, borderRadius: '10px', fontSize: '12px' }}>
-                                {assignmentType === 'course' ? 'Материал увидят все ученики курса' : 'Материал увидит только выбранный ученик'}
-                            </Alert>
-                        </Paper>
-                        {uploading && (
-                            <Box sx={{ mt: 2 }}>
-                                <LinearProgress variant="determinate" value={uploadProgress} sx={{ borderRadius: 4, height: 8 }} />
-                                <Typography sx={{ textAlign: 'center', mt: 1, fontSize: '13px', color: '#6B7280' }}>{uploadProgress}%</Typography>
-                            </Box>
+                        <TextField fullWidth label="Название" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} />
+                        <TextField fullWidth label="Описание" multiline rows={2} value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }} />
+                        <FormControl fullWidth><InputLabel>Кому доступен</InputLabel>
+                            <Select value={formData.studentId || formData.courseId ? (formData.studentId ? 'student' : 'course') : ''} onChange={(e) => {
+                                if (e.target.value === 'course') setFormData({...formData, courseId: courses[0]?.id || '', studentId: ''});
+                                else setFormData({...formData, studentId: students[0]?.id || '', courseId: ''});
+                            }} sx={{ borderRadius: '12px' }}>
+                                <MenuItem value="course">📚 Курсу</MenuItem>
+                                <MenuItem value="student">👤 Ученику</MenuItem>
+                            </Select>
+                        </FormControl>
+                        {formData.courseId && (
+                            <FormControl fullWidth><InputLabel>Курс</InputLabel>
+                                <Select value={formData.courseId} onChange={(e) => setFormData({...formData, courseId: e.target.value})} sx={{ borderRadius: '12px' }}>
+                                    {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                                </Select>
+                            </FormControl>
                         )}
-                    </Box>
+                        {formData.studentId && (
+                            <FormControl fullWidth><InputLabel>Ученик</InputLabel>
+                                <Select value={formData.studentId} onChange={(e) => setFormData({...formData, studentId: e.target.value})} sx={{ borderRadius: '12px' }}>
+                                    {students.map(s => <MenuItem key={s.id} value={s.id}>{s.fullName}</MenuItem>)}
+                                </Select>
+                            </FormControl>
+                        )}
+                        {uploading && <LinearProgress variant="determinate" value={uploadProgress} sx={{ borderRadius: 4, height: 6 }} />}
+                    </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 3 }}>
-                    <Button onClick={() => setOpenUpload(false)} startIcon={<Close />} sx={{ borderRadius: '10px' }}>Отмена</Button>
-                    <Button variant="contained" onClick={handleUpload} disabled={!selectedFile || !formData.title || uploading || (!formData.courseId && !formData.studentId)}
-                        startIcon={<CloudUpload />} sx={{ bgcolor: '#764ba2', borderRadius: '10px', '&:hover': { bgcolor: '#667eea' } }}>{uploading ? 'Загрузка...' : 'Загрузить'}</Button>
+                    <Button onClick={() => setOpenUpload(false)}>Отмена</Button>
+                    <Button variant="contained" onClick={handleUpload} disabled={!selectedFile || uploading}
+                        sx={{ bgcolor: '#764ba2', borderRadius: '10px', '&:hover': { bgcolor: '#5a3782' } }}>Загрузить</Button>
                 </DialogActions>
             </StyledDialog>
 
-            <Dialog open={openPreview} onClose={() => setOpenPreview(false)} maxWidth="md" fullWidth>
+            {/* Диалог предпросмотра */}
+            <Dialog open={openPreview} onClose={() => setOpenPreview(false)} maxWidth="sm" fullWidth>
                 {previewMaterial && (<>
                     <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <FileIconWithColor fileName={previewMaterial.fileName} size={36} />
-                        <Box><Typography sx={{ fontWeight: 700 }}>{previewMaterial.title}</Typography><Typography sx={{ fontSize: '13px', color: '#6B7280' }}>{formatSize(previewMaterial.fileSize)} · {formatDate(previewMaterial.createdAt)}</Typography></Box>
+                        <FileIconWithColor fileName={previewMaterial.fileName} size={32} />
+                        <Box><Typography sx={{ fontWeight: 700 }}>{previewMaterial.title}</Typography><Typography sx={{ fontSize: '13px', color: '#6B7280' }}>{formatSize(previewMaterial.fileSize)}</Typography></Box>
                     </DialogTitle>
                     <DialogContent>
-                        <Box sx={{ bgcolor: '#F9FAFB', borderRadius: '16px', p: 4, textAlign: 'center', mb: 2 }}><FileIconWithColor fileName={previewMaterial.fileName} size={80} /></Box>
-                        <Grid container spacing={1}>
-                            {previewMaterial.course && <Grid item xs={6}><Paper sx={{ p: 1.5, borderRadius: '12px', bgcolor: '#F5F3FF' }}><Typography sx={{ fontSize: '12px', color: '#7C3AED' }}>Курс</Typography><Typography sx={{ fontWeight: 600 }}>{previewMaterial.course.name}</Typography></Paper></Grid>}
-                            {previewMaterial.student && <Grid item xs={6}><Paper sx={{ p: 1.5, borderRadius: '12px', bgcolor: '#ECFDF5' }}><Typography sx={{ fontSize: '12px', color: '#10B981' }}>Ученик</Typography><Typography sx={{ fontWeight: 600 }}>{previewMaterial.student.fullName}</Typography></Paper></Grid>}
-                        </Grid>
+                        <Box sx={{ bgcolor: '#F9FAFB', borderRadius: '16px', p: 4, textAlign: 'center', mb: 2 }}>
+                            <FileIconWithColor fileName={previewMaterial.fileName} size={80} />
+                        </Box>
+                        {previewMaterial.description && <Typography sx={{ mb: 2, color: '#6B7280' }}>{previewMaterial.description}</Typography>}
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 3 }}>
-                        <Button startIcon={<Download />} variant="contained" onClick={() => { handleDownload(previewMaterial); setOpenPreview(false); }} sx={{ bgcolor: '#764ba2', borderRadius: '10px' }}>Скачать</Button>
-                        <Button onClick={() => setOpenPreview(false)} sx={{ borderRadius: '10px' }}>Закрыть</Button>
+                        <Button startIcon={<Download />} variant="contained" onClick={() => { handleDownload(previewMaterial); setOpenPreview(false); }}
+                            sx={{ bgcolor: '#764ba2', borderRadius: '10px' }}>Скачать</Button>
+                        <Button onClick={() => setOpenPreview(false)}>Закрыть</Button>
                     </DialogActions>
                 </>)}
             </Dialog>

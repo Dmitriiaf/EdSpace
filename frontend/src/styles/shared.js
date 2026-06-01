@@ -2,17 +2,30 @@
 import { Box, Button, Dialog, Card, Paper } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
-// Общие styled-компоненты для всего проекта
+// ========== ГЛОБАЛЬНЫЕ ТОКЕНЫ ==========
+const BORDER_RADIUS_LG = '16px';
+const BORDER_RADIUS_XL = '20px';
+const SHADOW_SOFT = '0 2px 8px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)';
+const SHADOW_HOVER = '0 8px 24px rgba(0,0,0,0.07), 0 2px 8px rgba(0,0,0,0.04)';
+const TRANSITION_SMOOTH = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+const BG_WARM = '#F8FAFC';
+const BG_WHITE = '#FFFFFF';
+const BORDER_COLOR = '#E8ECF0';
 
 export const PageContainer = styled(Box)({
-    padding: '24px 32px',
+    padding: '28px 36px',
+    maxWidth: '1440px',
+    margin: '0 auto',
     minHeight: '100vh',
-    backgroundColor: '#F3F4F6',
-    animation: 'fadeSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+    backgroundColor: BG_WARM,
+    animation: 'fadeSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    '@media (max-width: 768px)': {
+        padding: '16px 12px',
+    },
     '@keyframes fadeSlideIn': {
         from: {
             opacity: 0,
-            transform: 'translateY(12px)',
+            transform: 'translateY(16px)',
         },
         to: {
             opacity: 1,
@@ -22,28 +35,33 @@ export const PageContainer = styled(Box)({
 });
 
 export const StyledButton = styled(Button)({
-    borderRadius: '8px',
+    borderRadius: '12px',
     textTransform: 'none',
     fontSize: '14px',
-    fontWeight: 500,
+    fontWeight: 600,
+    padding: '10px 20px',
+    transition: TRANSITION_SMOOTH,
+    '&:hover': {
+        transform: 'translateY(-1px)',
+    },
 });
 
 export const StyledDialog = styled(Dialog)({
     '& .MuiDialog-paper': {
-        borderRadius: '16px',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.08)',
+        borderRadius: BORDER_RADIUS_XL,
+        boxShadow: '0 25px 50px rgba(0,0,0,0.12), 0 8px 20px rgba(0,0,0,0.06)',
     },
 });
 
 export const StatCard = styled(Card)({
-    borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-    border: '1px solid #F3F4F6',
-    backgroundColor: '#FFFFFF',
-    transition: 'all 0.2s ease',
+    borderRadius: BORDER_RADIUS_LG,
+    boxShadow: SHADOW_SOFT,
+    border: `1px solid ${BORDER_COLOR}`,
+    backgroundColor: BG_WHITE,
+    transition: TRANSITION_SMOOTH,
     '&:hover': {
-        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-        transform: 'translateY(-2px)',
+        boxShadow: SHADOW_HOVER,
+        transform: 'translateY(-3px)',
     },
 });
 
@@ -52,39 +70,42 @@ export const EmptyStateContainer = styled(Box)({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '64px 24px',
+    padding: '80px 32px',
     textAlign: 'center',
 });
 
 export const EmptyStateIcon = styled(Box)({
-    width: '80px',
-    height: '80px',
+    width: '88px',
+    height: '88px',
     borderRadius: '50%',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F1F5F9',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: '0 auto 16px',
+    margin: '0 auto 20px',
 });
 
 export const ViewToggle = styled(Box)({
     display: 'inline-flex',
-    backgroundColor: '#F3F4F6',
-    borderRadius: '10px',
-    padding: '3px',
+    backgroundColor: '#F1F5F9',
+    borderRadius: '14px',
+    padding: '4px',
 });
 
 export const ViewToggleBtn = styled(Button)(({ active }) => ({
-    padding: '8px 16px',
-    borderRadius: '8px',
+    padding: '10px 18px',
+    borderRadius: '12px',
     border: 'none',
-    backgroundColor: active ? '#FFFFFF' : 'transparent',
-    color: active ? '#1F2937' : '#6B7280',
+    backgroundColor: active ? BG_WHITE : 'transparent',
+    color: active ? '#1F2937' : '#64748B',
     fontSize: '14px',
-    fontWeight: 500,
+    fontWeight: 600,
     cursor: 'pointer',
     textTransform: 'none',
-    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+    boxShadow: active ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
     minWidth: 'auto',
-    '&:hover': { backgroundColor: active ? '#FFFFFF' : '#F9FAFB' },
+    transition: TRANSITION_SMOOTH,
+    '&:hover': { 
+        backgroundColor: active ? BG_WHITE : '#F8FAFC',
+    },
 }));

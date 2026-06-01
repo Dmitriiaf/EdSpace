@@ -1,18 +1,14 @@
-// ========== frontend/src/pages/WeeklyScheduleNew.js (РЕДИЗАЙН v2) ==========
+// ========== frontend/src/pages/WeeklyScheduleNew.js (v3 — UnifiedSchedule) ==========
 import React, { useState, useEffect } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
-import { Delete, Edit, Refresh as RefreshIcon, ViewList as ListIcon, CalendarToday as CalendarIcon, Work as WorkIcon, Event as EventIcon, Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, Work as WorkIcon } from '@mui/icons-material';
 import { Checkbox, FormControlLabel } from '@mui/material';
 import {
-    Box, Paper, Typography, Table, TableBody, TableCell, Drawer,
-    TableContainer, TableHead, TableRow, Button,
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    FormControl, InputLabel, Select, MenuItem,
-    IconButton, Alert, CircularProgress, Chip, Snackbar,
-    Avatar, Card, CardContent, ToggleButton, ToggleButtonGroup,
-    TextField, Tooltip, Autocomplete, Stack, Grid, Divider
+    Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
+    FormControl, InputLabel, Select, MenuItem, IconButton, Alert, Chip, Snackbar,
+    Avatar, TextField, Autocomplete, Stack, Grid, Divider, Paper
 } from '@mui/material';
-import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
+import { PageContainer, StyledButton, StyledDialog } from '../styles/shared';
 import { styled } from '@mui/material/styles';
 import { formatLessonTime } from '../utils/timezone';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -22,7 +18,7 @@ import ruLocale from 'date-fns/locale/ru';
 import { useAuth } from '../context/AuthContext';
 import { useStudentRate } from '../hooks/useStudentRate';
 import axiosInstance, { getAllLessons, generateLessons, deleteLesson } from '../services/api';
-import WeekCalendar from '../components/WeekCalendar';
+import UnifiedSchedule from '../components/UnifiedSchedule';
 import { format, addDays, startOfWeek, addMinutes, parse } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -32,148 +28,33 @@ const DAYS = [
     { id: 4, name: 'ЧТ' }, { id: 5, name: 'ПТ' }, { id: 6, name: 'СБ' }, { id: 7, name: 'ВС' }
 ];
 
-const TIME_SLOTS = [
-    '10:00', '11:00', '12:00', '13:00', '14:00', '15:00',
-    '16:00', '17:00', '18:00', '19:00', '20:00', '21:00',
-    '22:00', '23:00',
-    '00:00', '01:00', '02:00', '03:00'
-];
-
-const STATUS_COLORS = {
-    SCHEDULED:      { bg: '#F3F4F6', text: '#374151', dot: '#9CA3AF', label: 'Не проведено' },
-    COMPLETED:      { bg: '#FFFBEB', text: '#92400E', dot: '#F59E0B', label: 'Проведено (ждёт оплаты)' },
-    PAID:           { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'Оплачено' },
-    RESCHEDULED:    { bg: '#EFF6FF', text: '#1E40AF', dot: '#3B82F6', label: 'Перенесено' },
-    CANCELLED:      { bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444', label: 'Отменено' },
-    SINGLE:         { bg: '#F5F3FF', text: '#5B21B6', dot: '#8B5CF6', label: 'Разовое' },
-    TRIAL:          { bg: '#F5F3FF', text: '#5B21B6', dot: '#8B5CF6', label: 'Пробное' },
-};
-
-// Функция получения статуса с проверкой отработки
-const getLessonStatusStyle = (lesson, allLessons) => {
-    if (lesson.isTrial) {
-        return STATUS_COLORS.TRIAL;
-    }
-    if (lesson.status === 'CANCELLED') {
-        const hasResurrected = allLessons.some(l => 
-            l.student?.id === lesson.student?.id && 
-            l.lessonDate === lesson.lessonDate && 
-            (l.status === 'PAID' || l.status === 'COMPLETED')
-        );
-        if (hasResurrected) {
-            return { bg: '#ECFDF5', text: '#065F46', dot: '#10B981', label: 'Отработано' };
-        }
-    }
-    return STATUS_COLORS[lesson.status] || STATUS_COLORS.SCHEDULED;
-};
-
-// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
-
-
-const HeaderPaper = styled(Paper)({
-    marginBottom: '24px',
-    borderRadius: '12px',
-    backgroundColor: '#FFFFFF',
-    border: '1px solid #F3F4F6',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    padding: '24px',
-});
-
-const ScheduleTableContainer = styled(Paper)({
-    borderRadius: '12px',
-    overflow: 'hidden',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-});
-
-
-const ViewToggleContainer = styled(Box)({
-    display: 'inline-flex',
-    backgroundColor: '#F3F4F6',
-    borderRadius: '10px',
-    padding: '3px',
-});
-
-
-
-const DebtorsBar = styled(Paper)({
-    padding: '16px 20px',
-    marginBottom: '20px',
-    borderRadius: '12px',
-    backgroundColor: '#FFFBEB',
-    border: '1px solid #FDE68A',
-    boxShadow: 'none',
-});
-
-const SlotCell = styled(TableCell)(({ isEmpty, isTemplate }) => ({
-    padding: '6px',
-    minWidth: 120,
-    border: '1px solid #F3F4F6',
-    cursor: isEmpty ? 'pointer' : 'default',
-    backgroundColor: isEmpty ? '#FFFFFF' : (isTemplate ? '#F9FAFB' : 'inherit'),
-    transition: 'all 0.15s ease',
-    verticalAlign: 'top',
-    position: 'relative',
-    fontSize: '12px',
-    '&:hover': {
-        backgroundColor: isEmpty ? '#EEF2FF' : undefined,
-    },
-}));
-
-
-
-// ========== УТИЛИТЫ ==========
-function getAvatarColor(name) {
-    const colors = ['#4F46E5', '#7C3AED', '#EC4899', '#EF4444', '#F59E0B', '#10B981', '#059669', '#3B82F6', '#2563EB', '#6366F1'];
-    let hash = 0;
-    const str = name || '?';
-    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-}
-
-function getInitials(name) {
-    if (!name) return '?';
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return name.substring(0, 2).toUpperCase();
-}
-
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function WeeklySchedule() {
     const { user } = useAuth();
     useEffect(() => { document.title = 'EdSpace — Расписание'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
     
-    const [viewMode, setViewMode] = useState('table');
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
-
-    useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 900);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-    const [mobileCalendarMonth, setMobileCalendarMonth] = useState(new Date());
-    const [mobileSelectedDay, setMobileSelectedDay] = useState(null);
-    const [templates, setTemplates] = useState([]);
+    const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
     const [lessons, setLessons] = useState([]);
+    const [templates, setTemplates] = useState([]);
     const [students, setStudents] = useState([]);
     const [courses, setCourses] = useState([]);
+    const [debtors, setDebtors] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [editingTemplate, setEditingTemplate] = useState(null);
-    const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-    const [formData, setFormData] = useState({
-        studentId: '', courseId: '', dayOfWeek: 1, startTime: '10:00', endTime: '11:00'
-    });
 
-    const [debtors, setDebtors] = useState([]);
+    // Диалоги
     const [openResurrectDialog, setOpenResurrectDialog] = useState(false);
     const [selectedDebtor, setSelectedDebtor] = useState(null);
     const [resurrectForm, setResurrectForm] = useState({
         date: new Date(), startTime: '10:00', duration: 60, courseId: ''
     });
-
+    const [openTemplateDialog, setOpenTemplateDialog] = useState(false);
+    const [editingTemplate, setEditingTemplate] = useState(null);
+    const [templateForm, setTemplateForm] = useState({
+        studentId: '', courseId: '', dayOfWeek: 1, startTime: '10:00', endTime: '11:00'
+    });
     const [openSingleLesson, setOpenSingleLesson] = useState(false);
     const [singleLesson, setSingleLesson] = useState({
         studentId: '', courseId: '', date: new Date(), time: '10:00',
@@ -184,7 +65,7 @@ function WeeklySchedule() {
         if (user && user.id) { fetchData(); fetchDebtors(); }
     }, [user, currentWeekOffset]);
 
-    // ========== ВСЕ ФУНКЦИИ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ ==========
+    // ========== ЗАГРУЗКА ДАННЫХ ==========
     const fetchData = async () => {
         if (!user || !user.id) { setError('Ошибка авторизации'); setLoading(false); return; }
         try {
@@ -211,45 +92,32 @@ function WeeklySchedule() {
                 axiosInstance.get(`/students/tutor/${user.id}`),
                 axiosInstance.get(`/subscriptions/tutor/${user.id}`)
             ]);
-            
             const studentsData = studentsRes.data || [];
             const subscriptionsData = subscriptionsRes.data || [];
-            
-            // Только ученики с типом оплаты "абонемент" у которых есть долги
             const debtorsList = studentsData
-                .filter(student => student.paymentType === 'subscription')
-                .filter(student => {
+                .filter(s => s.paymentType === 'subscription')
+                .filter(s => {
                     const activeSub = subscriptionsData.find(
-                        sub => sub.student?.id === student.id && 
+                        sub => sub.student?.id === s.id && 
                             (sub.status === 'ACTIVE' || sub.status === 'active') && 
                             sub.debtLessons > 0
                     );
                     return !!activeSub;
                 })
-                .map(student => {
+                .map(s => {
                     const activeSub = subscriptionsData.find(
-                        sub => sub.student?.id === student.id && 
+                        sub => sub.student?.id === s.id && 
                             (sub.status === 'ACTIVE' || sub.status === 'active')
                     );
-                    return {
-                        ...student,
-                        debtLessons: activeSub?.debtLessons || 0
-                    };
+                    return { ...s, debtLessons: activeSub?.debtLessons || 0 };
                 });
-            
             setDebtors(debtorsList);
-        } catch (err) {
-            console.error('Ошибка загрузки должников:', err);
-        }
+        } catch (err) { console.error('Ошибка загрузки должников:', err); }
     };
 
-    const handleGenerateLessons = async () => {
-        try { await generateLessons(); showSnackbar('✅ Занятия созданы на месяц вперёд', 'success'); fetchData(); } 
-        catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
-    };
-
-    const goToPreviousWeek = () => setCurrentWeekOffset(currentWeekOffset - 1);
-    const goToNextWeek = () => setCurrentWeekOffset(currentWeekOffset + 1);
+    // ========== НАВИГАЦИЯ ==========
+    const goToPreviousWeek = () => setCurrentWeekOffset(prev => prev - 1);
+    const goToNextWeek = () => setCurrentWeekOffset(prev => prev + 1);
     const goToCurrentWeek = () => setCurrentWeekOffset(0);
 
     const getWeekDates = () => {
@@ -259,46 +127,26 @@ function WeeklySchedule() {
         return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
     };
 
-    const getTemplate = (dayId, timeSlot) => templates.find(t => t.dayOfWeek === dayId && formatLessonTime('2026-01-01', t.startTime) === timeSlot);    
-    const getLessonForSlot = (date, timeSlot) => {
-        const dateStr = format(date, 'yyyy-MM-dd');
-        return lessons.find(l => {
-            if (l.lessonDate !== dateStr) return false;
-            const localLessonStart = formatLessonTime(l.lessonDate, l.startTime);
-            const localLessonEnd = formatLessonTime(l.lessonDate, l.endTime);
-            const duration = l.duration || 60;
-            const slotIndex = TIME_SLOTS.indexOf(timeSlot);
-            const startIndex = TIME_SLOTS.indexOf(localLessonStart);
-            if (startIndex === -1) return false;
-            const endIndex = startIndex + (duration / 60);
-            return slotIndex >= startIndex && slotIndex < endIndex;
-        });
+    // ========== ДЕЙСТВИЯ ==========
+    const handleGenerateLessons = async () => {
+        try { 
+            await generateLessons(); 
+            showSnackbar('✅ Занятия созданы на месяц вперёд', 'success'); 
+            fetchData(); 
+        } catch (err) { 
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); 
+        }
     };
 
-    const getDailyIncome = (date) => {
-        const dateStr = format(date, 'yyyy-MM-dd');
-        const dayLessons = lessons.filter(l => l.lessonDate === dateStr); let total = 0;
-        dayLessons.forEach(l => { if (l.status === 'PAID' && l.student?.paymentType !== 'subscription') total += getStudentRateForTutor(l.student, user?.id) || 0; });
-        return total;
-    };
-    const getTotalIncome = () => { const weekDates = getWeekDates(); let total = 0; weekDates.forEach(date => total += getDailyIncome(date)); return total; };
-
-    const handleAddClick = (dayId, timeSlot) => {
-        setEditingTemplate(null);
-        setFormData({ studentId: '', courseId: '', dayOfWeek: dayId, startTime: timeSlot, endTime: (parseInt(timeSlot.split(':')[0]) + 1).toString().padStart(2, '0') + ':00' });
-        setOpenDialog(true);
-    };
-    const handleEditClick = (template) => { if (!template) return; setEditingTemplate(template); setFormData({ studentId: template.student?.id || '', courseId: template.course?.id || '', dayOfWeek: template.dayOfWeek, startTime: formatLessonTime('2026-01-01', template.startTime) || '10:00', endTime: formatLessonTime('2026-01-01', template.endTime) || '11:00'}); setOpenDialog(true); };
-    const handleDeleteTemplate = async (id) => { if (!window.confirm('Удалить шаблон?')) return; try { await axiosInstance.delete(`/weekly-template/${id}`); showSnackbar('Шаблон удалён', 'success'); fetchData(); } catch (err) { showSnackbar('Ошибка', 'error'); } };
-    const handleDeleteLesson = async (lessonId) => { if (!window.confirm('Удалить занятие?')) return; try { await deleteLesson(lessonId); showSnackbar('Занятие удалено', 'success'); fetchData(); } catch (err) { showSnackbar('Ошибка', 'error'); } };
-    const handleSave = async () => {
-        if (!user || !user.id) { showSnackbar('Ошибка: пользователь не авторизован', 'error'); return; }
-        try {
-            const data = { tutorId: user.id, studentId: formData.studentId, courseId: formData.courseId || null, dayOfWeek: formData.dayOfWeek, startTime: formData.startTime + ':00', endTime: formData.endTime + ':00' };
-            if (editingTemplate) { await axiosInstance.put(`/weekly-template/${editingTemplate.id}`, data); showSnackbar('Шаблон обновлён', 'success'); }
-            else { await axiosInstance.post('/weekly-template', data); showSnackbar('Шаблон добавлен', 'success'); }
-            setOpenDialog(false); fetchData();
-        } catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
+    const handleDeleteLesson = async (lessonId) => {
+        if (!window.confirm('Удалить занятие?')) return;
+        try { 
+            await deleteLesson(lessonId); 
+            showSnackbar('Занятие удалено', 'success'); 
+            fetchData(); 
+        } catch (err) { 
+            showSnackbar('Ошибка', 'error'); 
+        }
     };
 
     const handleOpenResurrect = (student) => {
@@ -328,47 +176,123 @@ function WeeklySchedule() {
         }
     };
 
-        const handleCreateSingleLesson = async () => {
-            if (!singleLesson.time) return;
-            if (!singleLesson.isTrial && !singleLesson.studentId) return;
-            if (singleLesson.isTrial && !singleLesson.trialName) return;
-            
-            try {
-                const payload = {
-                    tutorId: user.id,
-                    lessonDate: format(singleLesson.date, 'yyyy-MM-dd'),
-                    startTime: singleLesson.time + ':00',
-                    endTime: (parseInt(singleLesson.time.split(':')[0]) + 1).toString().padStart(2, '0') + ':00:00'
-                };
+    const handleAddClick = (dayId, timeSlot) => {
+        setEditingTemplate(null);
+        setTemplateForm({ 
+            studentId: '', courseId: '', dayOfWeek: dayId, 
+            startTime: timeSlot, 
+            endTime: (parseInt(timeSlot.split(':')[0]) + 1).toString().padStart(2, '0') + ':00' 
+        });
+        setOpenTemplateDialog(true);
+    };
 
-                if (singleLesson.isTrial) {
-                    // Создаём пробного ученика и урок
-                    payload.trialName = singleLesson.trialName;
-                    payload.trialEmail = singleLesson.trialEmail || '';
-                    payload.trialPrice = singleLesson.trialPrice || 0;
-                    payload.isTrial = true;
-                } else {
-                    payload.studentId = parseInt(singleLesson.studentId);
-                    payload.courseId = singleLesson.courseId ? parseInt(singleLesson.courseId) : null;
-                }
+    const handleEditTemplate = (template) => {
+        if (!template) return;
+        setEditingTemplate(template);
+        setTemplateForm({ 
+            studentId: template.student?.id || '', 
+            courseId: template.course?.id || '', 
+            dayOfWeek: template.dayOfWeek, 
+            startTime: formatLessonTime('2026-01-01', template.startTime) || '10:00', 
+            endTime: formatLessonTime('2026-01-01', template.endTime) || '11:00'
+        });
+        setOpenTemplateDialog(true);
+    };
 
-                await axiosInstance.post('/lessons', payload);
-                setOpenSingleLesson(false);
-                setSingleLesson({ studentId: '', courseId: '', date: new Date(), time: '10:00', isTrial: false, trialName: '', trialEmail: '', trialPrice: 0 });
-                fetchData();
-                showSnackbar(singleLesson.isTrial ? '✅ Пробное занятие создано' : '✅ Разовое занятие создано', 'success');
-            } catch (err) {
-                showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+    const handleDeleteTemplate = async (id) => {
+        if (!window.confirm('Удалить шаблон?')) return;
+        try { 
+            await axiosInstance.delete(`/weekly-template/${id}`); 
+            showSnackbar('Шаблон удалён', 'success'); 
+            fetchData(); 
+        } catch (err) { 
+            showSnackbar('Ошибка', 'error'); 
+        }
+    };
+
+    const handleSaveTemplate = async () => {
+        if (!user || !user.id) { showSnackbar('Ошибка: пользователь не авторизован', 'error'); return; }
+        try {
+            const data = { 
+                tutorId: user.id, 
+                studentId: templateForm.studentId, 
+                courseId: templateForm.courseId || null, 
+                dayOfWeek: templateForm.dayOfWeek, 
+                startTime: templateForm.startTime + ':00', 
+                endTime: templateForm.endTime + ':00' 
+            };
+            if (editingTemplate) { 
+                await axiosInstance.put(`/weekly-template/${editingTemplate.id}`, data); 
+                showSnackbar('Шаблон обновлён', 'success'); 
+            } else { 
+                await axiosInstance.post('/weekly-template', data); 
+                showSnackbar('Шаблон добавлен', 'success'); 
             }
+            setOpenTemplateDialog(false); 
+            fetchData();
+        } catch (err) { 
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); 
+        }
+    };
+
+    const handleCreateSingleLesson = async () => {
+        if (!singleLesson.time) return;
+        if (!singleLesson.isTrial && !singleLesson.studentId) return;
+        if (singleLesson.isTrial && !singleLesson.trialName) return;
+        
+        try {
+            const payload = {
+                tutorId: user.id,
+                lessonDate: format(singleLesson.date, 'yyyy-MM-dd'),
+                startTime: singleLesson.time + ':00',
+                endTime: (parseInt(singleLesson.time.split(':')[0]) + 1).toString().padStart(2, '0') + ':00:00'
+            };
+
+            if (singleLesson.isTrial) {
+                payload.trialName = singleLesson.trialName;
+                payload.trialEmail = singleLesson.trialEmail || '';
+                payload.trialPrice = singleLesson.trialPrice || 0;
+                payload.isTrial = true;
+            } else {
+                payload.studentId = parseInt(singleLesson.studentId);
+                payload.courseId = singleLesson.courseId ? parseInt(singleLesson.courseId) : null;
+            }
+
+            await axiosInstance.post('/lessons', payload);
+            setOpenSingleLesson(false);
+            setSingleLesson({ studentId: '', courseId: '', date: new Date(), time: '10:00', isTrial: false, trialName: '', trialEmail: '', trialPrice: 0 });
+            fetchData();
+            showSnackbar(singleLesson.isTrial ? '✅ Пробное занятие создано' : '✅ Разовое занятие создано', 'success');
+        } catch (err) {
+            showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        }
     };
 
     const showSnackbar = (message, severity) => setSnackbar({ open: true, message, severity });
-    const formatDate = (date) => date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 
+    // ========== ВЫЧИСЛЕНИЯ ==========
     const weekDates = getWeekDates();
-    const totalIncome = getTotalIncome();
     const isCurrentWeek = currentWeekOffset === 0;
-    const weekDateStr = weekDates[0] && weekDates[6] ? `${format(weekDates[0], 'd MMM', { locale: ru })} – ${format(weekDates[6], 'd MMM yyyy', { locale: ru })}` : '';
+    const weekDateStr = weekDates[0] && weekDates[6] 
+        ? `${format(weekDates[0], 'd MMM', { locale: ru })} – ${format(weekDates[6], 'd MMM yyyy', { locale: ru })}` 
+        : '';
+
+    const getDailyIncome = (date) => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const dayLessons = lessons.filter(l => l.lessonDate === dateStr);
+        let total = 0;
+        dayLessons.forEach(l => { 
+            if (l.status === 'PAID' && l.student?.paymentType !== 'subscription') 
+                total += getStudentRateForTutor(l.student, user?.id) || 0; 
+        });
+        return total;
+    };
+
+    const totalIncome = (() => { 
+        let total = 0; 
+        weekDates.forEach(date => total += getDailyIncome(date)); 
+        return total; 
+    })();
 
     if (loading) return (
         <PageContainer>
@@ -382,40 +306,23 @@ function WeeklySchedule() {
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
             <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
                 {/* ========== ЗАГОЛОВОК ========== */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
                     <Box>
                         <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
                             Расписание
                         </Typography>
                         <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
-                            Управление постоянными занятиями и расписанием на неделю
+                            Управление занятиями и расписанием на неделю
                         </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <ViewToggleContainer>
-                            <ViewToggleBtn active={viewMode === 'table'} onClick={() => setViewMode('table')}>
-                                <ListIcon sx={{ fontSize: 18 }} />
-                                Таблица
-                            </ViewToggleBtn>
-                            <ViewToggleBtn active={viewMode === 'calendar'} onClick={() => setViewMode('calendar')}>
-                                <CalendarIcon sx={{ fontSize: 18 }} />
-                                Календарь
-                            </ViewToggleBtn>
-                        </ViewToggleContainer>
-                        <StyledButton data-tour="add-template-btn" variant="outlined" startIcon={<AddIcon sx={{ fontSize: 18 }} />} onClick={() => setOpenSingleLesson(true)}
-                            sx={{ color: '#374151', borderColor: '#D1D5DB', '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' } }}>
-                            + Разовое
-                        </StyledButton>
-                        <StyledButton data-tour="generate-lessons" variant="contained" startIcon={<RefreshIcon sx={{ fontSize: 18 }} />} onClick={handleGenerateLessons}
-                            sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
-                            Создать занятия на месяц
-                        </StyledButton>
+                        {/* Кнопки перенесены в UnifiedSchedule */}
                     </Box>
                 </Box>
 
                 {/* ========== НАВИГАЦИЯ ПО НЕДЕЛЕ ========== */}
                 <Paper sx={{ 
-                    p: 2, mb: 3, borderRadius: '12px', 
+                    p: 2, mb: 2, borderRadius: '12px', 
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
                     flexWrap: 'wrap', gap: 2,
                     backgroundColor: '#FFFFFF',
@@ -437,367 +344,41 @@ function WeeklySchedule() {
                     </Typography>
                 </Paper>
 
-                {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>}
+                {error && <Alert severity="error" sx={{ mb: 2, borderRadius: '12px' }}>{error}</Alert>}
 
-                                {/* ========== МОБИЛЬНЫЙ ВИД: КАЛЕНДАРЬ НА МЕСЯЦ ========== */}
-                {isMobile && viewMode !== 'calendar' && (() => {
-                    const year = mobileCalendarMonth.getFullYear();
-                    const month = mobileCalendarMonth.getMonth();
-                    const firstDay = new Date(year, month, 1);
-                    const lastDay = new Date(year, month + 1, 0);
-                    const startPad = (firstDay.getDay() + 6) % 7; // ПН=0
-                    const totalDays = lastDay.getDate();
-                    const today = format(new Date(), 'yyyy-MM-dd');
-                    const cells = [];
-                    for (let i = 0; i < startPad; i++) cells.push(null);
-                    for (let d = 1; d <= totalDays; d++) cells.push(new Date(year, month, d));
-
-                    return (
-                        <Box>
-                            {/* Навигация по месяцам */}
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                <IconButton onClick={() => setMobileCalendarMonth(new Date(year, month - 1, 1))}>←</IconButton>
-                                <Typography sx={{ fontWeight: 700, fontSize: '16px' }}>
-                                    {format(mobileCalendarMonth, 'LLLL yyyy', { locale: ru })}
-                                </Typography>
-                                <IconButton onClick={() => setMobileCalendarMonth(new Date(year, month + 1, 1))}>→</IconButton>
-                            </Box>
-
-                            {/* Сетка 5×7 */}
-                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
-                                {['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'].map(d => (
-                                    <Typography key={d} sx={{ textAlign: 'center', fontSize: '11px', color: '#9CA3AF', fontWeight: 600, py: 0.5 }}>{d}</Typography>
-                                ))}
-                                {cells.map((date, idx) => {
-                                    if (!date) return <Box key={`empty-${idx}`} />;
-                                    const dateStr = format(date, 'yyyy-MM-dd');
-                                    const dayLessons = lessons.filter(l => l.lessonDate === dateStr);
-                                    const isToday = dateStr === today;
-                                    return (
-                                        <Box key={idx} onClick={() => setMobileSelectedDay({ date, lessons: dayLessons })}
-                                            sx={{
-                                                p: 0.5, textAlign: 'center', borderRadius: '8px', cursor: 'pointer',
-                                                bgcolor: isToday ? '#4F46E5' : dayLessons.length > 0 ? '#F9FAFB' : 'transparent',
-                                                color: isToday ? '#fff' : '#1F2937',
-                                                border: isToday ? 'none' : '1px solid #F3F4F6',
-                                                minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                                '&:active': { opacity: 0.7 }
-                                            }}>
-                                            <Typography sx={{ fontSize: '13px', fontWeight: isToday ? 700 : 500, lineHeight: 1 }}>
-                                                {format(date, 'd')}
-                                            </Typography>
-                                            {dayLessons.length > 0 && (
-                                                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.2, mt: 0.3 }}>
-                                                    {dayLessons.slice(0, 3).map((l, i) => {
-                                                        const s = getLessonStatusStyle(l, lessons);
-                                                        return <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: s.dot }} />;
-                                                    })}
-                                                </Box>
-                                            )}
-                                        </Box>
-                                    );
-                                })}
-                            </Box>
-
-                            {/* Bottom Sheet с карточками дня */}
-                            <Drawer anchor="bottom" open={!!mobileSelectedDay} onClose={() => setMobileSelectedDay(null)}
-                                PaperProps={{ sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70vh' } }}>
-                                <Box sx={{ p: 2 }}>
-                                    <Box sx={{ width: 40, height: 4, bgcolor: '#E5E7EB', borderRadius: 2, mx: 'auto', mb: 2 }} />
-                                    {mobileSelectedDay && (
-                                        <>
-                                            <Typography sx={{ fontWeight: 700, fontSize: '16px', mb: 2 }}>
-                                                {format(mobileSelectedDay.date, 'EEEE, d MMMM', { locale: ru })}
-                                            </Typography>
-                                            {mobileSelectedDay.lessons.length === 0 ? (
-                                                <Typography color="textSecondary">Нет занятий</Typography>
-                                            ) : (
-                                                mobileSelectedDay.lessons.sort((a, b) => a.startTime.localeCompare(b.startTime)).map(lesson => {
-                                                    const statusStyle = getLessonStatusStyle(lesson, lessons);
-                                                    const studentRate = getStudentRateForTutor(lesson.student, user?.id);
-                                                    return (
-                                                        <Paper key={lesson.id} sx={{ p: 2, mb: 1, borderRadius: '10px', borderLeft: `4px solid ${statusStyle.dot}`, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                                <Box sx={{ flex: 1 }}>
-                                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                                                                        <Typography sx={{ fontWeight: 600, fontSize: '15px' }}>
-                                                                            {formatLessonTime(lesson.lessonDate, lesson.startTime)} – {formatLessonTime(lesson.lessonDate, lesson.endTime)}
-                                                                        </Typography>
-                                                                        <Chip label={statusStyle.label} size="small"
-                                                                            sx={{ fontSize: '10px', height: 20, bgcolor: statusStyle.bg, color: statusStyle.text }} />
-                                                                    </Box>
-                                                                    <Typography sx={{ fontWeight: 500, fontSize: '14px' }}>{lesson.student?.fullName || '—'}</Typography>
-                                                                    {lesson.course && <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{lesson.course.name} • {lesson.duration || 60} мин</Typography>}
-                                                                    {studentRate && lesson.status !== 'CANCELLED' && <Typography sx={{ fontSize: '14px', fontWeight: 600, color: '#10B981', mt: 0.5 }}>{studentRate} ₽</Typography>}
-                                                                </Box>
-                                                                <IconButton size="small" onClick={() => { handleDeleteLesson(lesson.id); setMobileSelectedDay(null); }} sx={{ color: '#EF4444' }}><Delete sx={{ fontSize: 16 }} /></IconButton>
-                                                            </Box>
-                                                        </Paper>
-                                                    );
-                                                })
-                                            )}
-                                        </>
-                                    )}
-                                </Box>
-                            </Drawer>
-                        </Box>
-                    );
-                })()}
-
-                {/* ========== ДЕСКТОП: ТАБЛИЦА ========== */}
-                {!isMobile && viewMode !== 'calendar' && (
-                    <>
-                        {/* ========== ДОЛЖНИКИ ========== */}
-                        {debtors.length > 0 && (
-                            <DebtorsBar elevation={0}>
-                                <Typography sx={{ fontWeight: 600, mb: 2, color: '#92400E', fontSize: '14px', display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    ⚠️ Должники (пропущенные занятия)
-                                </Typography>
-                                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                    {debtors.map(student => (
-                                        <Card key={student.id} sx={{ 
-                                            width: 220, 
-                                            borderRadius: '10px',
-                                            border: '1px solid #FDE68A', 
-                                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                            backgroundColor: '#FFFFFF',
-                                        }}>
-                                            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                                    <Avatar sx={{ width: 32, height: 32, bgcolor: getAvatarColor(student.fullName), fontSize: 14, fontWeight: 600 }}>
-                                                        {getInitials(student.fullName)}
-                                                    </Avatar>
-                                                    <Typography sx={{ fontWeight: 600, fontSize: '14px', color: '#1F2937' }}>
-                                                        {student.fullName}
-                                                    </Typography>
-                                                </Box>
-                                                <Chip
-                                                    label={`Пропущено: ${student.debtLessons}`}
-                                                    size="small"
-                                                    sx={{ 
-                                                        bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 600, 
-                                                        width: '100%', mb: 1, borderRadius: '8px', fontSize: '12px',
-                                                    }}
-                                                />
-                                                <StyledButton
-                                                    fullWidth
-                                                    size="small"
-                                                    variant="contained"
-                                                    startIcon={<WorkIcon sx={{ fontSize: 14 }} />}
-                                                    onClick={() => handleOpenResurrect(student)}
-                                                    sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' }, fontSize: '12px', py: 0.5 }}
-                                                >
-                                                    Отработать
-                                                </StyledButton>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
-                                </Box>
-                            </DebtorsBar>
-                        )}
-
-                        {/* ========== ТАБЛИЦА РАСПИСАНИЯ ========== */}
-                        <ScheduleTableContainer data-tour="template-list" elevation={0} sx={{ 
-                            mx: { xs: -2, sm: 0 },
-                            borderRadius: { xs: 0, sm: '12px' }
-                        }}>
-                            <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                                <Table stickyHeader size="small">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell sx={{ 
-                                                fontWeight: 600, fontSize: '12px', color: '#6B7280',
-                                                backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB',
-                                                minWidth: 100, position: 'sticky', left: 0, zIndex: 3,
-                                            }}>
-                                                Время
-                                            </TableCell>
-                                            {DAYS.map((day, index) => {
-                                                const date = weekDates[index];
-                                                const dailyIncome = getDailyIncome(date);
-                                                const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-                                                return (
-                                                    <TableCell key={day.id} align="center" sx={{ 
-                                                        fontWeight: 600, fontSize: '12px', color: '#6B7280',
-                                                        backgroundColor: isToday ? '#EEF2FF' : '#F9FAFB',
-                                                        borderBottom: '1px solid #E5E7EB', minWidth: 120,
-                                                    }}>
-                                                        <Box>
-                                                            <Typography sx={{ fontWeight: 600, fontSize: '13px', color: '#1F2937' }}>
-                                                                {day.name}
-                                                            </Typography>
-                                                            <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
-                                                                {formatDate(date)}
-                                                            </Typography>
-                                                            {dailyIncome > 0 && (
-                                                                <Typography sx={{ fontSize: '11px', color: '#10B981', fontWeight: 600 }}>
-                                                                    +{dailyIncome} ₽
-                                                                </Typography>
-                                                            )}
-                                                        </Box>
-                                                    </TableCell>
-                                                );
-                                            })}
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {TIME_SLOTS.map((timeSlot) => {
-                                            const startHour = parseInt(timeSlot.split(':')[0]); 
-                                            const endHour = startHour + 1;
-                                            const timeDisplay = `${timeSlot}–${endHour.toString().padStart(2, '0')}:00`;
-                                            
-                                            return (
-                                                <TableRow key={timeSlot} sx={{ '&:hover': { backgroundColor: '#F9FAFB' } }}>
-                                                    <TableCell sx={{ 
-                                                        fontWeight: 500, fontSize: '12px', color: '#6B7280',
-                                                        backgroundColor: '#FAFAFA', borderBottom: '1px solid #F3F4F6',
-                                                        position: 'sticky', left: 0, zIndex: 2,
-                                                    }}>
-                                                        {timeDisplay}
-                                                    </TableCell>
-                                                    
-                                                    {DAYS.map((day, index) => {
-                                                        const date = weekDates[index];
-                                                        const lesson = getLessonForSlot(date, timeSlot);
-                                                        const template = getTemplate(day.id, timeSlot);
-                                                        
-                                                        if (lesson) {
-                                                            const isFirstSlot = formatLessonTime(lesson.lessonDate, lesson.startTime) === timeSlot;
-                                                            if (!isFirstSlot) return <TableCell key={day.id} sx={{ display: 'none' }} />;
-                                                            const statusStyle = getLessonStatusStyle(lesson, lessons);
-                                                            const hasTemplate = template !== null;
-                                                            const studentRate = getStudentRateForTutor(lesson.student, user?.id);
-                                                            const rowSpan = (lesson.duration || 60) / 60;
-                                                            
-                                                            return (
-                                                                <SlotCell 
-                                                                    key={day.id}
-                                                                    rowSpan={rowSpan}
-                                                                    sx={{ 
-                                                                        backgroundColor: statusStyle.bg,
-                                                                        border: `1px solid ${statusStyle.dot}30`,
-                                                                        borderLeft: `3px solid ${statusStyle.dot}`,
-                                                                    }}
-                                                                >
-                                                                    <Box sx={{ position: 'relative', minHeight: 60 }}>
-                                                                        <Typography sx={{ fontWeight: 600, fontSize: '13px', color: statusStyle.text }}>
-                                                                            {lesson.student?.fullName || '—'}
-                                                                        </Typography>
-                                                                        {lesson.course && (
-                                                                            <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
-                                                                                {lesson.course.name}
-                                                                            </Typography>
-                                                                        )}
-                                                                        <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
-                                                                            {formatLessonTime(lesson.lessonDate, lesson.startTime)} ({lesson.duration || 60} мин)
-                                                                        </Typography>
-                                                                        {studentRate && lesson.status !== 'CANCELLED' && (
-                                                                            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#10B981' }}>
-                                                                                {studentRate} ₽
-                                                                            </Typography>
-                                                                        )}
-                                                                        <Chip 
-                                                                            label={statusStyle.label}
-                                                                            size="small"
-                                                                            sx={{ 
-                                                                                mt: 0.5, fontSize: '10px', height: 20,
-                                                                                bgcolor: statusStyle.bg, color: statusStyle.text,
-                                                                                border: `1px solid ${statusStyle.text}40`,
-                                                                                borderRadius: '100px',
-                                                                            }}
-                                                                        />
-                                                                        
-                                                                        {hasTemplate && (
-                                                                            <Tooltip title="Редактировать шаблон">
-                                                                                <IconButton size="small" sx={{ position: 'absolute', top: 0, right: 0, color: '#6B7280' }}
-                                                                                    onClick={(e) => { e.stopPropagation(); handleEditClick(template); }}>
-                                                                                    <Edit sx={{ fontSize: 14 }} />
-                                                                                </IconButton>
-                                                                            </Tooltip>
-                                                                        )}
-                                                                        <Tooltip title="Удалить занятие">
-                                                                            <IconButton size="small" sx={{ position: 'absolute', bottom: 0, right: 0, color: '#EF4444' }}
-                                                                                onClick={(e) => { e.stopPropagation(); handleDeleteLesson(lesson.id); }}>
-                                                                                <Delete sx={{ fontSize: 14 }} />
-                                                                            </IconButton>
-                                                                        </Tooltip>
-                                                                    </Box>
-                                                                </SlotCell>
-                                                            );
-                                                        }
-                                                        
-                                                        if (template) {
-                                                            return (
-                                                                <SlotCell key={day.id} isTemplate onClick={() => handleEditClick(template)}>
-                                                                    <Box sx={{ position: 'relative', minHeight: 50 }}>
-                                                                        <Typography sx={{ fontWeight: 600, fontSize: '13px', color: '#1F2937' }}>
-                                                                            {template.student?.fullName || '—'}
-                                                                        </Typography>
-                                                                        {template.course && (
-                                                                            <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
-                                                                                {template.course.name}
-                                                                            </Typography>
-                                                                        )}
-                                                                        <Chip 
-                                                                            label={`Шаблон ${formatLessonTime('2026-01-01', template.startTime)}`}
-                                                                            size="small"
-                                                                            variant="outlined"
-                                                                            sx={{ mt: 0.5, fontSize: '10px', borderRadius: '100px', borderColor: '#D1D5DB', color: '#6B7280' }}
-                                                                        />
-                                                                        <Tooltip title="Редактировать шаблон">
-                                                                            <IconButton size="small" sx={{ position: 'absolute', top: 0, right: 0, color: '#6B7280' }}
-                                                                                onClick={(e) => { e.stopPropagation(); handleEditClick(template); }}>
-                                                                                <Edit sx={{ fontSize: 14 }} />
-                                                                            </IconButton>
-                                                                        </Tooltip>
-                                                                        <Tooltip title="Удалить шаблон">
-                                                                            <IconButton size="small" sx={{ position: 'absolute', bottom: 0, right: 0, color: '#EF4444' }}
-                                                                                onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(template.id); }}>
-                                                                                <Delete sx={{ fontSize: 14 }} />
-                                                                            </IconButton>
-                                                                        </Tooltip>
-                                                                    </Box>
-                                                                </SlotCell>
-                                                            );
-                                                        }
-                                                        
-                                                        return (
-                                                            <SlotCell key={day.id} isEmpty onClick={() => handleAddClick(day.id, timeSlot)}>
-                                                                <Box sx={{ 
-                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                    minHeight: 50, color: '#D1D5DB',
-                                                                    '&:hover': { color: '#4F46E5' },
-                                                                }}>
-                                                                    <AddIcon sx={{ fontSize: 20, opacity: 0, transition: 'opacity 0.15s', '.MuiTableCell-root:hover &': { opacity: 1 } }} />
-                                                                </Box>
-                                                            </SlotCell>
-                                                        );
-                                                    })}
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        </ScheduleTableContainer>
-                    </>
-                )}
+                {/* ========== ЕДИНЫЙ КАЛЕНДАРЬ ========== */}
+                <UnifiedSchedule 
+                    weekDates={weekDates}
+                    lessons={lessons}
+                    students={students}
+                    courses={courses}
+                    debtors={debtors}
+                    user={user}
+                    onRefresh={fetchData}
+                    onShowSnackbar={showSnackbar}
+                    onOpenResurrect={handleOpenResurrect}
+                    getStudentRateForTutor={getStudentRateForTutor}
+                    templates={templates}
+                    onEditTemplate={handleEditTemplate}
+                    onDeleteTemplate={handleDeleteTemplate}
+                    onDeleteLesson={handleDeleteLesson}
+                />
 
                 {/* ========== ДИАЛОГ ШАБЛОНА ========== */}
-                <StyledDialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+                <StyledDialog open={openTemplateDialog} onClose={() => setOpenTemplateDialog(false)} maxWidth="sm" fullWidth>
                     <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
-                        {editingTemplate ? 'Редактировать постоянное занятие' : 'Добавить постоянное занятие'}
+                        {editingTemplate ? 'Редактировать шаблон' : 'Добавить шаблон'}
                     </DialogTitle>
                     <DialogContent sx={{ px: 3 }}>
                         <Box sx={{ pt: 2 }}>
                             <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 2 }}>
-                                {DAYS.find(d => d.id === formData.dayOfWeek)?.name}, {formData.startTime} – {formData.endTime}
+                                {DAYS.find(d => d.id === templateForm.dayOfWeek)?.name}, {templateForm.startTime} – {templateForm.endTime}
                             </Typography>
                             <Autocomplete
                                 options={students}
                                 getOptionLabel={(s) => `${s.fullName} (${getStudentRateForTutor(s, user?.id) || '—'} ₽/час)`}
-                                value={students.find(s => s.id === formData.studentId) || null}
-                                onChange={(e, newValue) => setFormData({...formData, studentId: newValue?.id || ''})}
+                                value={students.find(s => s.id === templateForm.studentId) || null}
+                                onChange={(e, newValue) => setTemplateForm({...templateForm, studentId: newValue?.id || ''})}
                                 renderInput={(params) => (
                                     <TextField {...params} label="Ученик" size="small"
                                         sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
@@ -805,15 +386,15 @@ function WeeklySchedule() {
                                 sx={{ mb: 2 }}
                             />
                             <FormControl fullWidth sx={{ mb: 2 }}>
-                                <InputLabel sx={{ fontSize: '14px' }}>Предмет (необязательно)</InputLabel>
-                                <Select value={formData.courseId} onChange={(e) => setFormData({...formData, courseId: e.target.value})} label="Предмет"
-                                    sx={{ borderRadius: '8px', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' } }}>
+                                <InputLabel sx={{ fontSize: '14px' }}>Предмет</InputLabel>
+                                <Select value={templateForm.courseId} onChange={(e) => setTemplateForm({...templateForm, courseId: e.target.value})} label="Предмет"
+                                    sx={{ borderRadius: '8px' }}>
                                     <MenuItem value="">— Без предмета —</MenuItem>
                                     {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                                 </Select>
                             </FormControl>
                             <Alert severity="info" sx={{ borderRadius: '8px', fontSize: '13px' }}>
-                                Это постоянное занятие будет автоматически добавляться в расписание каждую неделю.
+                                Постоянное занятие будет добавляться в расписание каждую неделю.
                             </Alert>
                         </Box>
                     </DialogContent>
@@ -824,8 +405,8 @@ function WeeklySchedule() {
                                 Удалить
                             </StyledButton>
                         )}
-                        <StyledButton onClick={() => setOpenDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
-                        <StyledButton onClick={handleSave} variant="contained" disabled={!formData.studentId}
+                        <StyledButton onClick={() => setOpenTemplateDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
+                        <StyledButton onClick={handleSaveTemplate} variant="contained" disabled={!templateForm.studentId}
                             sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
                             {editingTemplate ? 'Сохранить' : 'Добавить'}
                         </StyledButton>
@@ -835,40 +416,24 @@ function WeeklySchedule() {
                 {/* ========== ДИАЛОГ ОТРАБОТКИ ДОЛГА ========== */}
                 <StyledDialog open={openResurrectDialog} onClose={() => setOpenResurrectDialog(false)} maxWidth="sm" fullWidth
                     PaperProps={{ sx: { borderRadius: '20px', overflow: 'hidden' } }}>
-                    
-                    {/* Шапка */}
-                    <Box sx={{ 
-                        background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
-                        p: 3, color: '#fff'
-                    }}>
+                    <Box sx={{ background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)', p: 3, color: '#fff' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Box sx={{ 
-                                width: 44, height: 44, borderRadius: '14px', 
-                                bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', 
-                                alignItems: 'center', justifyContent: 'center' 
-                            }}>
+                            <Box sx={{ width: 44, height: 44, borderRadius: '14px', bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <WorkIcon sx={{ color: '#fff' }} />
                             </Box>
                             <Box>
-                                <Typography sx={{ fontSize: '20px', fontWeight: 700 }}>
-                                    Отработать пропущенное занятие
-                                </Typography>
-                                <Typography sx={{ fontSize: '13px', opacity: 0.85 }}>
-                                    Создать занятие для списания долга
-                                </Typography>
+                                <Typography sx={{ fontSize: '20px', fontWeight: 700 }}>Отработать пропущенное занятие</Typography>
+                                <Typography sx={{ fontSize: '13px', opacity: 0.85 }}>Создать занятие для списания долга</Typography>
                             </Box>
                         </Box>
                     </Box>
-
                     <DialogContent sx={{ p: 3 }}>
                         <Stack spacing={2.5}>
                             <Paper sx={{ p: 2.5, borderRadius: '14px', bgcolor: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-                                <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 1.5, color: '#374151' }}>
-                                    👤 Ученик-должник
-                                </Typography>
+                                <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 1.5, color: '#374151' }}>👤 Ученик-должник</Typography>
                                 <Autocomplete
                                     options={debtors}
-                                    getOptionLabel={(s) => `${s.fullName} (долг: ${s.debtLessons || s.missedLessons || 0} занятий)`}
+                                    getOptionLabel={(s) => `${s.fullName} (долг: ${s.debtLessons || 0} занятий)`}
                                     value={debtors.find(s => s.id === selectedDebtor?.id) || null}
                                     onChange={(e, newValue) => { if (newValue) setSelectedDebtor(newValue); }}
                                     renderInput={(params) => (
@@ -876,22 +441,12 @@ function WeeklySchedule() {
                                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
                                     )}
                                 />
-                                {selectedDebtor && (
-                                    <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
-                                        <Chip icon={<WorkIcon sx={{ fontSize: 14 }} />}
-                                            label={`Долг: ${selectedDebtor.debtLessons || selectedDebtor.missedLessons || 0} занятий`}
-                                            color="warning" size="small" sx={{ borderRadius: '8px', fontWeight: 600 }} />
-                                    </Box>
-                                )}
                             </Paper>
-
                             <Divider sx={{ borderColor: '#F3F4F6' }} />
-
                             <DatePicker label="Дата отработки" value={resurrectForm.date}
                                 onChange={(newDate) => setResurrectForm({...resurrectForm, date: newDate})}
                                 minDate={new Date()}
                                 slotProps={{ textField: { fullWidth: true, sx: { '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } } } }} />
-
                             <Grid container spacing={2}>
                                 <Grid item xs={6}>
                                     <TextField fullWidth label="Время начала" type="time" value={resurrectForm.startTime}
@@ -913,7 +468,6 @@ function WeeklySchedule() {
                                     </FormControl>
                                 </Grid>
                             </Grid>
-
                             <FormControl fullWidth>
                                 <InputLabel>Предмет</InputLabel>
                                 <Select value={resurrectForm.courseId} onChange={(e) => setResurrectForm({...resurrectForm, courseId: e.target.value})} label="Предмет"
@@ -922,13 +476,11 @@ function WeeklySchedule() {
                                     {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                                 </Select>
                             </FormControl>
-
                             <Alert severity="success" sx={{ borderRadius: '12px', fontSize: '13px' }}>
                                 ✅ При создании занятия долг автоматически уменьшится на 1.
                             </Alert>
                         </Stack>
                     </DialogContent>
-
                     <DialogActions sx={{ px: 3, pb: 3, pt: 0 }}>
                         <Button onClick={() => setOpenResurrectDialog(false)} sx={{ borderRadius: '12px', color: '#6B7280' }}>Отмена</Button>
                         <Button variant="contained" onClick={handleSaveResurrect} disabled={!selectedDebtor || !resurrectForm.startTime}
@@ -942,8 +494,6 @@ function WeeklySchedule() {
                 {/* ========== ДИАЛОГ РАЗОВОГО ЗАНЯТИЯ ========== */}
                 <StyledDialog open={openSingleLesson} onClose={() => setOpenSingleLesson(false)} maxWidth="sm" fullWidth
                     PaperProps={{ sx: { borderRadius: '20px', overflow: 'hidden' } }}>
-                    
-                    {/* Шапка */}
                     <Box sx={{ 
                         background: singleLesson.isTrial 
                             ? 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' 
@@ -951,11 +501,7 @@ function WeeklySchedule() {
                         p: 3, color: '#fff'
                     }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Box sx={{ 
-                                width: 44, height: 44, borderRadius: '14px', 
-                                bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', 
-                                alignItems: 'center', justifyContent: 'center' 
-                            }}>
+                            <Box sx={{ width: 44, height: 44, borderRadius: '14px', bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 {singleLesson.isTrial ? '🎯' : '📅'}
                             </Box>
                             <Box>
@@ -968,35 +514,23 @@ function WeeklySchedule() {
                             </Box>
                         </Box>
                     </Box>
-
                     <DialogContent sx={{ p: 3 }}>
                         <Stack spacing={2.5}>
-                            {/* Чекбокс пробного */}
                             <FormControlLabel
                                 control={
-                                    <Checkbox 
-                                        checked={singleLesson.isTrial || false} 
-                                        onChange={(e) => setSingleLesson({ 
-                                            ...singleLesson, 
-                                            isTrial: e.target.checked,
-                                            studentId: '', courseId: '', trialName: '', trialEmail: '', trialPrice: 0
-                                        })} 
-                                        sx={{ color: '#7C3AED', '&.Mui-checked': { color: '#7C3AED' } }}
-                                    />
+                                    <Checkbox checked={singleLesson.isTrial || false} 
+                                        onChange={(e) => setSingleLesson({ ...singleLesson, isTrial: e.target.checked, studentId: '', courseId: '', trialName: '', trialEmail: '', trialPrice: 0 })} 
+                                        sx={{ color: '#7C3AED', '&.Mui-checked': { color: '#7C3AED' } }} />
                                 }
                                 label={<Typography sx={{ fontWeight: 500, fontSize: '14px' }}>Пробное занятие (новый ученик)</Typography>}
                             />
-
-                            {/* Пробное: поля для имени и email */}
                             {singleLesson.isTrial ? (
                                 <>
                                     <TextField fullWidth label="Имя ученика" value={singleLesson.trialName || ''}
                                         onChange={(e) => setSingleLesson({ ...singleLesson, trialName: e.target.value })}
-                                        placeholder="Введите имя"
                                         sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
                                     <TextField fullWidth label="Email ученика" value={singleLesson.trialEmail || ''}
                                         onChange={(e) => setSingleLesson({ ...singleLesson, trialEmail: e.target.value })}
-                                        placeholder="email@example.com"
                                         sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
                                     <TextField fullWidth label="Стоимость (₽)" type="number" value={singleLesson.trialPrice || 0}
                                         onChange={(e) => setSingleLesson({ ...singleLesson, trialPrice: Number(e.target.value) })}
@@ -1005,7 +539,6 @@ function WeeklySchedule() {
                                 </>
                             ) : (
                                 <>
-                                    {/* Поиск ученика */}
                                     <Autocomplete
                                         options={students}
                                         getOptionLabel={(s) => `${s.fullName} (${getStudentRateForTutor(s, user?.id) || '—'} ₽)`}
@@ -1014,9 +547,7 @@ function WeeklySchedule() {
                                         renderInput={(params) => (
                                             <TextField {...params} label="Ученик" placeholder="Начните вводить имя..."
                                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
-                                        )}
-                                    />
-                                    {/* Предмет */}
+                                        )} />
                                     <FormControl fullWidth>
                                         <InputLabel>Предмет</InputLabel>
                                         <Select value={singleLesson.courseId} onChange={(e) => setSingleLesson({ ...singleLesson, courseId: e.target.value })} label="Предмет"
@@ -1027,40 +558,21 @@ function WeeklySchedule() {
                                     </FormControl>
                                 </>
                             )}
-
                             <Divider sx={{ borderColor: '#F3F4F6' }} />
-
-                            {/* Дата */}
-                            <DatePicker 
-                                label="Дата занятия" 
-                                value={singleLesson.date} 
-                                onChange={(d) => setSingleLesson({ ...singleLesson, date: d })} 
-                                minDate={new Date()}
-                                slotProps={{ 
-                                    textField: { 
-                                        fullWidth: true, 
-                                        sx: { '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } } 
-                                    } 
-                                }} 
-                            />
-
-                            {/* Время + Длительность в одной строке */}
+                            <DatePicker label="Дата занятия" value={singleLesson.date} 
+                                onChange={(d) => setSingleLesson({ ...singleLesson, date: d })} minDate={new Date()}
+                                slotProps={{ textField: { fullWidth: true, sx: { '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } } } }} />
                             <Grid container spacing={2}>
                                 <Grid item xs={6}>
-                                    <TextField 
-                                        fullWidth label="Время начала" type="time" 
-                                        value={singleLesson.time}
+                                    <TextField fullWidth label="Время начала" type="time" value={singleLesson.time}
                                         onChange={(e) => setSingleLesson({ ...singleLesson, time: e.target.value })}
-                                        InputLabelProps={{ shrink: true }}
-                                        inputProps={{ step: 300 }}
-                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} 
-                                    />
+                                        InputLabelProps={{ shrink: true }} inputProps={{ step: 300 }}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: '#fff' } }} />
                                 </Grid>
                                 <Grid item xs={6}>
                                     <FormControl fullWidth>
                                         <InputLabel>Длительность</InputLabel>
-                                        <Select 
-                                            value={singleLesson.duration || 60} 
+                                        <Select value={singleLesson.duration || 60} 
                                             onChange={(e) => setSingleLesson({ ...singleLesson, duration: Number(e.target.value) })} 
                                             label="Длительность"
                                             sx={{ borderRadius: '12px', bgcolor: '#fff' }}>
@@ -1073,28 +585,19 @@ function WeeklySchedule() {
                                     </FormControl>
                                 </Grid>
                             </Grid>
-
                             <Alert severity="info" sx={{ borderRadius: '12px', fontSize: '13px' }}>
                                 {singleLesson.isTrial 
-                                    ? 'Пробное занятие — ученик будет создан автоматически. Отправить приглашение можно позже.'
+                                    ? 'Пробное занятие — ученик будет создан автоматически.'
                                     : 'Занятие будет добавлено в расписание на выбранную дату.'}
                             </Alert>
                         </Stack>
                     </DialogContent>
-
                     <DialogActions sx={{ px: 3, pb: 3, pt: 0 }}>
                         <Button onClick={() => setOpenSingleLesson(false)} sx={{ borderRadius: '12px', color: '#6B7280' }}>Отмена</Button>
-                        <Button 
-                            variant="contained" 
-                            onClick={handleCreateSingleLesson}
-                            disabled={singleLesson.isTrial 
-                                ? (!singleLesson.trialName || !singleLesson.time) 
-                                : (!singleLesson.studentId || !singleLesson.time)}
-                            sx={{ 
-                                bgcolor: singleLesson.isTrial ? '#7C3AED' : '#4F46E5', 
-                                borderRadius: '12px', px: 4, fontWeight: 600,
-                                '&:hover': { bgcolor: singleLesson.isTrial ? '#6D28D9' : '#4338CA' }
-                            }}>
+                        <Button variant="contained" onClick={handleCreateSingleLesson}
+                            disabled={singleLesson.isTrial ? (!singleLesson.trialName || !singleLesson.time) : (!singleLesson.studentId || !singleLesson.time)}
+                            sx={{ bgcolor: singleLesson.isTrial ? '#7C3AED' : '#4F46E5', borderRadius: '12px', px: 4, fontWeight: 600,
+                                '&:hover': { bgcolor: singleLesson.isTrial ? '#6D28D9' : '#4338CA' } }}>
                             {singleLesson.isTrial ? 'Создать пробное' : 'Создать занятие'}
                         </Button>
                     </DialogActions>

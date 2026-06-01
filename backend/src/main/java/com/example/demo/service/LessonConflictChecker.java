@@ -58,6 +58,18 @@ public class LessonConflictChecker {
         return null;
     }
 
+    public String checkConflictsForGroupLesson(Long tutorId, String studentEmail,
+                                               LocalDate date, LocalTime startTime, LocalTime endTime) {
+        List<Long> studentIdsForTutor = studentRepository.findStudentIdsByTutorIdAndEmail(tutorId, studentEmail);
+        if (studentIdsForTutor.isEmpty()) return null;
+
+        boolean studentBusy = lessonRepository.isStudentSlotOverlappingForTutor(
+                studentIdsForTutor, tutorId, date, startTime, endTime);
+        if (studentBusy) return "У ученика уже есть занятие в это время";
+
+        return null; // ✅ Репетитора НЕ проверяем — это группа!
+    }
+
     public String checkConflictsForReschedule(Long lessonId, Long tutorId, String studentEmail,
                                               LocalDate date, LocalTime startTime, LocalTime endTime) {
 

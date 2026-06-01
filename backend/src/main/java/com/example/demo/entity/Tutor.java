@@ -18,6 +18,8 @@ public class Tutor {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+
+
     @Column(unique = true, nullable = false)
     private String email;
 
@@ -91,6 +93,16 @@ public class Tutor {
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
+    // ✅ REG-1: Подтверждение email кодом
+    @Column(name = "email_verified")
+    private Boolean emailVerified = false;
+
+    @Column(name = "verification_code", length = 10)
+    private String verificationCode;
+
+    @Column(name = "verification_code_expiry")
+    private LocalDateTime verificationCodeExpiry;
+
     // ✅ REF-1: Реферальная система
     @Column(name = "referral_code", unique = true)
     private String referralCode = UUID.randomUUID().toString().substring(0, 8);
@@ -149,6 +161,13 @@ public class Tutor {
     public String getVideoRoomName() { return videoRoomName; }
     public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
     public LocalDateTime getLockedUntil() { return lockedUntil; }
+
+    public Boolean getEmailVerified() { return emailVerified; }
+    public void setEmailVerified(Boolean emailVerified) { this.emailVerified = emailVerified; }
+    public String getVerificationCode() { return verificationCode; }
+    public void setVerificationCode(String verificationCode) { this.verificationCode = verificationCode; }
+    public LocalDateTime getVerificationCodeExpiry() { return verificationCodeExpiry; }
+    public void setVerificationCodeExpiry(LocalDateTime verificationCodeExpiry) { this.verificationCodeExpiry = verificationCodeExpiry; }
 
     // Сеттеры
     public void setTimezone(String timezone) { this.timezone = timezone; }

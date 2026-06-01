@@ -1,5 +1,5 @@
 // ========== frontend/src/pages/Dashboard.js (ФИНАЛ — БЕЗ ДОЛЖНИКОВ) ==========
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo  } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
     Box, Grid, Card, CardContent, Typography,
@@ -7,7 +7,7 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Chip, Snackbar,
     FormControl, InputLabel, Select, MenuItem, Divider, Tabs, Tab,
-    IconButton
+    IconButton, Checkbox
 } from '@mui/material';
 import { PageContainer, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon } from '../styles/shared';
 import { styled } from '@mui/material/styles';
@@ -159,7 +159,34 @@ function Dashboard() {
     const [cancelledLesson, setCancelledLesson] = useState(null);
     const [selectedDebtorId, setSelectedDebtorId] = useState('');
     const [debtorsList, setDebtorsList] = useState([]);
+    const [groups, setGroups] = useState([]);
     const [expandedLessonId, setExpandedLessonId] = useState(null);
+    // Группировка групповых уроков
+    const groupedLessons = useMemo(() => {
+        const result = [];
+        const groupMap = {};
+        
+        todayLessons.forEach(lesson => {
+            if (lesson.groupId) {
+                // Группируем по groupId + startTime (разные слоты = разные карточки)
+                const key = `${lesson.groupId}_${lesson.startTime}`;
+                if (!groupMap[key]) {
+                    groupMap[key] = {
+                        ...lesson,
+                        isGroup: true,
+                        students: [lesson.student],
+                    };
+                    result.push(groupMap[key]);
+                } else {
+                    groupMap[key].students.push(lesson.student);
+                }
+            } else {
+                result.push({ ...lesson, isGroup: false });
+            }
+        });
+        
+        return result.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    }, [todayLessons]);
     const [previousLessonsCache, setPreviousLessonsCache] = useState({});
     const [loadingHistory, setLoadingHistory] = useState(false);
     // ========== БАНК ЗАДАНИЙ ==========
@@ -251,6 +278,9 @@ function Dashboard() {
             
             fetchPreviousLessons().catch(() => {});
             fetchDebtors().catch(() => {});
+            axiosInstance.get(`/groups/tutor/${user.id}`)
+                .then(res => setGroups(res.data || []))
+                .catch(() => {});
             setError(null);
         } catch (err) {
             setError('Ошибка загрузки данных');
@@ -383,25 +413,53 @@ function Dashboard() {
     const handleCompleteLesson = async () => {
         if (!selectedLesson) return;
         try {
-            await completeLesson(selectedLesson.id, lessonNotes, nextLessonPlan);
-            if (newHomeworkForLesson.task) {
-                const dueDate = newHomeworkForLesson.dueDate === 'custom' ? newHomeworkForLesson.customDueDate : newHomeworkForLesson.dueDate;
-                await axiosInstance.post('/homework', {
-                    tutorId: user.id,
-                    studentId: selectedLesson.student?.id,
-                    task: newHomeworkForLesson.task,
-                    dueDate: dueDate ? dueDate + (dueDate.includes('T') ? '' : 'T23:59:59') : null,
-                    status: 'ASSIGNED',
-                    gradeType: newHomeworkForLesson.gradeType || 'GRADE_5',
-                    courseId: selectedLesson.course?.id || null
-                });
+            if (selectedLesson.isGroup && selectedLesson.students) {
+                let completed = 0;
+                let cancelled = 0;
+                
+                for (const student of selectedLesson.students) {
+                    const studentLesson = todayLessons.find(l => 
+                        l.groupId === selectedLesson.groupId && 
+                        l.student?.id === student.id && 
+                        l.startTime === selectedLesson.startTime
+                    );
+                    
+                    if (!studentLesson) continue;
+                    
+                    if (student.present !== false) {
+                        await completeLesson(studentLesson.id, lessonNotes, nextLessonPlan);
+                        completed++;
+                    } else {
+                        await cancelLesson(studentLesson.id, 'Ученик не пришёл');
+                        cancelled++;
+                    }
+                }
+                
+                setOpenCompleteDialog(false); setSelectedLesson(null);
+                setLessonNotes(''); setNextLessonPlan('');
+                await loadAllData();
+                showSnackbar(`✅ Группа завершена: ${completed} проведено, ${cancelled} не пришли`, 'success');
+            } else {
+                await completeLesson(selectedLesson.id, lessonNotes, nextLessonPlan);
+                if (newHomeworkForLesson.task) {
+                    const dueDate = newHomeworkForLesson.dueDate === 'custom' ? newHomeworkForLesson.customDueDate : newHomeworkForLesson.dueDate;
+                    await axiosInstance.post('/homework', {
+                        tutorId: user.id,
+                        studentId: selectedLesson.student?.id,
+                        task: newHomeworkForLesson.task,
+                        dueDate: dueDate ? dueDate + (dueDate.includes('T') ? '' : 'T23:59:59') : null,
+                        status: 'ASSIGNED',
+                        gradeType: newHomeworkForLesson.gradeType || 'GRADE_5',
+                        courseId: selectedLesson.course?.id || null
+                    });
+                }
+                setOpenCompleteDialog(false); setSelectedLesson(null);
+                setLessonNotes(''); setNextLessonPlan('');
+                setNewHomeworkForLesson({ studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5', customDueDate: '' });
+                await loadAllData();
+                fetchDebtors();
+                showSnackbar(newHomeworkForLesson.task ? '✅ Урок завершён и ДЗ назначено!' : '✅ Занятие завершено!', 'success');
             }
-            setOpenCompleteDialog(false); setSelectedLesson(null);
-            setLessonNotes(''); setNextLessonPlan('');
-            setNewHomeworkForLesson({ studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5', customDueDate: '' });
-            await loadAllData();
-            fetchDebtors();
-            showSnackbar(newHomeworkForLesson.task ? '✅ Урок завершён и ДЗ назначено!' : '✅ Занятие завершено!', 'success');
         } catch (err) { showSnackbar('Ошибка при завершении урока', 'error'); }
     };
 
@@ -456,16 +514,35 @@ function Dashboard() {
         } catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
     const handleStartLesson = async (lesson) => {
-        // Если урок уже начат — не дёргаем API, просто открываем комнату
         if (lesson.status === 'IN_PROGRESS') {
             setSelectedLessonForRoom(lesson);
             setLessonRoomOpen(true);
             return;
         }
-        try { 
-            await axiosInstance.post(`/lessons/${lesson.id}/start`); 
-            showSnackbar('✅ Урок начат!', 'success'); 
-            await loadAllData(); // Обновляем список, статус сменится на IN_PROGRESS
+        try {
+            if (lesson.isGroup) {
+                // Запускаем все уроки группы
+                for (const s of lesson.students) {
+                    // Находим ID урока для каждого ученика
+                    const studentLesson = todayLessons.find(l => 
+                        l.groupId === lesson.groupId && 
+                        l.student?.id === s.id && 
+                        l.startTime === lesson.startTime
+                    );
+                    if (studentLesson && studentLesson.status === 'SCHEDULED') {
+                        try {
+                            await axiosInstance.post(`/lessons/${studentLesson.id}/start`);
+                        } catch (e) {
+                            // Игнорируем ошибки (урок уже начат)
+                        }
+                    }
+                }
+                showSnackbar('✅ Групповой урок начат!', 'success');
+            } else {
+                await axiosInstance.post(`/lessons/${lesson.id}/start`);
+                showSnackbar('✅ Урок начат!', 'success');
+            }
+            await loadAllData();
         }
         catch (err) { 
             showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); 
@@ -530,8 +607,22 @@ function Dashboard() {
             const studentName = lesson.student?.fullName || 'Ученик';
             const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
             const statusConfig = getStatusConfig(lesson.status, lesson, todayLessons);
-            const isScheduled = lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED';
-            const isInProgress = lesson.status === 'IN_PROGRESS';
+                        // Для группы — смотрим на любой урок (если хоть один IN_PROGRESS, показываем кнопки прогресса)
+            const groupAnyInProgress = lesson.isGroup && lesson.students?.some(s => {
+                const sl = todayLessons.find(l => l.groupId === lesson.groupId && l.student?.id === s.id && l.startTime === lesson.startTime);
+                return sl?.status === 'IN_PROGRESS';
+            });
+            const groupAllScheduled = lesson.isGroup && lesson.students?.every(s => {
+                const sl = todayLessons.find(l => l.groupId === lesson.groupId && l.student?.id === s.id && l.startTime === lesson.startTime);
+                return sl?.status === 'SCHEDULED' || sl?.status === 'RESCHEDULED';
+            });
+            
+            const isScheduled = !lesson.isGroup 
+                ? (lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED')
+                : groupAllScheduled;
+            const isInProgress = !lesson.isGroup 
+                ? (lesson.status === 'IN_PROGRESS')
+                : groupAnyInProgress;
             const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID';
             const isCancelled = lesson.status === 'CANCELLED';
             const isMobile = window.innerWidth < 900;
@@ -551,8 +642,15 @@ function Dashboard() {
                             </Box>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
                                 <Typography sx={{ fontWeight: 600, fontSize: '14px', color: '#1F2937' }}>
-                                    {studentName}
+                                    {lesson.groupId 
+                                        ? `👥 ${groups.find(g => g.id === lesson.groupId)?.name || 'Группа'}`
+                                        : studentName}
                                 </Typography>
+                                {lesson.groupId && (
+                                    <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
+                                        {studentName}
+                                    </Typography>
+                                )}
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                     <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{courseName}</Typography>
                                     {studentRate && lesson.status !== 'CANCELLED' && (
@@ -644,13 +742,26 @@ function Dashboard() {
                                 </Box>
                                 <Box>
                                     <Typography sx={{ fontWeight: 500, color: '#1F2937', fontSize: '15px' }}>
-                                        {studentName}
+                                        {lesson.isGroup 
+                                            ? `👥 ${groups.find(g => g.id === lesson.groupId)?.name || 'Группа'} (${lesson.students?.length || 0} чел.)`
+                                            : studentName}
                                     </Typography>
+                                    {lesson.isGroup && (
+                                        <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>
+                                            {lesson.students?.map(s => s.fullName).join(', ')}
+                                        </Typography>
+                                    )}
                                     <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>
                                         {courseName}
                                     </Typography>
                                 </Box>
-                                {studentRate && (
+                                {lesson.isGroup ? (
+                                    <Typography sx={{ ml: 'auto', fontWeight: 600, color: '#10B981', fontSize: '16px' }}>
+                                        {groups.find(g => g.id === lesson.groupId)?.pricePerStudent 
+                                            ? `${groups.find(g => g.id === lesson.groupId).pricePerStudent * (lesson.students?.length || 0)} ₽`
+                                            : ''}
+                                    </Typography>
+                                ) : studentRate && (
                                     <Typography sx={{ ml: 'auto', fontWeight: 600, color: '#10B981', fontSize: '16px' }}>
                                         {studentRate} ₽
                                     </Typography>
@@ -918,7 +1029,7 @@ function Dashboard() {
     const isToday = isSameDay(selectedDate, new Date());
 
     const timeGroups = {};
-    todayLessons.forEach(lesson => {
+    groupedLessons.forEach(lesson => {
         const timeOfDay = getTimeOfDay(lesson);
         if (!timeGroups[timeOfDay]) timeGroups[timeOfDay] = [];
         timeGroups[timeOfDay].push(lesson);
@@ -1164,95 +1275,159 @@ function Dashboard() {
                         })}
                     </Box>
                 ) : (
-                    <Box>{todayLessons.map(lesson => renderLessonCard(lesson))}</Box>
+                    <Box>{groupedLessons.map(lesson => renderLessonCard(lesson))}</Box>
                 )}
 
                 {/* ========== ДИАЛОГ ЗАВЕРШЕНИЯ УРОКА ========== */}
                 <StyledDialog open={openCompleteDialog} onClose={() => setOpenCompleteDialog(false)} maxWidth="md" fullWidth fullScreen={window.innerWidth < 600}>
                     <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', px: 3, pt: 3, pb: 1 }}>
-                        Завершение урока
+                        {selectedLesson?.isGroup ? 'Завершение группового урока' : 'Завершение урока'}
                     </DialogTitle>
                     <DialogContent sx={{ px: 3 }}>
                         <Box sx={{ pt: 2 }}>
                             <Typography sx={{ fontSize: '15px', fontWeight: 500, color: '#374151' }}>
-                                {selectedLesson?.student?.fullName} | {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)} - {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.endTime)}
+                                {selectedLesson?.isGroup 
+                                    ? `👥 ${groups.find(g => g.id === selectedLesson.groupId)?.name || 'Группа'} | ${formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)} - ${formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.endTime)}`
+                                    : `${selectedLesson?.student?.fullName} | ${formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)} - ${formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.endTime)}`}
                             </Typography>
-                            <FormControl fullWidth sx={{ mt: 2, mb: 3 }}>
-                                <InputLabel sx={{ fontSize: '13px', color: '#6B7280' }}>📋 Применить (опционально)</InputLabel>
-                                <Select 
-                                    value={applyType === 'plan' ? `plan_${selectedPlanId}` : (applyType === 'variant' ? `variant_${selectedVariantId}` : '')}
-                                    onChange={(e) => { 
-                                        const val = e.target.value; 
-                                        if (!val) { setApplyType('none'); setSelectedPlanId(''); setSelectedVariantId(''); return; } 
-                                        const [type, id] = val.split('_'); 
-                                        handleApplyItem(type, id); 
-                                    }} 
-                                    label="📋 Применить (опционально)"
-                                    sx={{
-                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' },
-                                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' },
-                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5', boxShadow: '0 0 0 3px rgba(79,70,229,0.1)' },
-                                    }}
-                                >
-                                    <MenuItem value="">— Не применять —</MenuItem>
-                                    <Divider />
-                                    <MenuItem disabled sx={{ fontWeight: 600 }}>📖 Планы уроков</MenuItem>
-                                    {lessonPlans.map(plan => (
-                                        <MenuItem key={`plan_${plan.id}`} value={`plan_${plan.id}`}>
-                                            <Box><Typography variant="body2">{plan.title}</Typography><Typography variant="caption" sx={{ color: '#6B7280' }}>{plan.topic}</Typography></Box>
-                                        </MenuItem>
-                                    ))}
-                                    <Divider />
-                                    <MenuItem disabled sx={{ fontWeight: 600 }}>🔗 Варианты</MenuItem>
-                                    {variants.map(v => (
-                                        <MenuItem key={`variant_${v.id}`} value={`variant_${v.id}`}>
-                                            <Box><Typography variant="body2">{v.title}</Typography><Typography variant="caption" sx={{ color: '#6B7280' }}>{v.subject} • {v.examType}</Typography></Box>
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
+
+                            {/* Список учеников группы с чекбоксами */}
+                            {selectedLesson?.isGroup && selectedLesson?.students && (
+                                <Paper sx={{ p: 2, mt: 2, mb: 2, borderRadius: '12px', bgcolor: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                                    <Typography sx={{ fontWeight: 600, fontSize: '14px', mb: 1.5, color: '#374151' }}>
+                                        Отметить присутствующих ({selectedLesson.students.filter(s => s.present !== false).length} из {selectedLesson.students.length})
+                                    </Typography>
+                                    <Grid container spacing={1}>
+                                        {selectedLesson.students.map((student, idx) => (
+                                            <Grid item xs={12} sm={6} key={student.id}>
+                                                <Box sx={{ 
+                                                    display: 'flex', alignItems: 'center', gap: 1.5,
+                                                    p: 1.5, borderRadius: '10px',
+                                                    bgcolor: student.present !== false ? '#ECFDF5' : '#FEF2F2',
+                                                    border: `1px solid ${student.present !== false ? '#A7F3D0' : '#FECACA'}`,
+                                                }}>
+                                                    <Checkbox
+                                                        checked={student.present !== false}
+                                                        onChange={(e) => {
+                                                            const updated = [...selectedLesson.students];
+                                                            updated[idx] = { ...updated[idx], present: e.target.checked };
+                                                            setSelectedLesson({ ...selectedLesson, students: updated });
+                                                        }}
+                                                        sx={{ color: '#10B981', '&.Mui-checked': { color: '#10B981' } }}
+                                                    />
+                                                    <Box sx={{ flex: 1 }}>
+                                                        <Typography sx={{ fontSize: '14px', fontWeight: 500, color: '#1F2937' }}>
+                                                            {student.fullName}
+                                                        </Typography>
+                                                        <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>
+                                                            {student.present !== false 
+                                                                ? `✅ Присутствовал · ${groups.find(g => g.id === selectedLesson.groupId)?.pricePerStudent || 0} ₽`
+                                                                : '❌ Не пришёл'}
+                                                        </Typography>
+                                                    </Box>
+                                                </Box>
+                                            </Grid>
+                                        ))}
+                                    </Grid>
+                                    <Box sx={{ mt: 2, p: 2, bgcolor: '#EEF2FF', borderRadius: '10px', display: 'flex', justifyContent: 'space-between' }}>
+                                        <Typography sx={{ fontSize: '14px', fontWeight: 600, color: '#4F46E5' }}>
+                                            Итого к оплате: {selectedLesson.students.filter(s => s.present !== false).length} чел.
+                                        </Typography>
+                                        <Typography sx={{ fontSize: '16px', fontWeight: 700, color: '#4F46E5' }}>
+                                            {((groups.find(g => g.id === selectedLesson.groupId)?.pricePerStudent || 0) * selectedLesson.students.filter(s => s.present !== false).length).toLocaleString()} ₽
+                                        </Typography>
+                                    </Box>
+                                </Paper>
+                            )}
+
+                            {!selectedLesson?.isGroup && (
+                                <>
+                                    <FormControl fullWidth sx={{ mt: 2, mb: 3 }}>
+                                        <InputLabel sx={{ fontSize: '13px', color: '#6B7280' }}>📋 Применить (опционально)</InputLabel>
+                                        <Select 
+                                            value={applyType === 'plan' ? `plan_${selectedPlanId}` : (applyType === 'variant' ? `variant_${selectedVariantId}` : '')}
+                                            onChange={(e) => { 
+                                                const val = e.target.value; 
+                                                if (!val) { setApplyType('none'); setSelectedPlanId(''); setSelectedVariantId(''); return; } 
+                                                const [type, id] = val.split('_'); 
+                                                handleApplyItem(type, id); 
+                                            }} 
+                                            label="📋 Применить (опционально)"
+                                            sx={{
+                                                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' },
+                                                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' },
+                                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5', boxShadow: '0 0 0 3px rgba(79,70,229,0.1)' },
+                                            }}
+                                        >
+                                            <MenuItem value="">— Не применять —</MenuItem>
+                                            <Divider />
+                                            <MenuItem disabled sx={{ fontWeight: 600 }}>📖 Планы уроков</MenuItem>
+                                            {lessonPlans.map(plan => (
+                                                <MenuItem key={`plan_${plan.id}`} value={`plan_${plan.id}`}>
+                                                    <Box><Typography variant="body2">{plan.title}</Typography><Typography variant="caption" sx={{ color: '#6B7280' }}>{plan.topic}</Typography></Box>
+                                                </MenuItem>
+                                            ))}
+                                            <Divider />
+                                            <MenuItem disabled sx={{ fontWeight: 600 }}>🔗 Варианты</MenuItem>
+                                            {variants.map(v => (
+                                                <MenuItem key={`variant_${v.id}`} value={`variant_${v.id}`}>
+                                                    <Box><Typography variant="body2">{v.title}</Typography><Typography variant="caption" sx={{ color: '#6B7280' }}>{v.subject} • {v.examType}</Typography></Box>
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </>
+                            )}
+                            
                             <TextField fullWidth label="📝 Что делали на уроке" multiline rows={4} value={lessonNotes} onChange={(e) => setLessonNotes(e.target.value)}
                                 sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />
                             <TextField fullWidth label="🎯 Что сделать на следующем уроке" multiline rows={3} value={nextLessonPlan} onChange={(e) => setNextLessonPlan(e.target.value)}
                                 sx={{ mb: 3, '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />
-                            <Divider sx={{ my: 3, borderColor: '#F3F4F6' }} />
-                            <Typography sx={{ fontSize: '16px', fontWeight: 600, color: '#1F2937', mb: 2 }}>📋 Назначить домашнее задание (опционально)</Typography>
-                            <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
-                                <TextField fullWidth label="Текст задания" multiline rows={3} value={newHomeworkForLesson.task}
-                                    onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, task: e.target.value })}
-                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />
-                                <StyledButton variant="outlined" onClick={() => { setOpenBankPicker(true); loadBankItems(); }}
-                                    sx={{ minWidth: 140, whiteSpace: 'nowrap', borderColor: '#D1D5DB', color: '#374151', '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' } }}>
-                                    📋 Из банка
-                                </StyledButton>
-                            </Box>
-                            <Grid container spacing={2}>
-                                <Grid item xs={12} sm={6}>
-                                    <FormControl fullWidth><InputLabel sx={{ fontSize: '13px' }}>Срок сдачи</InputLabel>
-                                        <Select value={newHomeworkForLesson.dueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, dueDate: e.target.value })} label="Срок сдачи"
-                                            sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' } }}>
-                                            <MenuItem value="">Выбрать дату</MenuItem><MenuItem value="custom">📅 Своя дата</MenuItem><Divider />
-                                            <MenuItem disabled sx={{ fontWeight: 600 }}>📅 Следующие уроки:</MenuItem>
-                                            {upcomingLessons.map(l => <MenuItem key={l.id} value={l.lessonDate + 'T23:59:59'}>{format(new Date(l.lessonDate), 'd MMM', { locale: ru })} {formatLessonTime(l.lessonDate, l.startTime)}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
-                                    {newHomeworkForLesson.dueDate === 'custom' && <TextField fullWidth type="date" label="Своя дата" value={newHomeworkForLesson.customDueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, customDueDate: e.target.value })} InputLabelProps={{ shrink: true }} sx={{ mt: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />}
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <FormControl fullWidth><InputLabel sx={{ fontSize: '13px' }}>Шкала</InputLabel>
-                                        <Select value={newHomeworkForLesson.gradeType || 'GRADE_5'} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, gradeType: e.target.value })} label="Шкала"
-                                            sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' } }}>
-                                            <MenuItem value="GRADE_5">5-балльная ⭐</MenuItem><MenuItem value="GRADE_10">10-балльная</MenuItem><MenuItem value="GRADE_100">100-балльная</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                            </Grid>
+                            
+                            {!selectedLesson?.isGroup && (
+                                <>
+                                    <Divider sx={{ my: 3, borderColor: '#F3F4F6' }} />
+                                    <Typography sx={{ fontSize: '16px', fontWeight: 600, color: '#1F2937', mb: 2 }}>📋 Назначить домашнее задание (опционально)</Typography>
+                                    <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
+                                        <TextField fullWidth label="Текст задания" multiline rows={3} value={newHomeworkForLesson.task}
+                                            onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, task: e.target.value })}
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />
+                                        <StyledButton variant="outlined" onClick={() => { setOpenBankPicker(true); loadBankItems(); }}
+                                            sx={{ minWidth: 140, whiteSpace: 'nowrap', borderColor: '#D1D5DB', color: '#374151', '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' } }}>
+                                            📋 Из банка
+                                        </StyledButton>
+                                    </Box>
+                                    <Grid container spacing={2}>
+                                        <Grid item xs={12} sm={6}>
+                                            <FormControl fullWidth><InputLabel sx={{ fontSize: '13px' }}>Срок сдачи</InputLabel>
+                                                <Select value={newHomeworkForLesson.dueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, dueDate: e.target.value })} label="Срок сдачи"
+                                                    sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' } }}>
+                                                    <MenuItem value="">Выбрать дату</MenuItem><MenuItem value="custom">📅 Своя дата</MenuItem><Divider />
+                                                    <MenuItem disabled sx={{ fontWeight: 600 }}>📅 Следующие уроки:</MenuItem>
+                                                    {upcomingLessons.map(l => <MenuItem key={l.id} value={l.lessonDate + 'T23:59:59'}>{format(new Date(l.lessonDate), 'd MMM', { locale: ru })} {formatLessonTime(l.lessonDate, l.startTime)}</MenuItem>)}
+                                                </Select>
+                                            </FormControl>
+                                            {newHomeworkForLesson.dueDate === 'custom' && <TextField fullWidth type="date" label="Своя дата" value={newHomeworkForLesson.customDueDate || ''} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, customDueDate: e.target.value })} InputLabelProps={{ shrink: true }} sx={{ mt: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px', '& fieldset': { borderColor: '#E5E7EB' }, '&:hover fieldset': { borderColor: '#D1D5DB' }, '&.Mui-focused fieldset': { borderColor: '#4F46E5' } } }} />}
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <FormControl fullWidth><InputLabel sx={{ fontSize: '13px' }}>Шкала</InputLabel>
+                                                <Select value={newHomeworkForLesson.gradeType || 'GRADE_5'} onChange={(e) => setNewHomeworkForLesson({ ...newHomeworkForLesson, gradeType: e.target.value })} label="Шкала"
+                                                    sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB', borderRadius: '8px' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D1D5DB' }, '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' } }}>
+                                                    <MenuItem value="GRADE_5">5-балльная ⭐</MenuItem><MenuItem value="GRADE_10">10-балльная</MenuItem><MenuItem value="GRADE_100">100-балльная</MenuItem>
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+                                    </Grid>
+                                </>
+                            )}
                         </Box>
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 3 }}>
                         <StyledButton onClick={() => setOpenCompleteDialog(false)} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
                         <StyledButton onClick={handleCompleteLesson} variant="contained" startIcon={<CheckIcon />}
-                            sx={{ bgcolor: '#10B981', '&:hover': { bgcolor: '#059669' } }}>Завершить урок</StyledButton>
+                            sx={{ bgcolor: '#10B981', '&:hover': { bgcolor: '#059669' } }}>
+                            {selectedLesson?.isGroup ? `Завершить группу` : 'Завершить урок'}
+                        </StyledButton>
                     </DialogActions>
                 </StyledDialog>
 

@@ -8,11 +8,14 @@ import com.example.demo.entity.Subscription;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import com.example.demo.entity.Tutor;
+import com.example.demo.entity.Group;
+import com.example.demo.repository.GroupRepository;
 import com.example.demo.service.LessonService;
 import com.example.demo.service.LessonGeneratorService;
 import com.example.demo.service.SubscriptionService;
 import com.example.demo.service.NotificationService;
 import com.example.demo.service.StudentService;
+import com.example.demo.service.LessonConflictChecker;
 import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.SubscriptionRepository;
 import com.example.demo.repository.LessonRepository;
@@ -24,6 +27,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
+import com.example.demo.entity.Course;
+import com.example.demo.repository.CourseRepository;
 import com.example.demo.entity.Payment;
 import com.example.demo.repository.PaymentRepository;
 import java.math.BigDecimal;
@@ -52,6 +57,12 @@ public class LessonController {
     private LessonRepository lessonRepository;
 
     @Autowired
+    private GroupRepository groupRepository;
+
+    @Autowired
+    private CourseRepository courseRepository;
+
+    @Autowired
     private LessonService lessonService;
 
     @Autowired
@@ -77,6 +88,9 @@ public class LessonController {
 
     @Autowired
     private StudentService studentService;
+
+    @Autowired
+    private LessonConflictChecker conflictChecker;
 
     @GetMapping("/today")
     @PreAuthorize("hasRole('TUTOR')")
@@ -501,11 +515,48 @@ public class LessonController {
             LocalTime utcStartTime = utcZonedDateTime.toLocalTime();
             LocalTime utcEndTime = utcStartTime.plusMinutes(duration);
 
+            // ✅ Если передан groupId — создаём уроки для всех учеников группы
+            if (request.get("groupId") != null && !request.get("groupId").toString().isEmpty()) {
+                Long groupId = Long.parseLong(request.get("groupId").toString());
+                Group group = groupRepository.findById(groupId)
+                        .orElseThrow(() -> new RuntimeException("Группа не найдена"));
+
+                Course course = null;
+                if (request.get("courseId") != null) {
+                    Long courseId = Long.parseLong(request.get("courseId").toString());
+                    course = courseRepository.findById(courseId).orElse(null);
+                }
+
+                List<Lesson> createdLessons = new ArrayList<>();
+                for (Student s : group.getStudents()) {
+                    // Используем облегчённую проверку для групповых уроков (только ученик, не репетитор)
+                    String conflict = conflictChecker.checkConflictsForGroupLesson(
+                            tutorId, s.getEmail(), utcLessonDate, utcStartTime, utcEndTime);
+
+                    if (conflict != null) {
+                        log.warn("⚠️ Пропущен ученик {}: {}", s.getFullName(), conflict);
+                        continue;
+                    }
+
+                    Lesson lesson = new Lesson(tutor, s, course, utcLessonDate, utcStartTime, utcEndTime);
+                    lesson.setDuration(duration);
+                    lesson.setGroupId(groupId);
+                    lessonService.saveLesson(lesson);
+                    createdLessons.add(lesson);
+                }
+                return ResponseEntity.ok(Map.of(
+                        "message", "✅ Создано " + createdLessons.size() + " занятий для группы",
+                        "lessons", createdLessons,
+                        "count", createdLessons.size()
+                ));
+            }
+
             // Получаем studentId
             Long studentId = null;
             if (request.get("studentId") != null) {
                 studentId = Long.parseLong(request.get("studentId").toString());
-            }            // Если пробное занятие — создаём временного ученика
+            }
+            // Если пробное занятие — создаём временного ученика
             if (Boolean.TRUE.equals(request.get("isTrial"))) {
                 String trialName = (String) request.get("trialName");
                 String trialEmail = (String) request.get("trialEmail");
@@ -620,7 +671,15 @@ public class LessonController {
 
             Lesson completedLesson;
 
-            if (lesson.getOriginalLesson() != null && "RESCHEDULED".equals(lesson.getStatus())) {
+            if (lesson.getGroupId() != null) {
+                // Групповой урок — завершаем все уроки группы
+                List<Lesson> groupCompleted = lessonService.completeGroupLessons(id, notes, nextLessonPlan);
+                return ResponseEntity.ok(Map.of(
+                        "message", "✅ Завершено " + groupCompleted.size() + " уроков группы",
+                        "lessons", groupCompleted,
+                        "count", groupCompleted.size()
+                ));
+            } else if (lesson.getOriginalLesson() != null && "RESCHEDULED".equals(lesson.getStatus())) {
                 completedLesson = lessonService.completeRescheduledLesson(id, notes, nextLessonPlan);
             } else {
                 completedLesson = lessonService.completeLesson(id, notes, nextLessonPlan);
@@ -1013,6 +1072,53 @@ public class LessonController {
                 notificationService.createNotification(lesson.getStudent().getParent().getId(), lesson.getId(), message);
             }
             return ResponseEntity.ok(Map.of("message", isSubscription ? "Урок завершён автоматически и оплачен из абонемента" : "Урок завершён автоматически", "lesson", savedLesson));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+
+    @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> editLesson(@PathVariable Long id,
+                                        @RequestBody Map<String, Object> request,
+                                        @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Lesson lesson = lessonService.getLessonById(id);
+
+            boolean hasTutor = lesson.getStudent().getTutors().stream()
+                    .anyMatch(t -> t.getId().equals(currentUserId));
+            if (!hasTutor) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            if (request.get("startTime") != null) {
+                lesson.setStartTime(LocalTime.parse(request.get("startTime").toString()));
+            }
+
+            if (request.get("endTime") != null) {
+                lesson.setEndTime(LocalTime.parse(request.get("endTime").toString()));
+            }
+
+            if (request.get("duration") != null) {
+                lesson.setDuration(Integer.parseInt(request.get("duration").toString()));
+            }
+
+            // Обновляем предмет через сервис
+            if (request.get("courseId") != null) {
+                String courseIdStr = request.get("courseId").toString();
+                if (!courseIdStr.isEmpty()) {
+                    lesson.setCourse(lessonService.getCourseById(Long.parseLong(courseIdStr)));
+                } else {
+                    lesson.setCourse(null);
+                }
+            }
+
+            lesson.setUpdatedAt(LocalDateTime.now());
+            lessonService.saveLesson(lesson);
+
+            return ResponseEntity.ok(Map.of("message", "✅ Занятие обновлено", "lesson", lesson));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
