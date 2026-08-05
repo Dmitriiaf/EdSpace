@@ -1,6 +1,5 @@
-// ========== frontend/src/pages/Dashboard.js (ФИНАЛ — БЕЗ ДОЛЖНИКОВ) ==========
-import React, { useState, useEffect, useMemo  } from 'react';
-import EdSpaceLoader from '../components/EdSpaceLoader';
+// ========== frontend/src/pages/Dashboard.js ==========
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Box, Grid, Card, CardContent, Typography,
     Paper, CircularProgress, Alert, Button,
@@ -49,8 +48,6 @@ import {
 
 // ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
 
-
-
 const HeaderPaper = styled(Paper)({
     marginBottom: '24px',
     borderRadius: '12px',
@@ -60,18 +57,19 @@ const HeaderPaper = styled(Paper)({
     padding: '24px',
 });
 
-
-const LessonCard = styled(Card)({
+const LessonCard = styled(Card, {
+    shouldForwardProp: (prop) => prop !== 'isCurrent',
+})(({ isCurrent }) => ({
     marginBottom: '12px',
     borderRadius: '12px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-    border: '1px solid #F3F4F6',
-    transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+    border: isCurrent ? '2px solid #10B981' : '1px solid #F3F4F6',
+    transition: 'box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease',
     '&:hover': {
-        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+        boxShadow: isCurrent ? '0 4px 12px rgba(16, 185, 129, 0.15)' : '0 4px 12px rgba(0,0,0,0.08)',
         transform: 'translateY(-2px)',
     },
-});
+}));
 
 const TimeDivider = styled(Box)({
     display: 'flex',
@@ -86,39 +84,12 @@ const TimeDivider = styled(Box)({
     },
 });
 
-// // ========== СОВА В УГЛУ ==========
-// const CornerOwl = () => {
-//   const [owlState, setOwlState] = useState('idle');
-  
-//   return (
-//     <Box
-//       onMouseEnter={() => setOwlState('happy')}
-//       onMouseLeave={() => setOwlState('idle')}
-//       onClick={() => setOwlState('loading')}
-//       sx={{
-//         position: 'fixed',
-//         bottom: 20,
-//         left: 20,
-//         zIndex: 9999,
-//         cursor: 'pointer',
-//         opacity: 0.6,
-//         transition: 'opacity 0.3s, transform 0.3s',
-//         '&:hover': {
-//           opacity: 1,
-//           transform: 'scale(1.15)',
-//         },
-//       }}
-//     >
-//       <EdSpaceOwl state={owlState} size={100} />
-//     </Box>
-//   );
-// };
-
-
 function Dashboard() {
     const { user } = useAuth();
     useEffect(() => { document.title = 'EdSpace — Главная'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
+    
+    const stickyHeaderRef = useRef(null);
     
     const [newHomeworkForLesson, setNewHomeworkForLesson] = useState({ 
         studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5', customDueDate: '' 
@@ -161,6 +132,51 @@ function Dashboard() {
     const [debtorsList, setDebtorsList] = useState([]);
     const [groups, setGroups] = useState([]);
     const [expandedLessonId, setExpandedLessonId] = useState(null);
+
+    const closestLessonId = useMemo(() => {
+        if (!todayLessons || todayLessons.length === 0) return null;
+        
+        const now = new Date();
+        const currentTimeInMinutes = now.getHours() * 60 + now.getMinutes();
+        
+        let closestId = null;
+        let minDiff = Infinity;
+        
+        todayLessons.forEach(lesson => {
+            if (lesson.status === 'CANCELLED') return;
+            const [h, m] = lesson.startTime.split(':').map(Number);
+            const lessonTimeInMinutes = h * 60 + m;
+            const diff = lessonTimeInMinutes - currentTimeInMinutes;
+            
+            if (diff >= 0 && diff < minDiff) {
+                minDiff = diff;
+                closestId = lesson.id;
+            }
+        });
+        
+        return closestId;
+    }, [todayLessons]);
+
+    useEffect(() => {
+        if (!closestLessonId || todayLessons.length === 0) return;
+
+        const timer = setTimeout(() => {
+            const element = document.getElementById(`lesson-${closestLessonId}`);
+            if (element) {
+                const headerHeight = stickyHeaderRef.current?.offsetHeight || 80;
+                const elementPosition = element.getBoundingClientRect().top + window.scrollY;
+                const offsetPosition = elementPosition - headerHeight - 16;
+
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth',
+                });
+            }
+        }, 600);
+
+        return () => clearTimeout(timer);
+    }, [closestLessonId, todayLessons]);
+
     // Группировка групповых уроков
     const groupedLessons = useMemo(() => {
         const result = [];
@@ -168,7 +184,6 @@ function Dashboard() {
         
         todayLessons.forEach(lesson => {
             if (lesson.groupId) {
-                // Группируем по groupId + startTime (разные слоты = разные карточки)
                 const key = `${lesson.groupId}_${lesson.startTime}`;
                 if (!groupMap[key]) {
                     groupMap[key] = {
@@ -187,8 +202,10 @@ function Dashboard() {
         
         return result.sort((a, b) => a.startTime.localeCompare(b.startTime));
     }, [todayLessons]);
+    
     const [previousLessonsCache, setPreviousLessonsCache] = useState({});
     const [loadingHistory, setLoadingHistory] = useState(false);
+    
     // ========== БАНК ЗАДАНИЙ ==========
     const [openBankPicker, setOpenBankPicker] = useState(false);
     const [bankTasks, setBankTasks] = useState([]);
@@ -267,11 +284,9 @@ function Dashboard() {
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
             const lessonsRes = await getLessonsByDate(user.id, dateStr);
             const todayLessonsData = (lessonsRes.data || []).filter(lesson => {
-                // Скрываем только САМ перенесённый урок (originalLesson != null), если он завершён или отменён
                 if (lesson.originalLesson && (lesson.status === 'CANCELLED' || lesson.status === 'COMPLETED' || lesson.status === 'PAID')) {
                     return false;
                 }
-                // Всё остальное показываем
                 return true;
             });
             setTodayLessons(todayLessonsData.sort((a, b) => a.startTime.localeCompare(b.startTime)));
@@ -296,12 +311,9 @@ function Dashboard() {
             const lessonsData = response.data !== undefined ? response.data : response;
             const filtered = lessonsData.filter(lesson => {
                 if (lesson.lessonDate !== dateStr) return false;
-                
-                // Скрываем только САМ перенесённый урок, если он завершён или отменён
                 if (lesson.originalLesson && (lesson.status === 'CANCELLED' || lesson.status === 'COMPLETED' || lesson.status === 'PAID')) {
                     return false;
                 }
-                
                 return true;
             });
             setTodayLessons(filtered.sort((a, b) => a.startTime.localeCompare(b.startTime)));
@@ -324,6 +336,7 @@ function Dashboard() {
         } catch (err) { console.warn('Ошибка загрузки истории:', err); }
         finally { setLoadingHistory(false); }
     };
+
     const fetchPreviousLessons = async () => {
         try {
             const today = new Date();
@@ -362,7 +375,6 @@ function Dashboard() {
                         lastPlan = null; 
                         lastPlanLesson = null;
                     }
-                    // ✅ Для перенесённых уроков тоже переносим план (если ещё не перенесли)
                     if (lastPlan && lastPlanLesson && planTransferred && studentLessons[i].status === 'RESCHEDULED') {
                         map[studentLessons[i].id] = { 
                             ...lastPlanLesson, 
@@ -464,6 +476,7 @@ function Dashboard() {
     };
 
     const handleOpenNotes = (lesson) => { setSelectedLesson(lesson); setLessonNotes(lesson.notes || ''); setNextLessonPlan(lesson.nextLessonPlan || ''); setOpenNotesDialog(true); };
+    
     const handleManualPayment = async (lesson) => {
         if (!window.confirm('Подтвердить оплату вручную?')) return;
         try {
@@ -474,18 +487,23 @@ function Dashboard() {
             showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
         }
     };
+    
     const handleSaveNotes = async () => {
         if (!selectedLesson) return;
         try { await addNotes(selectedLesson.id, lessonNotes, nextLessonPlan); await loadAllData(); setOpenNotesDialog(false); setSelectedLesson(null); showSnackbar('Заметки сохранены', 'success'); }
         catch (err) { showSnackbar('Ошибка при сохранении заметок', 'error'); }
     };
+    
     const handleCancelClick = (lesson) => { setSelectedLesson(lesson); setCancelReason(''); setOpenCancelDialog(true); };
+    
     const handleCancelConfirm = async () => {
         if (!selectedLesson) return;
         try { await cancelLesson(selectedLesson.id, cancelReason); setOpenCancelDialog(false); setSelectedLesson(null); setCancelReason(''); await loadAllData(); showSnackbar('❌ Занятие отменено', 'info'); }
         catch (err) { showSnackbar('Ошибка при отмене занятия', 'error'); }
     };
+    
     const handleRescheduleClick = (lesson) => { setLessonToReschedule(lesson); setSelectedDateForReschedule(new Date(lesson.lessonDate)); setSelectedTime(lesson.startTime.slice(0,5)); checkAvailableSlots(new Date(lesson.lessonDate), lesson); setOpenRescheduleDialog(true); };
+    
     const checkAvailableSlots = async (date, currentLesson) => {
         try {
             const allLessonsForTutor = await getAllLessons(user.id);
@@ -502,7 +520,9 @@ function Dashboard() {
             if (selectedTime && !freeSlots.includes(selectedTime)) setSelectedTime('');
         } catch (err) { setAvailableSlots([]); }
     };
+    
     const handleDateChange = (date) => { setSelectedDateForReschedule(date); if (lessonToReschedule) checkAvailableSlots(date, lessonToReschedule); };
+    
     const handleRescheduleConfirm = async () => {
         if (!lessonToReschedule || !selectedTime) return;
         try {
@@ -513,6 +533,7 @@ function Dashboard() {
             showSnackbar('✅ Занятие успешно перенесено', 'success');
         } catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
     };
+    
     const handleStartLesson = async (lesson) => {
         if (lesson.status === 'IN_PROGRESS') {
             setSelectedLessonForRoom(lesson);
@@ -521,9 +542,7 @@ function Dashboard() {
         }
         try {
             if (lesson.isGroup) {
-                // Запускаем все уроки группы
                 for (const s of lesson.students) {
-                    // Находим ID урока для каждого ученика
                     const studentLesson = todayLessons.find(l => 
                         l.groupId === lesson.groupId && 
                         l.student?.id === s.id && 
@@ -532,9 +551,7 @@ function Dashboard() {
                     if (studentLesson && studentLesson.status === 'SCHEDULED') {
                         try {
                             await axiosInstance.post(`/lessons/${studentLesson.id}/start`);
-                        } catch (e) {
-                            // Игнорируем ошибки (урок уже начат)
-                        }
+                        } catch (e) {}
                     }
                 }
                 showSnackbar('✅ Групповой урок начат!', 'success');
@@ -548,8 +565,10 @@ function Dashboard() {
             showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); 
         }
     };
+    
     const handleStudentNoShow = (lesson) => { setSelectedLesson(lesson); setCancelReason('Ученик не пришёл'); setOpenCancelDialog(true); };
     const handleReplaceClick = (lesson) => { setCancelledLesson(lesson); setSelectedDebtorId(''); setOpenReplaceDialog(true); };
+    
     const handleConfirmReplace = async () => {
         if (!cancelledLesson || !selectedDebtorId) return;
         try { 
@@ -569,7 +588,6 @@ function Dashboard() {
     const showSnackbar = (message, severity) => setSnackbar({ open: true, message, severity });
 
     const getStatusConfig = (status, lesson, todayLessons) => {
-        // Проверка: отменённый урок, у которого есть отработанный в тот же день
         const isResurrected = status === 'CANCELLED' && todayLessons.some(l => 
             l.student?.id === lesson?.student?.id && 
             l.lessonDate === lesson?.lessonDate && 
@@ -600,111 +618,130 @@ function Dashboard() {
         return 'Ночь';
     };
 
-        const renderLessonCard = (lesson) => {
-            const startTime = formatLessonTime(lesson.lessonDate, lesson.startTime);
-            const endTime = formatLessonTime(lesson.lessonDate, lesson.endTime);
-            const courseName = lesson.course?.name || 'Занятие';
-            const studentName = lesson.student?.fullName || 'Ученик';
-            const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
-            const statusConfig = getStatusConfig(lesson.status, lesson, todayLessons);
-                        // Для группы — смотрим на любой урок (если хоть один IN_PROGRESS, показываем кнопки прогресса)
-            const groupAnyInProgress = lesson.isGroup && lesson.students?.some(s => {
-                const sl = todayLessons.find(l => l.groupId === lesson.groupId && l.student?.id === s.id && l.startTime === lesson.startTime);
-                return sl?.status === 'IN_PROGRESS';
-            });
-            const groupAllScheduled = lesson.isGroup && lesson.students?.every(s => {
-                const sl = todayLessons.find(l => l.groupId === lesson.groupId && l.student?.id === s.id && l.startTime === lesson.startTime);
-                return sl?.status === 'SCHEDULED' || sl?.status === 'RESCHEDULED';
-            });
-            
-            const isScheduled = !lesson.isGroup 
-                ? (lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED')
-                : groupAllScheduled;
-            const isInProgress = !lesson.isGroup 
-                ? (lesson.status === 'IN_PROGRESS')
-                : groupAnyInProgress;
-            const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID';
-            const isCancelled = lesson.status === 'CANCELLED';
-            const isMobile = window.innerWidth < 900;
+    const renderLessonCard = (lesson) => {
+        const isCurrent = lesson.id === closestLessonId;
+        const startTime = formatLessonTime(lesson.lessonDate, lesson.startTime);
+        const endTime = formatLessonTime(lesson.lessonDate, lesson.endTime);
+        const courseName = lesson.course?.name || 'Занятие';
+        const studentName = lesson.student?.fullName || 'Ученик';
+        const studentRate = getStudentRateForTutor(lesson.student, lesson.tutor?.id);
+        const statusConfig = getStatusConfig(lesson.status, lesson, todayLessons);
+        
+        const groupAnyInProgress = lesson.isGroup && lesson.students?.some(s => {
+            const sl = todayLessons.find(l => l.groupId === lesson.groupId && l.student?.id === s.id && l.startTime === lesson.startTime);
+            return sl?.status === 'IN_PROGRESS';
+        });
+        const groupAllScheduled = lesson.isGroup && lesson.students?.every(s => {
+            const sl = todayLessons.find(l => l.groupId === lesson.groupId && l.student?.id === s.id && l.startTime === lesson.startTime);
+            return sl?.status === 'SCHEDULED' || sl?.status === 'RESCHEDULED';
+        });
+        
+        const isScheduled = !lesson.isGroup 
+            ? (lesson.status === 'SCHEDULED' || lesson.status === 'RESCHEDULED')
+            : groupAllScheduled;
+        const isInProgress = !lesson.isGroup 
+            ? (lesson.status === 'IN_PROGRESS')
+            : groupAnyInProgress;
+        const isCompleted = lesson.status === 'COMPLETED' || lesson.status === 'PAID';
+        const isCancelled = lesson.status === 'CANCELLED';
+        const isMobile = window.innerWidth < 900;
 
-            // Мобильный вид — компактная строка
-            if (isMobile) {
-                return (
-                    <Paper key={lesson.id} sx={{ mb: 1, borderRadius: '10px', borderLeft: `4px solid ${statusConfig.dot}`, overflow: 'hidden' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5, gap: 1.5 }}>
-                            <Box sx={{ textAlign: 'center', minWidth: 50 }}>
-                                <Typography sx={{ fontWeight: 700, fontSize: '14px', color: '#1F2937', lineHeight: 1.2 }}>
-                                    {startTime}
-                                </Typography>
-                                <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
-                                    {endTime}
-                                </Typography>
-                            </Box>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
+        if (isMobile) {
+            return (
+                <Paper 
+                    key={lesson.id} 
+                    id={`lesson-${lesson.id}`}
+                    sx={{ 
+                        mb: 1, 
+                        borderRadius: '10px', 
+                        borderLeft: `4px solid ${statusConfig.dot}`, 
+                        overflow: 'hidden',
+                        border: isCurrent ? '2px solid #10B981' : 'none',
+                        boxShadow: isCurrent ? '0 0 0 2px rgba(16, 185, 129, 0.2)' : 'none',
+                    }}
+                >
+                    <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5, gap: 1.5 }}>
+                        <Box sx={{ textAlign: 'center', minWidth: 50 }}>
+                            <Typography sx={{ fontWeight: 700, fontSize: '14px', color: '#1F2937', lineHeight: 1.2 }}>
+                                {startTime}
+                            </Typography>
+                            <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
+                                {endTime}
+                            </Typography>
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Typography sx={{ fontWeight: 600, fontSize: '14px', color: '#1F2937' }}>
                                     {lesson.groupId 
                                         ? `👥 ${groups.find(g => g.id === lesson.groupId)?.name || 'Группа'}`
                                         : studentName}
                                 </Typography>
-                                {lesson.groupId && (
-                                    <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
-                                        {studentName}
-                                    </Typography>
+                                {isCurrent && (
+                                    <Box sx={{ 
+                                        width: 8, height: 8, borderRadius: '50%', 
+                                        bgcolor: '#10B981',
+                                        animation: 'pulse 2s infinite',
+                                        flexShrink: 0,
+                                    }} />
                                 )}
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                    <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{courseName}</Typography>
-                                    {studentRate && lesson.status !== 'CANCELLED' && (
-                                        <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#10B981' }}>{studentRate}₽</Typography>
-                                    )}
-                                </Box>
                             </Box>
-                            <Box sx={{ display: 'flex', gap: 0.3 }}>
-                                {isScheduled && (
-                                    <>
-                                        <IconButton size="small" onClick={async () => { setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); try { await axiosInstance.post(`/lessons/${lesson.id}/start`); await loadAllData(); } catch (err) {} }} sx={{ color: '#4F46E5', bgcolor: '#EEF2FF' }}><VideocamIcon sx={{ fontSize: 18 }} /></IconButton>
-                                        <IconButton size="small" onClick={() => handleRescheduleClick(lesson)} sx={{ color: '#6B7280' }}><EventIcon sx={{ fontSize: 18 }} /></IconButton>
-                                        <IconButton size="small" onClick={() => handleCancelClick(lesson)} sx={{ color: '#EF4444' }}><CancelIcon sx={{ fontSize: 18 }} /></IconButton>
-                                    </>
-                                )}
-                                {isInProgress && (
-                                    <>
-                                        <IconButton size="small" onClick={() => { setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); }} sx={{ color: '#4F46E5', bgcolor: '#EEF2FF' }}><VideocamIcon sx={{ fontSize: 18 }} /></IconButton>
-                                        <IconButton size="small" onClick={() => handleOpenComplete(lesson)} sx={{ color: '#10B981', bgcolor: '#ECFDF5' }}><CheckIcon sx={{ fontSize: 18 }} /></IconButton>
-                                        <IconButton size="small" onClick={() => handleStudentNoShow(lesson)} sx={{ color: '#D97706' }}><CancelIcon sx={{ fontSize: 18 }} /></IconButton>
-                                    </>
-                                )}
-                                {isCompleted && (
-                                    <>
-                                        <IconButton size="small" onClick={() => handleOpenNotes(lesson)} sx={{ color: '#6B7280' }}><EditIcon sx={{ fontSize: 18 }} /></IconButton>
-                                        {lesson.status !== 'PAID' && (
-                                            <IconButton size="small" onClick={() => handleManualPayment(lesson)} sx={{ color: '#059669', bgcolor: '#ECFDF5' }}><CheckIcon sx={{ fontSize: 18 }} /></IconButton>
-                                        )}
-                                    </>
-                                )}
-                                {isCancelled && !todayLessons.some(l => l.student?.id === lesson.student?.id && l.lessonDate === lesson.lessonDate && (l.status === 'PAID' || l.status === 'COMPLETED')) && (
-                                    <IconButton size="small" onClick={() => handleReplaceClick(lesson)} sx={{ color: '#059669', bgcolor: '#ECFDF5' }}><WorkIcon sx={{ fontSize: 18 }} /></IconButton>
+                            {lesson.groupId && (
+                                <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
+                                    {studentName}
+                                </Typography>
+                            )}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>{courseName}</Typography>
+                                {studentRate && lesson.status !== 'CANCELLED' && (
+                                    <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#10B981' }}>{studentRate * ((lesson.duration || 60) / 60)}₽</Typography>
                                 )}
                             </Box>
                         </Box>
-                        {/* Заметки */}
-                        {lesson.notes && (
-                            <Box sx={{ px: 1.5, pb: 1.5 }}>
-                                <Typography sx={{ fontSize: '11px', color: '#9CA3AF' }}>📝 {lesson.notes.substring(0, 60)}{lesson.notes.length > 60 ? '...' : ''}</Typography>
-                            </Box>
-                        )}
-                        {lesson.nextLessonPlan && (
-                            <Box sx={{ px: 1.5, pb: 1.5 }}>
-                                <Typography sx={{ fontSize: '11px', color: '#4F46E5' }}>🎯 {lesson.nextLessonPlan.substring(0, 60)}{lesson.nextLessonPlan.length > 60 ? '...' : ''}</Typography>
-                            </Box>
-                        )}
-                    </Paper>
-                );
-            }
+                        <Box sx={{ display: 'flex', gap: 0.3 }}>
+                            {isScheduled && (
+                                <>
+                                    <IconButton size="small" onClick={async () => { setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); try { await axiosInstance.post(`/lessons/${lesson.id}/start`); await loadAllData(); } catch (err) {} }} sx={{ color: '#4F46E5', bgcolor: '#EEF2FF' }}><VideocamIcon sx={{ fontSize: 18 }} /></IconButton>
+                                    <IconButton size="small" onClick={() => handleRescheduleClick(lesson)} sx={{ color: '#6B7280' }}><EventIcon sx={{ fontSize: 18 }} /></IconButton>
+                                    <IconButton size="small" onClick={() => handleCancelClick(lesson)} sx={{ color: '#EF4444' }}><CancelIcon sx={{ fontSize: 18 }} /></IconButton>
+                                </>
+                            )}
+                            {isInProgress && (
+                                <>
+                                    <IconButton size="small" onClick={() => { setSelectedLessonForRoom(lesson); setLessonRoomOpen(true); }} sx={{ color: '#4F46E5', bgcolor: '#EEF2FF' }}><VideocamIcon sx={{ fontSize: 18 }} /></IconButton>
+                                    <IconButton size="small" onClick={() => handleOpenComplete(lesson)} sx={{ color: '#10B981', bgcolor: '#ECFDF5' }}><CheckIcon sx={{ fontSize: 18 }} /></IconButton>
+                                    <IconButton size="small" onClick={() => handleStudentNoShow(lesson)} sx={{ color: '#D97706' }}><CancelIcon sx={{ fontSize: 18 }} /></IconButton>
+                                </>
+                            )}
+                            {isCompleted && (
+                                <>
+                                    <IconButton size="small" onClick={() => handleOpenNotes(lesson)} sx={{ color: '#6B7280' }}><EditIcon sx={{ fontSize: 18 }} /></IconButton>
+                                    {lesson.status !== 'PAID' && (
+                                        <IconButton size="small" onClick={() => handleManualPayment(lesson)} sx={{ color: '#059669', bgcolor: '#ECFDF5' }}><CheckIcon sx={{ fontSize: 18 }} /></IconButton>
+                                    )}
+                                </>
+                            )}
+                            {isCancelled && !todayLessons.some(l => l.student?.id === lesson.student?.id && l.lessonDate === lesson.lessonDate && (l.status === 'PAID' || l.status === 'COMPLETED')) && (
+                                <IconButton size="small" onClick={() => handleReplaceClick(lesson)} sx={{ color: '#059669', bgcolor: '#ECFDF5' }}><WorkIcon sx={{ fontSize: 18 }} /></IconButton>
+                            )}
+                        </Box>
+                    </Box>
+                    {lesson.notes && (
+                        <Box sx={{ px: 1.5, pb: 1.5 }}>
+                            <Typography sx={{ fontSize: '11px', color: '#9CA3AF' }}>📝 {lesson.notes.substring(0, 60)}{lesson.notes.length > 60 ? '...' : ''}</Typography>
+                        </Box>
+                    )}
+                    {lesson.nextLessonPlan && (
+                        <Box sx={{ px: 1.5, pb: 1.5 }}>
+                            <Typography sx={{ fontSize: '11px', color: '#4F46E5' }}>🎯 {lesson.nextLessonPlan.substring(0, 60)}{lesson.nextLessonPlan.length > 60 ? '...' : ''}</Typography>
+                        </Box>
+                    )}
+                </Paper>
+            );
+        }
 
-            // Десктоп — существующая карточка
-            return (
-            <LessonCard key={lesson.id} data-tour="lesson-card">
-                <CardContent sx={{ p: { xs: 1.5, sm: 2.5 }, '&:last-child': { pb: { xs: 1.5, sm: 2.5 } } }}>
+        return (
+            <LessonCard key={lesson.id} id={`lesson-${lesson.id}`} isCurrent={isCurrent}>
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                         <Box sx={{ 
                             width: 4, minHeight: 70, borderRadius: 2,
@@ -712,13 +749,24 @@ function Dashboard() {
                         }} />
                         
                         <Box sx={{ flex: 1 }}>
-                            <Box data-tour="date-nav" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: { xs: 1.5, sm: 2.5 } }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                     <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: { xs: '14px', sm: '16px' } }}>
                                         {startTime} – {endTime}
                                     </Typography>
                                     {isInProgress && (
-                                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#10B981', animation: 'pulse 2s infinite' }} />
+                                        <Box sx={{ 
+                                            width: 8, height: 8, borderRadius: '50%', 
+                                            bgcolor: '#10B981',
+                                            animation: 'pulse 2s infinite',
+                                        }} />
+                                    )}
+                                    {isCurrent && !isInProgress && (
+                                        <Box sx={{ 
+                                            width: 8, height: 8, borderRadius: '50%', 
+                                            bgcolor: '#10B981',
+                                            animation: 'pulse 2s infinite',
+                                        }} />
                                     )}
                                 </Box>
                                 <Chip 
@@ -733,10 +781,10 @@ function Dashboard() {
                             
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
                                 <Box sx={{ 
-                                    width: 36, height: 36, borderRadius: '50%', 
+                                    width: 28, height: 28, borderRadius: '50%', 
                                     bgcolor: lesson.course?.color || '#4F46E5',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    color: '#fff', fontSize: 14, fontWeight: 600, flexShrink: 0
+                                    color: '#fff', fontSize: 12, fontWeight: 600, flexShrink: 0
                                 }}>
                                     {studentName.charAt(0)}
                                 </Box>
@@ -763,12 +811,11 @@ function Dashboard() {
                                     </Typography>
                                 ) : studentRate && (
                                     <Typography sx={{ ml: 'auto', fontWeight: 600, color: '#10B981', fontSize: '16px' }}>
-                                        {studentRate} ₽
+                                        {studentRate * ((lesson.duration || 60) / 60)} ₽
                                     </Typography>
                                 )}
                             </Box>
 
-                            {/* Заметки урока */}
                             {lesson.notes && (
                                 <Paper sx={{ p: 1.5, bgcolor: '#F9FAFB', borderRadius: '8px', mb: 1 }}>
                                     <Typography sx={{ color: '#9CA3AF', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '11px', textTransform: 'uppercase' }}>
@@ -791,7 +838,6 @@ function Dashboard() {
                                 </Paper>
                             )}
 
-                            {/* Заметки с прошлого урока для RESCHEDULED */}
                             {lesson.status === 'RESCHEDULED' && !lesson.notes && !lesson.nextLessonPlan && !previousLessonsMap[lesson.id] && (
                                 <Box sx={{ mt: 1 }}>
                                     <StyledButton 
@@ -844,7 +890,6 @@ function Dashboard() {
                                 </Box>
                             )}
 
-                            {/* Заметки с прошлого урока */}
                             {!lesson.notes && !lesson.nextLessonPlan && previousLessonsMap[lesson.id] && (
                                 <Paper sx={{ p: 1.5, bgcolor: '#FEF3C7', borderRadius: '8px', mb: 1, border: '1px solid #FDE68A' }}>
                                     <Typography sx={{ color: '#92400E', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '11px', textTransform: 'uppercase' }}>
@@ -858,7 +903,6 @@ function Dashboard() {
                                 </Paper>
                             )}
 
-                            {/* Раскрывающаяся история уроков */}
                             {(isScheduled || isInProgress || lesson.status === 'RESCHEDULED') && (
                                 <Box sx={{ mt: 1 }}>
                                     <StyledButton 
@@ -917,16 +961,13 @@ function Dashboard() {
                             )}
                         </Box>
                         
-                        {/* Кнопки действий */}
-                        <Box data-tour="lesson-actions" sx={{ display: 'flex', flexDirection: { xs: 'row', sm: 'column' }, gap: 0.5, flexShrink: 0, flexWrap: 'wrap', mt: { xs: 1, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
+                        <Box sx={{ display: 'flex', flexDirection: { xs: 'row', sm: 'column' }, gap: 0.5, flexShrink: 0, flexWrap: 'wrap', mt: { xs: 1, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
                             {isScheduled && (
                                 <>
                                     <StyledButton variant="contained" startIcon={<VideocamIcon sx={{ fontSize: 16 }} />}
                                         onClick={async () => { 
-                                            // Сразу открываем комнату
                                             setSelectedLessonForRoom(lesson); 
                                             setLessonRoomOpen(true);
-                                            // API вызываем в фоне, ошибки 400 игнорируем
                                             try {
                                                 await axiosInstance.post(`/lessons/${lesson.id}/start`);
                                                 await loadAllData();
@@ -934,7 +975,6 @@ function Dashboard() {
                                                 if (err.response?.status !== 400) {
                                                     showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
                                                 } else {
-                                                    // 400 — уже начат, просто обновляем список
                                                     await loadAllData();
                                                 }
                                             }
@@ -1039,10 +1079,17 @@ function Dashboard() {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ruLocale}>
+            <style>{`
+                @keyframes pulse {
+                    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+                    70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+                }
+            `}</style>
             <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
 
                 {/* ========== ОБЪЕДИНЁННАЯ ШАПКА ========== */}
-                <Paper data-tour="hero" sx={{ 
+                <Paper sx={{ 
                     mb: 3, borderRadius: '16px', p: { xs: 2, sm: 3 },
                     background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
                     color: '#fff', position: 'relative', overflow: 'hidden',
@@ -1143,10 +1190,16 @@ function Dashboard() {
                         </Box>
                         
                         {/* Прогресс дня */}
-                        <Box sx={{ 
-                            bgcolor: 'rgba(255,255,255,0.15)', borderRadius: '12px', p: 2.5,
-                            border: '1px solid rgba(255,255,255,0.2)'
-                        }}>
+                        <Box 
+                            ref={stickyHeaderRef}
+                            sx={{ 
+                                bgcolor: 'rgba(255,255,255,0.15)', borderRadius: '12px', p: 2.5,
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                position: 'sticky',
+                                top: 0,
+                                zIndex: 10,
+                            }}
+                        >
                             <Typography sx={{ fontSize: '13px', fontWeight: 500, mb: 1.5, opacity: 0.9 }}>
                                 Прогресс дня
                             </Typography>
@@ -1431,7 +1484,7 @@ function Dashboard() {
                     </DialogActions>
                 </StyledDialog>
 
-                {/* Остальные диалоги (БАНК, ЗАМЕТКИ, ОТМЕНА, ПЕРЕНОС, ЗАМЕНА) */}
+                {/* Остальные диалоги */}
                 <Dialog open={openBankPicker} onClose={() => setOpenBankPicker(false)} maxWidth="sm" fullWidth>
                     <DialogTitle>Выбрать из банка</DialogTitle>
                     <DialogContent>
@@ -1506,7 +1559,6 @@ function Dashboard() {
                 <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
                     <Alert severity={snackbar.severity} sx={{ borderRadius: '8px' }}>{snackbar.message}</Alert>
                 </Snackbar>
-            {/* <CornerOwl /> */}
             </PageContainer>
         </LocalizationProvider>
     );

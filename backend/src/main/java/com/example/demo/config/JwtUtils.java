@@ -65,13 +65,14 @@ public class JwtUtils {
         return getClaimFromToken(token, Claims::getExpiration);
     }
 
-    public String generateToken(String email, Long id, String role) {
+    public String generateToken(String email, Long id, String role, String fullName) {
         log.debug("Генерация токена для пользователя: {}, роль: {}", email, role);
 
         String token = Jwts.builder()
                 .setSubject(email)
                 .claim("id", id)
                 .claim("role", role)
+                .claim("fullName", fullName != null ? fullName : email.split("@")[0])
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)

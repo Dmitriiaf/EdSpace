@@ -544,8 +544,36 @@ public class LessonController {
                     lessonService.saveLesson(lesson);
                     createdLessons.add(lesson);
                 }
+                // ✅ Если запрошена генерация на несколько недель вперёд
+                Integer generateForWeeks = request.get("generateForWeeks") != null ?
+                        Integer.parseInt(request.get("generateForWeeks").toString()) : 0;
+
+                if (generateForWeeks > 0) {
+                    int futureCount = 0;
+                    for (int week = 1; week <= generateForWeeks; week++) {
+                        LocalDate futureDate = utcLessonDate.plusWeeks(week);
+                        for (Student s : group.getStudents()) {
+                            boolean exists = lessonRepository.existsByTutorIdAndStudentIdAndLessonDateAndStartTime(
+                                    tutorId, s.getId(), futureDate, utcStartTime);
+                            if (!exists) {
+                                String conflict = conflictChecker.checkConflictsForGroupLesson(
+                                        tutorId, s.getEmail(), futureDate, utcStartTime, utcEndTime);
+                                if (conflict == null) {
+                                    Lesson futureLesson = new Lesson(tutor, s, course, futureDate, utcStartTime, utcEndTime);
+                                    futureLesson.setDuration(duration);
+                                    futureLesson.setGroupId(groupId);
+                                    lessonService.saveLesson(futureLesson);
+                                    futureCount++;
+                                }
+                            }
+                        }
+                    }
+                    log.info("📊 Группа {}: создано {} будущих уроков на {} недель", groupId, futureCount, generateForWeeks);
+                }
+
                 return ResponseEntity.ok(Map.of(
-                        "message", "✅ Создано " + createdLessons.size() + " занятий для группы",
+                        "message", "✅ Создано " + createdLessons.size() + " занятий для группы" +
+                                (generateForWeeks > 0 ? " + " + generateForWeeks + " недель вперёд" : ""),
                         "lessons", createdLessons,
                         "count", createdLessons.size()
                 ));
@@ -736,9 +764,10 @@ public class LessonController {
                 }
             }
 
-            // ✅ СОЗДАЁМ ЗАПИСЬ В PAYMENT
-            BigDecimal rate = lesson.getStudent().getRateForTutor(lesson.getTutor().getId());
-            double amount = rate != null ? rate.doubleValue() : 0;
+            // ✅ СОЗДАЁМ ЗАПИСЬ В PAYMENT (с учётом длительности)
+            BigDecimal hourlyRate = lesson.getStudent().getRateForTutor(lesson.getTutor().getId());
+            int durationMinutes = lesson.getDuration() != null ? lesson.getDuration() : 60;
+            double amount = hourlyRate != null ? hourlyRate.doubleValue() * durationMinutes / 60.0 : 0;
             String paymentType = lesson.getStudent().getPaymentTypeForTutor(lesson.getTutor().getId());
 
             Payment payment = new Payment(
@@ -1124,6 +1153,81 @@ public class LessonController {
         }
     }
 
+    @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
+    @PutMapping("/{id}/group")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> editGroupLesson(@PathVariable Long id,
+                                             @RequestBody Map<String, Object> request,
+                                             @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Lesson lesson = lessonService.getLessonById(id);
+
+            boolean hasTutor = lesson.getStudent().getTutors().stream()
+                    .anyMatch(t -> t.getId().equals(currentUserId));
+            if (!hasTutor) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            if (lesson.getGroupId() == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Это не групповой урок"));
+            }
+
+            Tutor tutor = tutorRepository.findById(currentUserId)
+                    .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
+            String tutorTimezone = tutor.getTimezone() != null ? tutor.getTimezone() : "Asia/Krasnoyarsk";
+
+            // ✅ Парсим локальное время из запроса
+            LocalDate localLessonDate = LocalDate.parse(request.get("lessonDate").toString());
+            LocalTime localStartTime = LocalTime.parse(request.get("startTime").toString());
+            LocalTime localEndTime = LocalTime.parse(request.get("endTime").toString());
+            Integer duration = request.get("duration") != null ?
+                    Integer.parseInt(request.get("duration").toString()) : 60;
+
+            // ✅ КОНВЕРТИРУЕМ локальное время в UTC
+            ZonedDateTime tutorZonedStart = ZonedDateTime.of(localLessonDate, localStartTime, ZoneId.of(tutorTimezone));
+            ZonedDateTime tutorZonedEnd = ZonedDateTime.of(localLessonDate, localEndTime, ZoneId.of(tutorTimezone));
+            ZonedDateTime utcZonedStart = tutorZonedStart.withZoneSameInstant(ZoneId.of("UTC"));
+            ZonedDateTime utcZonedEnd = tutorZonedEnd.withZoneSameInstant(ZoneId.of("UTC"));
+
+            log.info("🕐 Групповой урок: местное {} -> UTC {}", localStartTime, utcZonedStart.toLocalTime());
+
+            // Находим ВСЕ уроки этой группы на эту дату
+            List<Lesson> groupLessons = lessonRepository.findByGroupIdAndLessonDate(
+                    lesson.getGroupId(), lesson.getLessonDate());
+
+            int updatedCount = 0;
+            for (Lesson l : groupLessons) {
+                if (l.getStatus().equals("SCHEDULED") || l.getStatus().equals("IN_PROGRESS")) {
+                    // ✅ Сохраняем UTC время
+                    l.setStartTime(utcZonedStart.toLocalTime());
+                    l.setEndTime(utcZonedEnd.toLocalTime());
+                    l.setDuration(duration);
+
+                    if (request.get("courseId") != null) {
+                        String courseIdStr = request.get("courseId").toString();
+                        if (!courseIdStr.isEmpty()) {
+                            l.setCourse(lessonService.getCourseById(Long.parseLong(courseIdStr)));
+                        }
+                    }
+
+                    l.setUpdatedAt(LocalDateTime.now());
+                    lessonService.saveLesson(l);
+                    updatedCount++;
+                }
+            }
+
+            log.info("✅ Обновлено {} уроков группы {}", updatedCount, lesson.getGroupId());
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "✅ Обновлено " + updatedCount + " уроков группы",
+                    "updatedCount", updatedCount
+            ));
+        } catch (RuntimeException e) {
+            log.error("Ошибка при обновлении группы: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> deleteLesson(@PathVariable Long id,
@@ -1194,8 +1298,9 @@ public class LessonController {
 
         // ✅ Если меняем на PAID — создаём запись в payment
         if ("PAID".equals(newStatus)) {
-            BigDecimal rate = lesson.getStudent().getRateForTutor(lesson.getTutor().getId());
-            double amount = rate != null ? rate.doubleValue() : 0;
+            BigDecimal hourlyRate = lesson.getStudent().getRateForTutor(lesson.getTutor().getId());
+            int durationMinutes = lesson.getDuration() != null ? lesson.getDuration() : 60;
+            double amount = hourlyRate != null ? hourlyRate.doubleValue() * durationMinutes / 60.0 : 0;
             String paymentType = lesson.getStudent().getPaymentTypeForTutor(lesson.getTutor().getId());
 
             Payment payment = new Payment(

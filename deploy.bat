@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo         EDSPACE DEPLOY v1.9
+echo         EDSPACE DEPLOY v2.0
 echo ============================================
 echo 1 - Backend only (mvn + restart)
 echo 2 - Frontend only (npm + reload)
@@ -47,17 +47,15 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo === [2/4] Uploading build ===
+ssh edspace "rm -rf /opt/EdSpace/frontend/build/static /opt/EdSpace/frontend/build/asset-manifest.json /opt/EdSpace/frontend/build/index.html"
 scp -r build\* root@72.56.238.224:/opt/EdSpace/frontend/build/
 if %errorlevel% neq 0 (
     echo ❌ UPLOAD FAILED
     goto end
 )
 echo.
-echo === [3/4] Fixing permissions ===
-ssh edspace "docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/"
-echo.
-echo === [4/4] Reloading frontend ===
-ssh edspace "docker exec lmstutor-frontend nginx -s reload"
+echo === [3/4] Copying to container + fixing permissions ===
+ssh edspace "docker exec lmstutor-frontend rm -f /usr/share/nginx/html/static/js/main.*.js /usr/share/nginx/html/static/js/main.*.js.map /usr/share/nginx/html/static/js/main.*.js.LICENSE.txt && docker cp /opt/EdSpace/frontend/build/static/js/. lmstutor-frontend:/usr/share/nginx/html/static/js/ && docker cp /opt/EdSpace/frontend/build/index.html lmstutor-frontend:/usr/share/nginx/html/index.html && docker exec lmstutor-frontend chown -R nginx:nginx /usr/share/nginx/html/ && docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
 echo.
 echo ✅ FRONTEND DEPLOYED
 goto end
@@ -88,6 +86,7 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo === [4/6] Uploading frontend ===
+ssh edspace "rm -rf /opt/EdSpace/frontend/build/static /opt/EdSpace/frontend/build/asset-manifest.json /opt/EdSpace/frontend/build/index.html"
 scp -r build\* root@72.56.238.224:/opt/EdSpace/frontend/build/
 if %errorlevel% neq 0 (
     echo ❌ UPLOAD FAILED
@@ -98,7 +97,7 @@ echo === [5/6] Deploying backend ===
 ssh edspace "cd /opt/EdSpace && docker compose stop backend && docker rm lmstutor-backend && docker compose up -d backend"
 echo.
 echo === [6/6] Deploying frontend ===
-ssh edspace "docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
+ssh edspace "docker exec lmstutor-frontend rm -f /usr/share/nginx/html/static/js/main.*.js /usr/share/nginx/html/static/js/main.*.js.map /usr/share/nginx/html/static/js/main.*.js.LICENSE.txt && docker cp /opt/EdSpace/frontend/build/static/js/. lmstutor-frontend:/usr/share/nginx/html/static/js/ && docker cp /opt/EdSpace/frontend/build/index.html lmstutor-frontend:/usr/share/nginx/html/index.html && docker exec lmstutor-frontend chown -R nginx:nginx /usr/share/nginx/html/ && docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
 echo.
 echo ✅ ALL DEPLOYED
 goto end

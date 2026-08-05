@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-    Box, Typography, Button, FormControl, InputLabel, Select, MenuItem, Chip
+    Box, Typography, Button, FormControl, InputLabel, Select, MenuItem, Chip, TextField
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
@@ -35,6 +35,7 @@ const OnboardingQuestions = () => {
     const [studentsCount, setStudentsCount] = useState('');
     const [experience, setExperience] = useState('');
     const [source, setSource] = useState('');
+    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async () => {
@@ -45,6 +46,7 @@ const OnboardingQuestions = () => {
                 studentsCount,
                 experience,
                 source,
+                password: password || undefined,
                 onboardingCompleted: true
             });
         } catch (err) {
@@ -92,6 +94,16 @@ const OnboardingQuestions = () => {
                         />
                     ))}
                 </Box>
+
+                <TextField
+                    fullWidth
+                    label="Придумайте пароль для входа по email"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Необязательно, если будете входить через Яндекс"
+                    sx={{ mb: 3, '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                />
 
                 <FormControl fullWidth sx={{ mb: 3 }}>
                     <InputLabel>Сколько у вас учеников?</InputLabel>

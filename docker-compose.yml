@@ -1,4 +1,4 @@
-# ========== docker-compose.yml (v3 — чистый + volume для JAR) ==========
+# ========== docker-compose.yml (v4 — безопасный PostgreSQL) ==========
 services:
   postgres:
     image: postgres:15-alpine
@@ -10,8 +10,8 @@ services:
       POSTGRES_PASSWORD: tutor_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     networks:
       - lmstutor-network
     healthcheck:
@@ -38,8 +38,8 @@ services:
       SERVER_PORT: 8080
       JITSI_DOMAIN: meet.jit.si
       APP_BASE_URL: https://ed-space.ru
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     depends_on:
       postgres:
         condition: service_healthy

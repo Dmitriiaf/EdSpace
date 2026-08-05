@@ -32,6 +32,12 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
     List<Lesson> findByGroupId(Long groupId);
 
+    boolean existsByTutorIdAndStudentIdAndLessonDateAndStartTime(Long tutorId, Long studentId, LocalDate lessonDate, LocalTime startTime);
+
+    List<Lesson> findByGroupIdAndLessonDateAfter(Long groupId, LocalDate date);
+
+    List<Lesson> findByGroupIdAndLessonDate(Long groupId, LocalDate lessonDate);
+
     @Query("SELECT l FROM Lesson l WHERE l.lessonDate = :date AND l.startTime BETWEEN :startFrom AND :startTo AND l.status IN ('SCHEDULED', 'RESCHEDULED')")
     List<Lesson> findByLessonDateAndStartTimeBetween(
             @Param("date") LocalDate date,

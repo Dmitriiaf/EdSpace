@@ -87,8 +87,7 @@ public class StudentAuthController {
                     .map(Student::getId)
                     .collect(Collectors.toList());
 
-            String token = jwtUtils.generateToken(primaryStudent.getEmail(), primaryStudent.getId(), "ROLE_STUDENT");
-
+            String token = jwtUtils.generateToken(primaryStudent.getEmail(), primaryStudent.getId(), "ROLE_STUDENT", primaryStudent.getFullName());
             Map<String, Object> response = new HashMap<>();
             response.put("token", token);
             response.put("id", primaryStudent.getId());

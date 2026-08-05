@@ -200,8 +200,7 @@ public class AuthController {
                 Tutor tutor = (Tutor) user;
                 tutor.resetFailedAttempts();
                 tutorService.save(tutor);
-                String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR");
-                return ResponseEntity.ok(Map.of(
+                String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR", tutor.getFullName());                return ResponseEntity.ok(Map.of(
                         "token", token, "id", tutor.getId(), "email", tutor.getEmail(),
                         "fullName", tutor.getFullName(), "role", "tutor",
                         "referralCode", tutor.getReferralCode()
@@ -210,8 +209,7 @@ public class AuthController {
                 Student student = (Student) user;
                 student.resetFailedAttempts();
                 studentRepository.save(student);
-                String token = jwtUtils.generateToken(student.getEmail(), student.getId(), "ROLE_STUDENT");
-                return ResponseEntity.ok(Map.of(
+                String token = jwtUtils.generateToken(student.getEmail(), student.getId(), "ROLE_STUDENT", student.getFullName());                return ResponseEntity.ok(Map.of(
                         "token", token, "id", student.getId(), "email", student.getEmail(),
                         "fullName", student.getFullName(), "role", "student"
                 ));
@@ -219,8 +217,7 @@ public class AuthController {
                 Parent parent = (Parent) user;
                 parent.resetFailedAttempts();
                 parentRepository.save(parent);
-                String token = jwtUtils.generateToken(parent.getEmail(), parent.getId(), "ROLE_PARENT");
-                return ResponseEntity.ok(Map.of(
+                String token = jwtUtils.generateToken(parent.getEmail(), parent.getId(), "ROLE_PARENT", parent.getFullName());                return ResponseEntity.ok(Map.of(
                         "token", token, "id", parent.getId(), "email", parent.getEmail(),
                         "fullName", parent.getFullName(), "role", "parent"
                 ));
@@ -285,8 +282,7 @@ public class AuthController {
         tutorService.save(tutor);
 
         // Выдаём токен
-        String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR");
-
+        String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR", tutor.getFullName());
         return ResponseEntity.ok(Map.of(
                 "message", "Email подтверждён",
                 "token", token,

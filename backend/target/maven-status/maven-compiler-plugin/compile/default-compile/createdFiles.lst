@@ -111,6 +111,7 @@ com\example\demo\service\MaterialService.class
 com\example\demo\controller\StudentController.class
 com\example\demo\repository\SubscriptionRepository.class
 com\example\demo\controller\PasswordResetController.class
+com\example\demo\controller\YandexOAuthController.class
 com\example\demo\repository\BoardSessionRepository.class
 com\example\demo\controller\LessonNotesController.class
 com\example\demo\repository\LessonPlanRepository.class
@@ -136,5 +137,6 @@ com\example\demo\repository\LessonRepository.class
 com\example\demo\controller\ExportController.class
 com\example\demo\controller\ExcalidrawController.class
 com\example\demo\service\ExternalIntegrationService.class
+com\example\demo\controller\VkOAuthController.class
 com\example\demo\controller\AIGenerationController.class
 com\example\demo\entity\LessonPlan.class

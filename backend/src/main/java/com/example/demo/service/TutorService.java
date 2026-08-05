@@ -61,6 +61,10 @@ public class TutorService {
         return tutorRepository.save(tutor);
     }
 
+    public String hashPassword(String password) {
+        return passwordEncoder.encode(password);
+    }
+
     public Tutor login(String email, String password) {
         Optional<Tutor> optionalTutor = tutorRepository.findByEmail(email);
 

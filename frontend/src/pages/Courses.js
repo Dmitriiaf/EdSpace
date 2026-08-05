@@ -26,8 +26,6 @@ import axiosInstance from '../api/axiosConfig';
 
 // ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
 
-
-
 const CourseCard = styled(Card)({
     borderRadius: '12px',
     overflow: 'hidden',
@@ -169,8 +167,6 @@ function Courses() {
         }
     };
 
-
-
     const calculateCourseStats = (coursesData, studentsData, lessonsData, paymentsData) => {
         const stats = {};
         
@@ -185,20 +181,17 @@ function Courses() {
             const completedLessons = courseLessons.filter(l => l.status === 'COMPLETED' || l.status === 'PAID');
             const paidLessons = courseLessons.filter(l => l.status === 'PAID');
             
-            // 1. Все платежи по курсу (чеки + абонементы)
             const allPaymentIncome = paymentsData
                 .filter(p => (p.courseId || p.course?.id) === course.id && 
                             (p.status === 'PAID' || p.status === 'paid'))
                 .reduce((sum, p) => sum + (p.amount || 0), 0);
 
-            // 2. ID занятий, уже учтённых в платежах
             const paidLessonIds = new Set(
                 paymentsData
                     .map(p => p.lessonId || p.lesson?.id)
                     .filter(id => id)
             );
 
-            // 3. Оплаченные занятия (PAID), не учтённые в payments
             const lessonsIncome = courseLessons
                 .filter(l => l.status === 'PAID' && !paidLessonIds.has(l.id))
                 .reduce((sum, l) => {
@@ -362,10 +355,10 @@ function Courses() {
     );
 
     return (
-                <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
+        <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
             {/* ========== ЗАГОЛОВОК ========== */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-                <Box>
+                <Box data-tour="courses-page">
                     <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
                         Аналитика курсов
                     </Typography>
@@ -374,9 +367,9 @@ function Courses() {
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-        
                     <StyledButton
                         variant="contained"
+                        data-tour="courses-add-btn"
                         startIcon={<Add sx={{ fontSize: 18 }} />}
                         onClick={() => handleOpenDialog()}
                         sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}
@@ -618,7 +611,6 @@ function Courses() {
                 <MenuItem onClick={() => { handleMenuClose(); handleOpenDialog(selectedCourse); }} sx={{ fontSize: '14px', gap: 1 }}>
                     <Edit sx={{ fontSize: 18, color: '#6B7280' }} /> Редактировать
                 </MenuItem>
-                
             </Menu>
 
             {/* ========== ДИАЛОГ ДОБАВЛЕНИЯ/РЕДАКТИРОВАНИЯ ========== */}

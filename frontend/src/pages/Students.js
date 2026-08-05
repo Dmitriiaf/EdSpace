@@ -280,7 +280,7 @@ function Students() {
         }
     };
     const handleOpenDialog = (student) => {
-        if (!student) return; // Больше не открываем для нового ученика
+        if (!student) return;
         setEditingStudent(student);
         setFormData({ 
             fullName: student.fullName, 
@@ -346,7 +346,7 @@ function Students() {
         <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
             {/* ========== ЗАГОЛОВОК ========== */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-                <Box>
+                <Box data-tour="students-page">
                     <Typography sx={{ fontSize: '28px', fontWeight: 700, color: '#1F2937', mb: 0.5 }}>
                         Мои ученики
                     </Typography>
@@ -477,7 +477,8 @@ function Students() {
                             {tabValue === 0 ? (searchTerm ? 'Ничего не найдено' : 'У вас пока нет учеников') : 'Архив пуст'}
                         </Typography>
                         <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 3 }}>
-                            {tabValue === 0 && !searchTerm ? 'Отправьте ссылку-приглашение первому ученику' : 'Попробуйте изменить параметры поиска'}                        </Typography>
+                            {tabValue === 0 && !searchTerm ? 'Отправьте ссылку-приглашение первому ученику' : 'Попробуйте изменить параметры поиска'}
+                        </Typography>
                         {!searchTerm && tabValue === 0 && (
                             <StyledButton 
                                 variant="outlined" 

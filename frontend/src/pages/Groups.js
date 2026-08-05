@@ -191,6 +191,17 @@ function Groups() {
         }
     };
 
+    const handleCancelGroup = async (group) => {
+        if (!window.confirm(`Отменить ВСЕ будущие уроки группы «${group.name}»?\n\nЭто действие нельзя отменить.`)) return;
+        try {
+            const res = await axiosInstance.post(`/groups/${group.id}/cancel-lessons`);
+            showSnackbar(res.data?.message || `✅ Уроки группы «${group.name}» отменены`, 'success');
+            fetchData();
+        } catch (err) {
+            showSnackbar(err.response?.data?.error || 'Ошибка', 'error');
+        }
+    };
+
     const handleRemoveAllStudents = async () => {
         if (!editingGroup) return;
         const count = editingGroup.students?.length || 0;
@@ -260,9 +271,11 @@ function Groups() {
                 mb: 4, flexWrap: 'wrap', gap: 2 
             }}>
                 <Box>
-                    <Typography sx={{ fontSize: '28px', fontWeight: 700, color: '#1F2937', mb: 0.5 }}>
-                        Учебные группы
-                    </Typography>
+                    <Box data-tour="groups-page">
+                        <Typography sx={{ fontSize: '28px', fontWeight: 700, color: '#1F2937', mb: 0.5 }}>
+                            Учебные группы
+                        </Typography>
+                    </Box>
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                         <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
                             {groups.length} групп
@@ -281,7 +294,7 @@ function Groups() {
                         />
                     </Box>
                 </Box>
-                <StyledButton variant="contained" startIcon={<Add />} onClick={() => handleOpenDialog()}
+                <StyledButton variant="contained" data-tour="groups-add-btn" startIcon={<Add />} onClick={() => handleOpenDialog()}
                     sx={{ bgcolor: '#4F46E5', borderRadius: '14px', px: 3, py: 1.5, '&:hover': { bgcolor: '#4338CA' } }}>
                     Создать группу
                 </StyledButton>
@@ -438,7 +451,7 @@ function Groups() {
 
                                     <Divider sx={{ borderColor: '#F3F4F6' }} />
 
-                                    <CardActions sx={{ px: 2, py: 1.5, justifyContent: 'space-between' }}>
+                                    <CardActions sx={{ px: 2, py: 1.5, justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.5 }}>
                                         <Chip 
                                             icon={<CalendarToday sx={{ fontSize: 14 }} />}
                                             label={studentCount > 0 ? 'Можно создать урок' : 'Добавьте учеников'}
@@ -449,7 +462,24 @@ function Groups() {
                                                 fontWeight: 500, borderRadius: '8px', fontSize: '11px'
                                             }}
                                         />
-                                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                                            {group.status === 'active' && studentCount > 0 && (
+                                                <Tooltip title="Завершить все уроки группы">
+                                                    <Button
+                                                        size="small"
+                                                        color="warning"
+                                                        variant="outlined"
+                                                        onClick={() => handleCancelGroup(group)}
+                                                        sx={{ 
+                                                            textTransform: 'none', fontSize: '11px', borderRadius: '8px',
+                                                            borderColor: '#F59E0B', color: '#92400E',
+                                                            '&:hover': { bgcolor: '#FFFBEB', borderColor: '#D97706' }
+                                                        }}
+                                                    >
+                                                        Отменить уроки
+                                                    </Button>
+                                                </Tooltip>
+                                            )}
                                             <Tooltip title="Редактировать">
                                                 <IconButton size="small" onClick={() => handleOpenDialog(group)}>
                                                     <Edit sx={{ fontSize: 17 }} />

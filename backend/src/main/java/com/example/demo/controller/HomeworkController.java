@@ -53,7 +53,7 @@ public class HomeworkController {
             @RequestParam(value = "dueDate", required = false) String dueDateParam,
             @RequestParam(value = "status", defaultValue = "ASSIGNED") String statusParam,
             @RequestParam(value = "gradeType", defaultValue = "GRADE_5") String gradeTypeParam,
-            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            @RequestParam(value = "courseId", required = false) Long courseIdParam,            @RequestParam(value = "files", required = false) List<MultipartFile> files,
             @RequestBody(required = false) Map<String, Object> jsonBody,
             @RequestAttribute(name = "userId", required = false) Long currentUserId) throws Exception {
         try {
@@ -63,7 +63,7 @@ public class HomeworkController {
             String dueDate = null;
             String status = "ASSIGNED";
             String gradeType = "GRADE_5";
-
+            Long courseId = null;
             // Определяем источник данных: multipart или JSON
             if (tutorIdParam != null) {
                 // Пришли как multipart/form-data
@@ -73,7 +73,7 @@ public class HomeworkController {
                 dueDate = dueDateParam;
                 status = statusParam;
                 gradeType = gradeTypeParam;
-            } else if (jsonBody != null) {
+                courseId = courseIdParam;            } else if (jsonBody != null) {
                 // Пришли как JSON
                 tutorId = Long.parseLong(jsonBody.get("tutorId").toString());
                 studentId = Long.parseLong(jsonBody.get("studentId").toString());
@@ -96,7 +96,6 @@ public class HomeworkController {
                 dueDateTime = LocalDateTime.parse(dueDate);
             }
 
-            Long courseId = null;
             if (jsonBody != null && jsonBody.get("courseId") != null) {
                 courseId = Long.parseLong(jsonBody.get("courseId").toString());
             }

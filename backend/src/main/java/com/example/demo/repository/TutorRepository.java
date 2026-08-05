@@ -11,6 +11,7 @@ public interface TutorRepository extends JpaRepository<Tutor, Long> {
     // Найти репетитора по email
     Optional<Tutor> findByEmail(String email);
 
+
     // Проверить, существует ли email
     boolean existsByEmail(String email);
     Optional<Tutor> findByResetToken(String resetToken);

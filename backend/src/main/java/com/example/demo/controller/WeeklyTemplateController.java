@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import com.example.demo.service.LessonGeneratorService;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,9 @@ public class WeeklyTemplateController {
 
     @Autowired
     private LessonRepository lessonRepository;
+
+    @Autowired
+    private LessonGeneratorService lessonGeneratorService;
 
     @Autowired
     private WeeklyTemplateService templateService;
@@ -107,6 +111,12 @@ public class WeeklyTemplateController {
                     utcStartTime,
                     utcEndTime
             );
+
+            // ✅ Автоматически генерируем уроки на 4 недели вперёд
+            LocalDate today = LocalDate.now();
+            LocalDate fourWeeksLater = today.plusWeeks(4);
+            lessonGeneratorService.generateLessons(today, fourWeeksLater);
+
             return ResponseEntity.ok(template);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

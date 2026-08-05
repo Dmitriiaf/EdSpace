@@ -117,7 +117,7 @@ public class ParentAuthController {
                 childrenForFrontend.add(childMap);
             }
 
-            String token = jwtUtils.generateToken(parent.getEmail(), parent.getId(), "ROLE_PARENT");
+            String token = jwtUtils.generateToken(parent.getEmail(), parent.getId(), "ROLE_PARENT", parent.getFullName());
 
             Map<String, Object> response = new HashMap<>();
             response.put("token", token);

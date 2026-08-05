@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import NotFoundPage from './pages/NotFoundPage';
+import OnboardingTour from './components/OnboardingTour';
+import OAuthCallback from './pages/OAuthCallback';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import { Brightness4 as DarkIcon, Brightness7 as LightIcon } from '@mui/icons-material';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -125,6 +127,7 @@ const AppContent = () => {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/oauth-callback" element={<OAuthCallback />} />
             <Route path="/stepik/callback" element={<StepikCallback />} />
             <Route path="/onboarding" element={<OnboardingQuestions />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -181,7 +184,7 @@ const AppContent = () => {
             `}</style>
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>
                 <Sidebar onHoverChange={setIsSidebarHovered} darkMode={darkMode} />
-                
+                {isTutor && <OnboardingTour />}
                 <Tooltip title={darkMode ? 'Светлая тема' : 'Тёмная тема'}>
                     <IconButton
                         onClick={toggleDarkMode}
@@ -233,6 +236,7 @@ const AppContent = () => {
                         <Route path="/parent/children" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/payments" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/profile" element={<PrivateRoute requiredRole="parent"><ParentProfile /></PrivateRoute>} />
+                        <Route path="/oauth-callback" element={<OAuthCallback />} />
                         <Route path="/onboarding" element={<OnboardingQuestions />} />
                         <Route path="/forgot-password" element={<ForgotPassword />} />
                         <Route path="/reset-password" element={<ResetPassword />} />

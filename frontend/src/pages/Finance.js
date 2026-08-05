@@ -28,6 +28,7 @@ import {
     MoreVert as MoreVertIcon,
     CalendarToday as CalendarIcon
 } from '@mui/icons-material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -228,6 +229,8 @@ function Finance() {
     const [forecastResult, setForecastResult] = useState(null);
     const [allPayments, setAllPayments] = useState([]);
     const [students, setStudents] = useState([]);
+    const [unpaidLessons, setUnpaidLessons] = useState([]);
+    const [unpaidLoading, setUnpaidLoading] = useState(false);
     const [anchorEl, setAnchorEl] = useState(null);
     
     const [monthlyStats, setMonthlyStats] = useState({
@@ -261,8 +264,21 @@ function Finance() {
     };
 
     useEffect(() => {
-        if (user && tabValue === 3) fetchReport();
+        if (user && tabValue === 4) fetchReport();
     }, [user, tabValue, reportMonth]);
+
+    const fetchUnpaidLessons = async () => {
+        setUnpaidLoading(true);
+        try {
+            const res = await getAllLessons(user.id);
+            const allLessons = res.data !== undefined ? res.data : res;
+            const unpaid = allLessons.filter(l => l.status === 'COMPLETED');
+            setUnpaidLessons(unpaid);
+        } catch (err) { console.error('Ошибка загрузки:', err); }
+        finally { setUnpaidLoading(false); }
+    };
+
+    useEffect(() => { if (user && tabValue === 1) fetchUnpaidLessons(); }, [user, tabValue]);
 
     const fetchFinanceData = async () => {
         if (!user || !user.id) return;
@@ -386,6 +402,11 @@ function Finance() {
         }
     };
 
+    const showSnackbar = (message, severity) => {
+        // Используем alert как простую замену snackbar
+        alert(message);
+    };
+
     const calculateForecast = async () => {
         if (!user || !user.id) return;
         
@@ -497,7 +518,7 @@ function Finance() {
                     <Box sx={{ position: 'relative', zIndex: 1 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 4 }}>
                             <Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                                <Box data-tour="finance-page" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 4 }}>
                                     <PaymentsIcon sx={{ fontSize: 36, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }} />
                                     <Typography sx={{ fontSize: '32px', fontWeight: 700, letterSpacing: '-0.02em' }}>
                                         Финансы
@@ -562,6 +583,7 @@ function Finance() {
                 {/* ========== GLASS TABS ========== */}
                 <GlassTabsPaper elevation={0}>
                     <Tabs 
+                        data-tour="finance-tabs"
                         value={tabValue} 
                         onChange={handleTabChange} 
                         variant="fullWidth"
@@ -585,6 +607,7 @@ function Finance() {
                         }}
                     >
                         <Tab icon={<AssessmentIcon sx={{ fontSize: 20 }} />} label="Обзор" iconPosition="start" />
+                        <Tab icon={<ReceiptIcon sx={{ fontSize: 20 }} />} label="К оплате" iconPosition="start" />
                         <Tab icon={<PaymentsIcon sx={{ fontSize: 20 }} />} label="Платежи" iconPosition="start" />
                         <Tab icon={<CardGiftcardIcon sx={{ fontSize: 20 }} />} label="Абонементы" iconPosition="start" />
                         <Tab icon={<AssessmentIcon sx={{ fontSize: 20 }} />} label="Отчёт" iconPosition="start" />
@@ -939,17 +962,84 @@ function Finance() {
 
                 <TabPanel value={tabValue} index={1}>
                     <BentoCard elevation={0}>
-                        <Payments />
+                        <Typography sx={{ fontSize: '20px', fontWeight: 600, color: '#1F2937', mb: 3 }}>
+                            💰 К оплате ({unpaidLessons.length})
+                        </Typography>
+                        
+                        {unpaidLoading ? <CircularProgress /> : unpaidLessons.length === 0 ? (
+                            <Typography sx={{ color: '#6B7280', textAlign: 'center', py: 4 }}>
+                                ✅ Все уроки оплачены!
+                            </Typography>
+                        ) : (
+                            <GlassTableContainer>
+                                <Table stickyHeader size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Ученик</TableCell>
+                                            <TableCell sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Дата</TableCell>
+                                            <TableCell sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Время</TableCell>
+                                            <TableCell sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Предмет</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}>Сумма</TableCell>
+                                            <TableCell align="center" sx={{ fontWeight: 600, color: '#6B7280', background: 'rgba(249, 250, 251, 0.7)' }}></TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {unpaidLessons.map(lesson => {
+                                            const rate = getStudentRateForTutor(lesson.student, user.id) || 0;
+                                            const amount = rate * ((lesson.duration || 60) / 60);
+                                            return (
+                                                <TableRow key={lesson.id} hover>
+                                                    <TableCell sx={{ color: '#1F2937', fontWeight: 500 }}>{lesson.student?.fullName}</TableCell>
+                                                    <TableCell sx={{ color: '#1F2937' }}>{lesson.lessonDate}</TableCell>
+                                                    <TableCell sx={{ color: '#1F2937' }}>{lesson.startTime?.slice(0,5)} - {lesson.endTime?.slice(0,5)}</TableCell>
+                                                    <TableCell sx={{ color: '#1F2937' }}>{lesson.course?.name || '—'}</TableCell>
+                                                    <TableCell align="right" sx={{ color: '#10B981', fontWeight: 700 }}>{amount.toLocaleString()} ₽</TableCell>
+                                                    <TableCell align="center">
+                                                        <Button size="small" variant="contained" startIcon={<CheckCircleIcon sx={{ fontSize: 16 }} />}
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await axiosInstance.post(`/lessons/${lesson.id}/pay`);
+                                                                    showSnackbar('✅ Оплата подтверждена', 'success');
+                                                                    fetchUnpaidLessons();
+                                                                    fetchFinanceData();
+                                                                } catch (err) { showSnackbar('Ошибка: ' + (err.response?.data?.error || err.message), 'error'); }
+                                                            }}
+                                                            sx={{ bgcolor: '#10B981', '&:hover': { bgcolor: '#059669' }, borderRadius: '20px', fontSize: '12px' }}>
+                                                            Оплатить
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                        {unpaidLessons.length > 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={4} align="right" sx={{ fontWeight: 700, color: '#1F2937' }}>Итого к оплате:</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 800, color: '#10B981', fontSize: '16px' }}>
+                                                    {unpaidLessons.reduce((sum, l) => sum + (getStudentRateForTutor(l.student, user.id) || 0) * ((l.duration || 60) / 60), 0).toLocaleString()} ₽
+                                                </TableCell>
+                                                <TableCell></TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </GlassTableContainer>
+                        )}
                     </BentoCard>
                 </TabPanel>
 
                 <TabPanel value={tabValue} index={2}>
                     <BentoCard elevation={0}>
-                        <Subscriptions />
+                        <Payments />
                     </BentoCard>
                 </TabPanel>
 
                 <TabPanel value={tabValue} index={3}>
+                    <BentoCard elevation={0}>
+                        <Subscriptions />
+                    </BentoCard>
+                </TabPanel>
+
+                <TabPanel value={tabValue} index={4}>
                     <BentoCard elevation={0}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                             <Typography sx={{ fontSize: '20px', fontWeight: 600, color: '#1F2937' }}>

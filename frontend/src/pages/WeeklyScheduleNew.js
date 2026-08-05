@@ -307,7 +307,7 @@ function WeeklySchedule() {
             <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
                 {/* ========== ЗАГОЛОВОК ========== */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-                    <Box>
+                    <Box data-tour="schedule-page">
                         <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
                             Расписание
                         </Typography>

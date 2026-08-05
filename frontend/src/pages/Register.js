@@ -1,49 +1,23 @@
-// ========== frontend/src/pages/Register.js (v3 — Premium Human Edition) ==========
+// ========== frontend/src/pages/Register.js ==========
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, TextField, Button, Typography, Container,
+    Box, Stack, TextField, Button, Typography,
     InputAdornment, IconButton, Alert, CircularProgress,
-    Checkbox, FormControlLabel, Divider, Fade, Zoom
+    Divider, Fade, Checkbox, FormControlLabel
 } from '@mui/material';
 import { styled, keyframes } from '@mui/material/styles';
 import {
     Email, Lock, Visibility, VisibilityOff, ArrowForward,
-    Person, Badge, CheckCircle, Refresh, ArrowBack,
-    Rocket, Star, Shield, Zap, Coffee, Gift
+    Person, AutoAwesome, CheckCircle, Refresh, ArrowBack, Stars
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 
-// ========== АНИМАЦИИ (неидеальные, "живые") ==========
-const gentleFloat = keyframes`
-    0%, 100% { transform: translateY(0px); }
-    40% { transform: translateY(-8px); }
-    70% { transform: translateY(-3px); }
-`;
-
-const organicPulse = keyframes`
-    0%, 100% { opacity: 0.3; transform: scale(1); }
-    35% { opacity: 0.6; transform: scale(1.08); }
-    70% { opacity: 0.4; transform: scale(0.97); }
-`;
-
-const subtleShake = keyframes`
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-6px); }
-    40% { transform: translateX(6px); }
-    60% { transform: translateX(-4px); }
-    80% { transform: translateX(4px); }
-`;
-
-const fadeSlideUp = keyframes`
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: translateY(0); }
-`;
-
-const typewriterCursor = keyframes`
-    0%, 100% { border-color: transparent; }
-    50% { border-color: #4F46E5; }
+// ========== АНИМАЦИИ ==========
+const fadeIn = keyframes`
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
 `;
 
 const shimmer = keyframes`
@@ -51,144 +25,206 @@ const shimmer = keyframes`
     100% { background-position: 200% center; }
 `;
 
-// ========== ЦВЕТОВАЯ ПАЛИТРА ==========
-const INDIGO = '#4F46E5';
-const INDIGO_DARK = '#3730A3';
-const INDIGO_LIGHT = '#818CF8';
-const BG_DARK = '#0B0E17';
-const BG_CARD = '#FFFFFF';
-const TEXT_PRIMARY = '#111827';
-const TEXT_SECONDARY = '#6B7280';
-const BORDER_LIGHT = '#E5E7EB';
-const EMERALD = '#059669';
-const EMERALD_LIGHT = '#D1FAE5';
-const AMBER = '#F59E0B';
-const ROSE = '#E11D48';
+const glow = keyframes`
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.15); }
+`;
 
-// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
-const PageWrapper = styled(Box)({
-    display: 'flex',
-    minHeight: '100vh',
-    '@media (max-width: 768px)': { flexDirection: 'column' },
-});
+const float = keyframes`
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-6px); }
+`;
 
-const LeftPanel = styled(Box)({
-    flex: 1,
-    background: `linear-gradient(165deg, ${BG_DARK} 0%, #131129 40%, #0F0C1F 100%)`,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    padding: 40,
-});
+const pulse = keyframes`
+    0%, 100% { box-shadow: 0 0 20px rgba(99,102,241,0.15); }
+    50% { box-shadow: 0 0 40px rgba(99,102,241,0.3), 0 0 80px rgba(139,92,246,0.15); }
+`;
 
-// Декоративные элементы на фоне
-const FloatingOrb = styled(Box)(({ size, color, top, left, delay, duration }) => ({
+const shake = keyframes`
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+`;
+
+const particleFloat = keyframes`
+    0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-120px) translateX(40px); opacity: 0; }
+`;
+
+const orbit = keyframes`
+    from { transform: rotate(0deg) translateX(80px) rotate(0deg); }
+    to { transform: rotate(360deg) translateX(80px) rotate(-360deg); }
+`;
+
+// ========== ЦВЕТА ==========
+const INDIGO = '#6366F1';
+const VIOLET = '#8B5CF6';
+const CYAN = '#22D3EE';
+const EMERALD = '#10B981';
+const EMERALD_DARK = '#059669';
+const BG = '#030712';
+const SURFACE = 'rgba(255,255,255,0.03)';
+const SURFACE_HOVER = 'rgba(255,255,255,0.06)';
+const BORDER = 'rgba(255,255,255,0.06)';
+const BORDER_HOVER = 'rgba(255,255,255,0.12)';
+const TEXT_PRIMARY = '#FFFFFF';
+const TEXT_SECONDARY = 'rgba(255,255,255,0.5)';
+const TEXT_TERTIARY = 'rgba(255,255,255,0.3)';
+
+// ========== ДЕКОРАТИВНЫЕ ЧАСТИЦЫ ==========
+const Particle = styled(Box)(({ delay, left, size, color }) => ({
     position: 'absolute',
     width: size,
     height: size,
-    borderRadius: '55% 45% 60% 40%',
-    background: `radial-gradient(circle at 30% 30%, ${color}33, ${color}08)`,
-    top: `${top}%`,
+    borderRadius: '50%',
+    background: color,
     left: `${left}%`,
-    filter: 'blur(60px)',
-    animation: `${organicPulse} ${duration}s ease-in-out infinite`,
+    bottom: '-10px',
+    animation: `${particleFloat} 4s ease-in-out infinite`,
     animationDelay: `${delay}s`,
     pointerEvents: 'none',
+    filter: 'blur(1px)',
 }));
 
-const GridOverlay = styled(Box)({
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `linear-gradient(rgba(79,70,229,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(79,70,229,0.03) 1px, transparent 1px)`,
-    backgroundSize: '32px 32px',
-    maskImage: 'radial-gradient(ellipse at 50% 50%, black 30%, transparent 80%)',
-    pointerEvents: 'none',
-});
+const Particles = () => (
+    <Box sx={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+        {[...Array(20)].map((_, i) => (
+            <Particle
+                key={i}
+                delay={Math.random() * 4}
+                left={Math.random() * 100}
+                size={2 + Math.random() * 4}
+                color={i % 3 === 0 ? INDIGO : i % 3 === 1 ? VIOLET : CYAN}
+            />
+        ))}
+    </Box>
+);
 
-const FeatureRow = styled(Box)({
+// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+const PageWrapper = styled(Box)({
+    minHeight: '100vh',
     display: 'flex',
-    alignItems: 'flex-start',
-    gap: 14,
-    marginBottom: 28,
-    animation: `${fadeSlideUp} 0.6s ease both`,
-    '&:nth-of-type(1)': { animationDelay: '0.1s' },
-    '&:nth-of-type(2)': { animationDelay: '0.25s' },
-    '&:nth-of-type(3)': { animationDelay: '0.4s' },
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    background: `
+        radial-gradient(ellipse 80% 60% at 50% -20%, rgba(99,102,241,0.15), transparent),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(139,92,246,0.1), transparent),
+        radial-gradient(ellipse 40% 40% at 20% 70%, rgba(34,211,238,0.06), transparent),
+        #030712
+    `,
+    position: 'relative',
+    overflow: 'hidden',
 });
 
-const RightPanel = styled(Box)({
-    flex: 1,
-    backgroundColor: '#F9FAFB',
+const GlassCard = styled(Box)({
+    width: '100%',
+    maxWidth: 450,
+    padding: '48px 44px',
+    borderRadius: 36,
+    backdropFilter: 'blur(40px)',
+    background: 'rgba(15,15,25,0.6)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    boxShadow: `
+        0 32px 80px rgba(0,0,0,0.5),
+        0 0 120px rgba(99,102,241,0.05),
+        inset 0 1px 0 rgba(255,255,255,0.03)
+    `,
+    animation: `${fadeIn} 0.6s cubic-bezier(0.16, 1, 0.3, 1)`,
+    position: 'relative',
+    zIndex: 1,
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        inset: -1,
+        borderRadius: 36,
+        padding: 1,
+        background: 'linear-gradient(135deg, rgba(99,102,241,0.2), transparent 40%, transparent 60%, rgba(16,185,129,0.15))',
+        WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+        WebkitMaskComposite: 'xor',
+        maskComposite: 'exclude',
+        pointerEvents: 'none',
+    },
+});
+
+const LogoBox = styled(Box)({
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    background: 'linear-gradient(135deg, #10B981, #059669, #10B981)',
+    backgroundSize: '200% 200%',
+    animation: `${shimmer} 3s ease infinite, ${pulse} 2s ease-in-out infinite`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    margin: '0 auto 28px',
     position: 'relative',
-});
-
-const FormCard = styled(Box)({
-    backgroundColor: BG_CARD,
-    borderRadius: 28,
-    padding: '48px 44px',
-    width: '100%',
-    maxWidth: 440,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 40px rgba(0,0,0,0.04)',
-    animation: `${fadeSlideUp} 0.5s ease`,
-    position: 'relative',
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        inset: -4,
+        borderRadius: 26,
+        background: 'linear-gradient(135deg, rgba(16,185,129,0.4), rgba(5,150,105,0.2))',
+        filter: 'blur(12px)',
+        zIndex: -1,
+        animation: `${glow} 2s ease-in-out infinite`,
+    },
 });
 
 const StyledInput = styled(TextField)({
+    marginBottom: 18,
     '& .MuiOutlinedInput-root': {
-        borderRadius: 16,
-        backgroundColor: '#F9FAFB',
-        transition: 'all 0.25s ease',
+        borderRadius: 18,
+        background: 'rgba(255,255,255,0.02)',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         fontSize: '0.95rem',
-        '& fieldset': { 
-            borderColor: BORDER_LIGHT,
-            borderWidth: 1.5,
+        '& fieldset': {
+            borderColor: 'rgba(255,255,255,0.06)',
+            borderWidth: 1,
         },
-        '&:hover fieldset': { 
-            borderColor: '#D1D5DB',
+        '&:hover fieldset': {
+            borderColor: 'rgba(255,255,255,0.12)',
         },
-        '&.Mui-focused fieldset': { 
-            borderColor: INDIGO, 
-            borderWidth: 2,
+        '&.Mui-focused': {
+            background: 'rgba(16,185,129,0.04)',
+            '& fieldset': {
+                borderColor: EMERALD,
+                borderWidth: 1.5,
+                boxShadow: '0 0 0 4px rgba(16,185,129,0.08), 0 0 20px rgba(16,185,129,0.06)',
+            },
         },
         '&.Mui-error fieldset': {
-            borderColor: ROSE,
+            borderColor: '#EF4444',
+            boxShadow: '0 0 0 4px rgba(239,68,68,0.08)',
         },
     },
-    '& .MuiInputBase-input': { 
-        padding: '16px 18px',
-        '&::placeholder': {
-            color: '#9CA3AF',
-            opacity: 1,
-        },
+    '& .MuiInputBase-input': {
+        padding: '15px 18px',
+        color: TEXT_PRIMARY,
+        '&::placeholder': { color: TEXT_TERTIARY, opacity: 1 },
     },
-    '& .MuiInputAdornment-root': {
-        marginLeft: 4,
-    },
+    '& .MuiInputAdornment-root': { color: TEXT_TERTIARY },
 });
 
-const PrimaryButton = styled(Button)({
-    borderRadius: 16,
+const SubmitButton = styled(Button)({
+    height: 54,
+    borderRadius: 18,
     textTransform: 'none',
-    fontWeight: 600,
-    padding: '15px 28px',
+    fontWeight: 700,
     fontSize: '1rem',
+    letterSpacing: '-0.01em',
+    background: 'linear-gradient(135deg, #10B981, #059669, #10B981)',
+    backgroundSize: '200% 200%',
+    animation: `${shimmer} 4s ease infinite`,
+    boxShadow: '0 8px 32px rgba(16,185,129,0.25), 0 0 60px rgba(16,185,129,0.1)',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     position: 'relative',
     overflow: 'hidden',
-    letterSpacing: '-0.01em',
-    transition: 'all 0.3s cubic-bezier(0.4, 1.2, 0.7, 1)',
-    '&:hover': {
-        transform: 'translateY(-1px)',
-    },
-    '&:active': {
-        transform: 'scale(0.98)',
-    },
-    '&::after': {
+    '&::before': {
         content: '""',
         position: 'absolute',
         top: 0,
@@ -196,76 +232,126 @@ const PrimaryButton = styled(Button)({
         width: '100%',
         height: '100%',
         background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
-        transition: 'left 0.6s ease',
+        transition: 'left 0.7s ease',
     },
-    '&:hover::after': {
-        left: '100%',
+    '&:hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: '0 16px 40px rgba(16,185,129,0.35), 0 0 80px rgba(16,185,129,0.15)',
+        '&::before': { left: '100%' },
+    },
+    '&:active': { transform: 'scale(0.97)' },
+    '&.Mui-disabled': {
+        background: 'rgba(255,255,255,0.05)',
+        color: TEXT_TERTIARY,
+        boxShadow: 'none',
+        animation: 'none',
+    },
+});
+
+const OAuthButton = styled(Button)({
+    height: 50,
+    borderRadius: 16,
+    textTransform: 'none',
+    fontWeight: 500,
+    fontSize: '0.9rem',
+    background: 'rgba(255,255,255,0.02)',
+    color: TEXT_PRIMARY,
+    border: '1px solid rgba(255,255,255,0.06)',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    position: 'relative',
+    overflow: 'hidden',
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        inset: 0,
+        background: 'linear-gradient(135deg, rgba(16,185,129,0.08), transparent)',
+        opacity: 0,
+        transition: 'opacity 0.3s ease',
+    },
+    '&:hover': {
+        background: 'rgba(255,255,255,0.04)',
+        borderColor: 'rgba(255,255,255,0.14)',
+        transform: 'translateY(-1px)',
+        '&::after': { opacity: 1 },
+    },
+});
+
+const TextLink = styled(Button)({
+    color: EMERALD,
+    textTransform: 'none',
+    fontWeight: 500,
+    fontSize: '0.85rem',
+    padding: 0,
+    minWidth: 'auto',
+    position: 'relative',
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        bottom: -1,
+        left: 0,
+        width: '100%',
+        height: 1,
+        background: 'linear-gradient(90deg, #10B981, #059669)',
+        transform: 'scaleX(0)',
+        transformOrigin: 'right',
+        transition: 'transform 0.3s ease',
+    },
+    '&:hover': {
+        color: '#34D399',
+        background: 'transparent',
+        '&::after': {
+            transform: 'scaleX(1)',
+            transformOrigin: 'left',
+        },
     },
 });
 
 const CodeInput = styled(TextField)({
     '& .MuiOutlinedInput-root': {
         borderRadius: 18,
-        backgroundColor: '#F9FAFB',
-        transition: 'all 0.25s ease',
-        '& fieldset': { 
-            borderColor: BORDER_LIGHT,
+        background: 'rgba(255,255,255,0.02)',
+        '& fieldset': { borderColor: 'rgba(255,255,255,0.06)', borderWidth: 1 },
+        '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
+        '&.Mui-focused fieldset': {
+            borderColor: EMERALD,
             borderWidth: 1.5,
-        },
-        '&:hover fieldset': { 
-            borderColor: '#D1D5DB',
-        },
-        '&.Mui-focused fieldset': { 
-            borderColor: INDIGO, 
-            borderWidth: 2,
+            boxShadow: '0 0 0 4px rgba(16,185,129,0.08)',
         },
         '&.Mui-error fieldset': {
-            borderColor: ROSE,
-            animation: `${subtleShake} 0.4s ease`,
+            borderColor: '#EF4444',
+            animation: `${shake} 0.4s ease`,
         },
     },
-    '& input': { 
-        fontSize: '32px', 
-        fontWeight: 700, 
-        letterSpacing: '14px', 
-        textAlign: 'center', 
-        padding: '18px 12px',
+    '& input': {
+        fontSize: '28px',
+        fontWeight: 700,
+        letterSpacing: '12px',
+        textAlign: 'center',
+        padding: '16px 12px',
         fontFamily: '"SF Mono", "Fira Code", monospace',
         color: TEXT_PRIMARY,
-        caretColor: INDIGO,
+        caretColor: EMERALD,
     },
 });
-
-const FeatureIconWrapper = styled(Box)(({ bgcolor }) => ({
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    background: bgcolor,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    fontSize: '1.3rem',
-    boxShadow: `0 4px 12px ${bgcolor}44`,
-}));
 
 const EmailBadge = styled(Box)({
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#EEF2FF',
-    color: INDIGO,
-    padding: '6px 14px',
-    borderRadius: 20,
+    gap: 8,
+    background: 'rgba(16,185,129,0.1)',
+    color: '#34D399',
+    padding: '8px 16px',
+    borderRadius: 12,
     fontSize: '0.85rem',
-    fontWeight: 600,
-    marginTop: 8,
+    fontWeight: 500,
+    border: '1px solid rgba(16,185,129,0.2)',
 });
 
-// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
+// ========== КОМПОНЕНТ ==========
 const Register = () => {
     const navigate = useNavigate();
-    const { register, login } = useAuth();
+    const { register } = useAuth();
+
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({ fullName: '', email: '', password: '' });
     const [agree, setAgree] = useState(false);
@@ -273,29 +359,25 @@ const Register = () => {
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [shakeError, setShakeError] = useState(false);
-    
+    const [shakeForm, setShakeForm] = useState(false);
+    const [isFocused, setIsFocused] = useState({ fullName: false, email: false, password: false });
+
     // Шаг 2
     const [verificationCode, setVerificationCode] = useState('');
     const [codeError, setCodeError] = useState(false);
     const [timer, setTimer] = useState(120);
     const [canResend, setCanResend] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
-    
-    const codeInputRef = useRef(null);
-    const formRef = useRef(null);
 
-    // Таймер для повторной отправки кода
+    const codeInputRef = useRef(null);
+
     useEffect(() => {
         let interval;
-        if (step === 2 && timer > 0) {
-            interval = setInterval(() => setTimer(t => t - 1), 1000);
-        }
+        if (step === 2 && timer > 0) interval = setInterval(() => setTimer(t => t - 1), 1000);
         if (timer === 0) setCanResend(true);
         return () => clearInterval(interval);
     }, [step, timer]);
 
-    // Фокус на поле кода при переходе на шаг 2
     useEffect(() => {
         if (step === 2 && codeInputRef.current) {
             setTimeout(() => codeInputRef.current?.focus(), 300);
@@ -305,54 +387,41 @@ const Register = () => {
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
         if (error) setError('');
-        if (shakeError) setShakeError(false);
     };
 
     const validateForm = () => {
-        if (!formData.fullName.trim()) {
-            setError('Как к вам обращаться?');
-            return false;
-        }
-        if (!formData.email.includes('@') || !formData.email.includes('.')) {
-            setError('Похоже, email указан неверно');
-            return false;
-        }
-        if (formData.password.length < 6) {
-            setError('Пароль должен быть минимум 6 символов');
-            return false;
-        }
-        if (!agree) {
-            setError('Нужно принять условия использования');
-            return false;
-        }
+        if (!formData.fullName.trim()) { setError('Укажите имя и фамилию'); return false; }
+        if (!formData.email.includes('@') || !formData.email.includes('.')) { setError('Проверьте email — кажется, там опечатка'); return false; }
+        if (formData.password.length < 6) { setError('Пароль должен быть минимум 6 символов'); return false; }
+        if (!agree) { setError('Нужно принять условия использования'); return false; }
         return true;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!validateForm()) {
-            setShakeError(true);
-            setTimeout(() => setShakeError(false), 500);
+            setShakeForm(true);
+            setTimeout(() => setShakeForm(false), 400);
             return;
         }
-        
+
         setError('');
         setSuccess('');
         setLoading(true);
-        
+
         try {
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
             const params = new URLSearchParams(window.location.search);
             const refCode = params.get('ref') || '';
-            
+
             const response = await axiosInstance.post('/auth/register', {
                 fullName: formData.fullName.trim(),
                 email: formData.email.trim().toLowerCase(),
                 password: formData.password,
                 timezone,
-                ref: refCode
+                ref: refCode,
             });
-            
+
             if (response.data.requiresVerification) {
                 setRegisteredEmail(formData.email.trim().toLowerCase());
                 setStep(2);
@@ -360,24 +429,12 @@ const Register = () => {
                 setCanResend(false);
                 setVerificationCode('');
             } else {
-                const result = await register(
-                    formData.fullName.trim(), 
-                    formData.email.trim().toLowerCase(), 
-                    formData.password, 
-                    timezone, 
-                    refCode
-                );
-                if (result?.error) {
-                    setError(result.error);
-                } else {
-                    navigate('/onboarding', { replace: true });
-                }
+                const result = await register(formData.fullName.trim(), formData.email.trim().toLowerCase(), formData.password, timezone, refCode);
+                if (result?.error) setError(result.error);
+                else navigate('/onboarding', { replace: true });
             }
         } catch (err) {
-            const errorMessage = err.response?.data?.error || 
-                                 err.response?.data?.message ||
-                                 'Что-то пошло не так. Попробуйте ещё раз.';
-            setError(errorMessage);
+            setError(err.response?.data?.error || 'Что-то пошло не так. Попробуйте позже.');
         } finally {
             setLoading(false);
         }
@@ -389,25 +446,25 @@ const Register = () => {
             setError('Введите все 6 цифр');
             return;
         }
-        
+
         setLoading(true);
         setError('');
         setCodeError(false);
-        
+
         try {
             const response = await axiosInstance.post('/auth/verify-email', {
                 email: registeredEmail,
-                code: verificationCode
+                code: verificationCode,
             });
-            
+
             localStorage.setItem('token', response.data.token);
             localStorage.setItem('user', JSON.stringify({
                 id: response.data.id,
                 email: response.data.email,
                 fullName: response.data.fullName,
-                role: 'tutor'
+                role: 'tutor',
             }));
-            
+
             navigate('/onboarding', { replace: true });
         } catch (err) {
             setError(err.response?.data?.error || 'Неверный код. Проверьте и попробуйте снова.');
@@ -423,15 +480,13 @@ const Register = () => {
         setLoading(true);
         setError('');
         try {
-            await axiosInstance.post('/auth/resend-code', {
-                email: registeredEmail
-            });
+            await axiosInstance.post('/auth/resend-code', { email: registeredEmail });
             setTimer(120);
             setCanResend(false);
             setSuccess('Новый код отправлен! Проверьте почту.');
             setVerificationCode('');
             codeInputRef.current?.focus();
-        } catch (err) {
+        } catch {
             setError('Не получилось отправить код. Попробуйте позже.');
         } finally {
             setLoading(false);
@@ -445,185 +500,151 @@ const Register = () => {
         if (error) setError('');
     };
 
-    const handleBackToForm = () => {
-        setStep(1);
-        setVerificationCode('');
-        setError('');
-        setSuccess('');
-        setCodeError(false);
-        setTimer(120);
-        setCanResend(false);
-    };
-
-    // Обработка вставки кода
     const handlePaste = (e) => {
         e.preventDefault();
         const pasted = (e.clipboardData || window.clipboardData).getData('text');
         const digits = pasted.replace(/[^0-9]/g, '').substring(0, 6);
         setVerificationCode(digits);
-        if (digits.length === 6) {
-            setCodeError(false);
-        }
+        if (digits.length === 6) setCodeError(false);
     };
 
-    const features = [
-        { 
-            icon: '📅', 
-            text: 'Расписание на месяц вперёд',
-            subtext: 'Автоматически, без ручного ввода',
-            bgcolor: '#EEF2FF'
-        },
-        { 
-            icon: '💰', 
-            text: 'Учёт доходов и платежей',
-            subtext: 'Чеки, статистика, напоминания',
-            bgcolor: '#ECFDF5'
-        },
-        { 
-            icon: '🎥', 
-            text: 'Видеоуроки без установки',
-            subtext: 'Zoom, Телемост — что удобно',
-            bgcolor: '#FFF7ED'
-        },
-    ];
-
-    const formatTime = (seconds) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
+    const formatTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
     return (
         <PageWrapper>
-            {/* ========== ЛЕВАЯ ПАНЕЛЬ (десктоп) ========== */}
-            <LeftPanel sx={{ display: { xs: 'none', md: 'flex' } }}>
-                <GridOverlay />
-                <FloatingOrb size={400} color={INDIGO} top={20} left={10} delay={0} duration={5} />
-                <FloatingOrb size={300} color={EMERALD} top={60} left={60} delay={1.5} duration={6} />
-                <FloatingOrb size={250} color={AMBER} top={30} left={50} delay={3} duration={7} />
-                
-                <Box sx={{ position: 'relative', zIndex: 1, maxWidth: 380, textAlign: 'center' }}>
-                    {/* Логотип */}
-                    <Box sx={{ mb: 5 }}>
-                        <Box sx={{ 
-                            width: 56, height: 56, borderRadius: 18, 
-                            background: `linear-gradient(135deg, ${INDIGO}, ${INDIGO_LIGHT})`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                            margin: '0 auto',
-                            fontSize: 26, 
-                            fontWeight: 800,
-                            boxShadow: `0 12px 40px ${INDIGO}55`,
-                            animation: `${gentleFloat} 4s ease-in-out infinite`,
+            <Particles />
+
+            {/* Орбитальное кольцо */}
+            <Box sx={{
+                position: 'absolute',
+                width: 300,
+                height: 300,
+                borderRadius: '50%',
+                border: '1px solid rgba(16,185,129,0.08)',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                pointerEvents: 'none',
+                zIndex: 0,
+            }}>
+                <Box sx={{
+                    position: 'absolute',
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: EMERALD,
+                    boxShadow: '0 0 12px rgba(16,185,129,0.8)',
+                    animation: `${orbit} 8s linear infinite`,
+                }} />
+            </Box>
+
+            <GlassCard sx={{ 
+                animation: shakeForm 
+                    ? `${fadeIn} 0.6s cubic-bezier(0.16, 1, 0.3, 1), ${shake} 0.4s ease` 
+                    : `${fadeIn} 0.6s cubic-bezier(0.16, 1, 0.3, 1)`,
+            }}>
+                {step === 1 ? (
+                    <>
+                        {/* Логотип */}
+                        <LogoBox>
+                            <AutoAwesome sx={{ fontSize: 30, color: '#fff', animation: `${float} 3s ease-in-out infinite` }} />
+                        </LogoBox>
+
+                        {/* Заголовок */}
+                        <Typography sx={{
+                            fontSize: '1.6rem', fontWeight: 800, color: TEXT_PRIMARY,
+                            textAlign: 'center', mb: 0.5, letterSpacing: '-0.03em',
                         }}>
-                            E
-                        </Box>
-                    </Box>
-                    
-                    <Typography sx={{ 
-                        fontSize: '2.2rem', fontWeight: 800, color: '#FFFFFF', mb: 2,
-                        letterSpacing: '-0.03em', lineHeight: 1.15,
-                    }}>
-                        {step === 1 ? 'Начните за пару минут' : 'Почти готово!'}
-                    </Typography>
-                    
-                    <Typography sx={{ color: '#94A3B8', fontSize: '1rem', mb: 5, lineHeight: 1.6 }}>
-                        {step === 1 
-                            ? 'Присоединяйтесь к платформе, где уже работают сотни репетиторов.'
-                            : `Код подтверждения отправлен на почту. Обычно приходит за пару секунд.`
-                        }
-                    </Typography>
-                    
-                    {step === 1 ? (
-                        features.map((f, i) => (
-                            <FeatureRow key={i}>
-                                <FeatureIconWrapper bgcolor={f.bgcolor}>
-                                    {f.icon}
-                                </FeatureIconWrapper>
-                                <Box sx={{ textAlign: 'left' }}>
-                                    <Typography sx={{ color: '#E2E8F0', fontWeight: 600, fontSize: '0.95rem', mb: 0.3 }}>
-                                        {f.text}
-                                    </Typography>
-                                    <Typography sx={{ color: '#64748B', fontSize: '0.82rem' }}>
-                                        {f.subtext}
-                                    </Typography>
-                                </Box>
-                            </FeatureRow>
-                        ))
-                    ) : (
-                        <Box sx={{ textAlign: 'center' }}>
-                            <Box sx={{ fontSize: '5rem', mb: 3, animation: `${gentleFloat} 3s ease-in-out infinite` }}>
-                                📬
-                            </Box>
-                            <EmailBadge sx={{ mx: 'auto', display: 'inline-flex', mb: 2 }}>
-                                <Email sx={{ fontSize: 14 }} />
-                                {registeredEmail}
-                            </EmailBadge>
-                            <Typography sx={{ color: '#94A3B8', fontSize: '0.9rem', mt: 3, lineHeight: 1.6 }}>
-                                Не пришло? Проверьте папку «Спам» или запросите новый код.
+                            Создать аккаунт
+                        </Typography>
+                        <Typography sx={{
+                            color: TEXT_SECONDARY, fontSize: '0.9rem',
+                            textAlign: 'center', mb: 4,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
+                        }}>
+                            <Stars sx={{ fontSize: 16, color: EMERALD }} />
+                            Бесплатно 14 дней, потом 499 ₽/мес
+                            <Stars sx={{ fontSize: 16, color: CYAN }} />
+                        </Typography>
+
+                        {/* OAuth */}
+                        <Stack spacing={1.5} sx={{ mb: 2.5 }}>
+                            <OAuthButton
+                                fullWidth
+                                onClick={() => window.location.href = 'https://ed-space.ru/api/auth/vk/login'}                                startIcon={
+                                    <Box component="img" src="/vk.svg" sx={{ width: 20, height: 20, filter: 'brightness(1.2)' }} />
+                                }
+                            >
+                                Продолжить через VK
+                            </OAuthButton>
+                            <OAuthButton
+                                fullWidth
+                                onClick={() => window.location.href = 'https://ed-space.ru/api/auth/yandex/login'}
+                                startIcon={
+                                    <Box component="img" src="/yandex.svg" sx={{ width: 20, height: 20, filter: 'brightness(1.2)' }} />
+                                }
+                            >
+                                Продолжить через Яндекс
+                            </OAuthButton>
+                        </Stack>
+
+                        <Typography sx={{ textAlign: 'center', color: TEXT_TERTIARY, fontSize: '0.75rem', mb: 2.5 }}>
+                            Без пароля, в один клик
+                        </Typography>
+
+                        <Divider sx={{ mb: 2.5, '&::before, &::after': { borderColor: 'rgba(255,255,255,0.06)' } }}>
+                            <Typography sx={{ color: TEXT_TERTIARY, fontSize: '0.75rem', px: 2.5, letterSpacing: '0.03em' }}>
+                                или по email
                             </Typography>
-                        </Box>
-                    )}
-                </Box>
-            </LeftPanel>
+                        </Divider>
 
-            {/* ========== ПРАВАЯ ПАНЕЛЬ (форма) ========== */}
-            <RightPanel>
-                <FormCard ref={formRef} sx={{ 
-                    animation: shakeError ? `${subtleShake} 0.5s ease` : `${fadeSlideUp} 0.5s ease`,
-                }}>
-                    {step === 1 ? (
-                        <>
-                            {/* Заголовок */}
-                            <Box sx={{ textAlign: 'center', mb: 5 }}>
-                                <Typography sx={{ 
-                                    fontSize: '1.8rem', fontWeight: 800, color: TEXT_PRIMARY, mb: 0.5,
-                                    letterSpacing: '-0.02em',
-                                }}>
-                                    Регистрация
-                                </Typography>
-                                <Typography sx={{ color: TEXT_SECONDARY, fontSize: '0.95rem' }}>
-                                    Бесплатно 14 дней, потом 499 ₽/мес
-                                </Typography>
-                            </Box>
+                        {error && (
+                            <Fade in>
+                                <Alert
+                                    severity="error"
+                                    sx={{
+                                        mb: 3, borderRadius: 3,
+                                        background: 'rgba(239,68,68,0.06)',
+                                        color: '#FCA5A5',
+                                        border: '1px solid rgba(239,68,68,0.15)',
+                                        backdropFilter: 'blur(20px)',
+                                        '& .MuiAlert-icon': { color: '#EF4444' },
+                                        animation: `${fadeIn} 0.3s ease`,
+                                    }}
+                                    onClose={() => setError('')}
+                                >
+                                    {error}
+                                </Alert>
+                            </Fade>
+                        )}
 
-                            {/* Ошибка */}
-                            {error && (
-                                <Fade in>
-                                    <Alert 
-                                        severity="error" 
-                                        sx={{ 
-                                            mb: 3, borderRadius: 3, 
-                                            backgroundColor: '#FEF2F2', 
-                                            color: ROSE,
-                                            '& .MuiAlert-icon': { color: ROSE },
-                                        }}
-                                        onClose={() => setError('')}
-                                    >
-                                        {error}
-                                    </Alert>
-                                </Fade>
-                            )}
-
-                            {/* Форма */}
-                            <form onSubmit={handleSubmit} noValidate>
+                        <form onSubmit={handleSubmit} noValidate>
+                            <Box sx={{ position: 'relative' }}>
                                 <StyledInput
                                     fullWidth
                                     placeholder="Имя и фамилия"
                                     name="fullName"
                                     value={formData.fullName}
                                     onChange={handleChange}
+                                    onFocus={() => setIsFocused(f => ({ ...f, fullName: true }))}
+                                    onBlur={() => setIsFocused(f => ({ ...f, fullName: false }))}
                                     autoComplete="name"
                                     autoFocus
-                                    sx={{ mb: 2.5 }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <Person sx={{ color: '#9CA3AF', fontSize: 22 }} />
+                                                <Person sx={{ 
+                                                    fontSize: 20,
+                                                    color: isFocused.fullName ? EMERALD : TEXT_TERTIARY,
+                                                    transition: 'color 0.3s ease',
+                                                }} />
                                             </InputAdornment>
                                         ),
                                     }}
                                 />
-                                
+                            </Box>
+
+                            <Box sx={{ position: 'relative' }}>
                                 <StyledInput
                                     fullWidth
                                     placeholder="Email"
@@ -631,17 +652,24 @@ const Register = () => {
                                     type="email"
                                     value={formData.email}
                                     onChange={handleChange}
+                                    onFocus={() => setIsFocused(f => ({ ...f, email: true }))}
+                                    onBlur={() => setIsFocused(f => ({ ...f, email: false }))}
                                     autoComplete="email"
-                                    sx={{ mb: 2.5 }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <Email sx={{ color: '#9CA3AF', fontSize: 22 }} />
+                                                <Email sx={{ 
+                                                    fontSize: 20,
+                                                    color: isFocused.email ? EMERALD : TEXT_TERTIARY,
+                                                    transition: 'color 0.3s ease',
+                                                }} />
                                             </InputAdornment>
                                         ),
                                     }}
                                 />
-                                
+                            </Box>
+
+                            <Box sx={{ position: 'relative' }}>
                                 <StyledInput
                                     fullWidth
                                     placeholder="Пароль (от 6 символов)"
@@ -649,21 +677,25 @@ const Register = () => {
                                     type={showPassword ? 'text' : 'password'}
                                     value={formData.password}
                                     onChange={handleChange}
+                                    onFocus={() => setIsFocused(f => ({ ...f, password: true }))}
+                                    onBlur={() => setIsFocused(f => ({ ...f, password: false }))}
                                     autoComplete="new-password"
-                                    sx={{ mb: 3 }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <Lock sx={{ color: '#9CA3AF', fontSize: 22 }} />
+                                                <Lock sx={{ 
+                                                    fontSize: 20,
+                                                    color: isFocused.password ? EMERALD : TEXT_TERTIARY,
+                                                    transition: 'color 0.3s ease',
+                                                }} />
                                             </InputAdornment>
                                         ),
                                         endAdornment: (
                                             <InputAdornment position="end">
-                                                <IconButton 
-                                                    onClick={() => setShowPassword(!showPassword)} 
-                                                    edge="end" 
-                                                    sx={{ color: '#9CA3AF' }}
-                                                    tabIndex={-1}
+                                                <IconButton
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    edge="end"
+                                                    sx={{ color: TEXT_TERTIARY, '&:hover': { color: TEXT_PRIMARY } }}
                                                 >
                                                     {showPassword ? <VisibilityOff /> : <Visibility />}
                                                 </IconButton>
@@ -671,227 +703,170 @@ const Register = () => {
                                         ),
                                     }}
                                 />
-
-                                {/* Чекбокс */}
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox 
-                                            checked={agree} 
-                                            onChange={(e) => setAgree(e.target.checked)} 
-                                            sx={{ 
-                                                color: '#D1D5DB',
-                                                '&.Mui-checked': { color: INDIGO },
-                                            }} 
-                                        />
-                                    }
-                                    label={
-                                        <Typography sx={{ fontSize: '0.85rem', color: TEXT_SECONDARY }}>
-                                            Принимаю{' '}
-                                            <Box 
-                                                component="a" 
-                                                href="/privacy" 
-                                                target="_blank"
-                                                sx={{ 
-                                                    color: INDIGO, 
-                                                    textDecoration: 'underline',
-                                                    textUnderlineOffset: 2,
-                                                    '&:hover': { color: INDIGO_DARK },
-                                                }}
-                                            >
-                                                условия использования
-                                            </Box>
-                                        </Typography>
-                                    }
-                                    sx={{ mb: 3, ml: -1 }}
-                                />
-
-                                {/* Кнопка */}
-                                <PrimaryButton
-                                    type="submit"
-                                    fullWidth
-                                    variant="contained"
-                                    disabled={loading}
-                                    sx={{ 
-                                        bgcolor: EMERALD, 
-                                        '&:hover': { bgcolor: '#047857' },
-                                        mb: 3,
-                                        boxShadow: `0 4px 16px ${EMERALD}44`,
-                                    }}
-                                >
-                                    {loading ? (
-                                        <CircularProgress size={24} sx={{ color: 'white' }} />
-                                    ) : (
-                                        <>
-                                            Создать аккаунт
-                                            <ArrowForward sx={{ ml: 1, fontSize: 20 }} />
-                                        </>
-                                    )}
-                                </PrimaryButton>
-                            </form>
-
-                            <Divider sx={{ my: 3, '&::before, &::after': { borderColor: BORDER_LIGHT } }}>
-                                <Typography sx={{ color: TEXT_SECONDARY, fontSize: '0.8rem', px: 1.5 }}>
-                                    уже есть аккаунт
-                                </Typography>
-                            </Divider>
-
-                            <Button
-                                fullWidth
-                                onClick={() => navigate('/login')}
-                                sx={{ 
-                                    color: INDIGO, 
-                                    textTransform: 'none', 
-                                    fontWeight: 600, 
-                                    fontSize: '0.95rem',
-                                    borderRadius: 3,
-                                    py: 1.5,
-                                    '&:hover': { backgroundColor: '#EEF2FF' },
-                                }}
-                            >
-                                Войти
-                            </Button>
-                        </>
-                    ) : (
-                        /* ========== ШАГ 2: ПОДТВЕРЖДЕНИЕ ========== */
-                        <>
-                            {/* Кнопка назад */}
-                            <Box sx={{ mb: 4 }}>
-                                <IconButton 
-                                    onClick={handleBackToForm} 
-                                    sx={{ 
-                                        color: TEXT_SECONDARY,
-                                        '&:hover': { color: TEXT_PRIMARY, backgroundColor: '#F3F4F6' },
-                                    }}
-                                >
-                                    <ArrowBack />
-                                </IconButton>
                             </Box>
-                            
-                            <Typography sx={{ 
-                                fontSize: '1.5rem', fontWeight: 800, color: TEXT_PRIMARY, mb: 1,
-                                letterSpacing: '-0.02em',
-                            }}>
-                                Код из письма
-                            </Typography>
-                            
-                            <Typography sx={{ color: TEXT_SECONDARY, mb: 1, fontSize: '0.9rem', lineHeight: 1.5 }}>
-                                Мы отправили 6 цифр на
-                            </Typography>
-                            
-                            <EmailBadge sx={{ mb: 4 }}>
-                                <Email sx={{ fontSize: 14 }} />
-                                {registeredEmail}
-                            </EmailBadge>
 
-                            {error && (
-                                <Fade in>
-                                    <Alert 
-                                        severity="error" 
-                                        sx={{ 
-                                            mb: 3, borderRadius: 3,
-                                            backgroundColor: '#FEF2F2',
-                                            color: ROSE,
-                                            '& .MuiAlert-icon': { color: ROSE },
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={agree}
+                                        onChange={(e) => setAgree(e.target.checked)}
+                                        sx={{
+                                            color: 'rgba(255,255,255,0.12)',
+                                            '&.Mui-checked': { color: EMERALD },
                                         }}
-                                    >
-                                        {error}
-                                    </Alert>
-                                </Fade>
-                            )}
-                            
-                            {success && (
-                                <Fade in>
-                                    <Alert 
-                                        severity="success" 
-                                        sx={{ 
-                                            mb: 3, borderRadius: 3,
-                                            backgroundColor: EMERALD_LIGHT,
-                                            color: EMERALD,
-                                            '& .MuiAlert-icon': { color: EMERALD },
-                                        }}
-                                    >
-                                        {success}
-                                    </Alert>
-                                </Fade>
-                            )}
-
-                            {/* Поле ввода кода */}
-                            <CodeInput
-                                fullWidth
-                                value={verificationCode}
-                                onChange={handleCodeChange}
-                                onPaste={handlePaste}
-                                placeholder="000000"
-                                inputProps={{ 
-                                    maxLength: 6, 
-                                    inputMode: 'numeric', 
-                                    autoComplete: 'one-time-code',
-                                    ref: codeInputRef,
-                                }}
-                                error={codeError}
-                                sx={{ mb: 3 }}
+                                    />
+                                }
+                                label={
+                                    <Typography sx={{ fontSize: '0.8rem', color: TEXT_SECONDARY }}>
+                                        Принимаю{' '}
+                                        <Box
+                                            component="a"
+                                            href="/privacy"
+                                            target="_blank"
+                                            sx={{
+                                                color: EMERALD,
+                                                textDecoration: 'underline',
+                                                textUnderlineOffset: 2,
+                                                '&:hover': { color: '#34D399' },
+                                            }}
+                                        >
+                                            условия использования
+                                        </Box>
+                                    </Typography>
+                                }
+                                sx={{ mb: 3, ml: -1 }}
                             />
 
-                            {/* Подсказка */}
-                            <Typography sx={{ 
-                                textAlign: 'center', 
-                                color: TEXT_SECONDARY, 
-                                fontSize: '0.8rem',
-                                mb: 3,
-                            }}>
-                                {verificationCode.length}/6 цифр
-                            </Typography>
-
-                            {/* Кнопка подтверждения */}
-                            <PrimaryButton
-                                fullWidth
-                                variant="contained"
-                                disabled={loading || verificationCode.length !== 6}
-                                onClick={handleVerifyCode}
-                                sx={{ 
-                                    bgcolor: INDIGO, 
-                                    '&:hover': { bgcolor: INDIGO_DARK },
-                                    mb: 2,
-                                    boxShadow: `0 4px 16px ${INDIGO}44`,
-                                }}
-                            >
+                            <SubmitButton type="submit" fullWidth disabled={loading}>
                                 {loading ? (
-                                    <CircularProgress size={24} sx={{ color: 'white' }} />
+                                    <CircularProgress size={22} sx={{ color: '#fff' }} />
                                 ) : (
                                     <>
-                                        Подтвердить
-                                        <CheckCircle sx={{ ml: 1, fontSize: 20 }} />
+                                        Создать аккаунт
+                                        <ArrowForward sx={{ ml: 1.5, fontSize: 20, animation: `${float} 2s ease-in-out infinite` }} />
                                     </>
                                 )}
-                            </PrimaryButton>
+                            </SubmitButton>
+                        </form>
 
-                            {/* Таймер / повторная отправка */}
-                            <Box sx={{ textAlign: 'center', mt: 2 }}>
-                                {canResend ? (
-                                    <Button 
-                                        onClick={handleResendCode} 
-                                        disabled={loading}
-                                        startIcon={<Refresh />}
-                                        sx={{ 
-                                            color: INDIGO, 
-                                            textTransform: 'none', 
-                                            fontWeight: 600,
-                                            fontSize: '0.9rem',
-                                            '&:hover': { backgroundColor: '#EEF2FF' },
-                                        }}
-                                    >
-                                        Отправить новый код
-                                    </Button>
-                                ) : (
-                                    <Typography sx={{ color: TEXT_SECONDARY, fontSize: '0.85rem' }}>
-                                        Отправить повторно через {formatTime(timer)}
-                                    </Typography>
-                                )}
-                            </Box>
-                        </>
-                    )}
-                </FormCard>
-            </RightPanel>
+                        <Box sx={{ textAlign: 'center', mt: 3.5 }}>
+                            <Typography sx={{ color: TEXT_SECONDARY, fontSize: '0.86rem', display: 'inline' }}>
+                                Уже есть аккаунт?{' '}
+                            </Typography>
+                            <TextLink onClick={() => navigate('/login')}>
+                                Войти
+                            </TextLink>
+                        </Box>
+                    </>
+                ) : (
+                    <>
+                        <IconButton
+                            onClick={() => { setStep(1); setError(''); setSuccess(''); }}
+                            sx={{ color: TEXT_SECONDARY, mb: 3, '&:hover': { color: TEXT_PRIMARY } }}
+                        >
+                            <ArrowBack />
+                        </IconButton>
+
+                        <Typography sx={{
+                            fontSize: '1.5rem', fontWeight: 800, color: TEXT_PRIMARY,
+                            mb: 1, letterSpacing: '-0.02em',
+                        }}>
+                            Код из письма
+                        </Typography>
+
+                        <Typography sx={{ color: TEXT_SECONDARY, fontSize: '0.9rem', mb: 3 }}>
+                            Мы отправили 6 цифр на
+                        </Typography>
+
+                        <EmailBadge sx={{ mb: 4 }}>
+                            <Email sx={{ fontSize: 14 }} />
+                            {registeredEmail}
+                        </EmailBadge>
+
+                        {error && (
+                            <Fade in>
+                                <Alert
+                                    severity="error"
+                                    sx={{
+                                        mb: 3, borderRadius: 3,
+                                        background: 'rgba(239,68,68,0.06)',
+                                        color: '#FCA5A5',
+                                        border: '1px solid rgba(239,68,68,0.15)',
+                                        '& .MuiAlert-icon': { color: '#EF4444' },
+                                    }}
+                                >
+                                    {error}
+                                </Alert>
+                            </Fade>
+                        )}
+
+                        {success && (
+                            <Fade in>
+                                <Alert
+                                    severity="success"
+                                    sx={{
+                                        mb: 3, borderRadius: 3,
+                                        background: 'rgba(16,185,129,0.06)',
+                                        color: '#6EE7B7',
+                                        border: '1px solid rgba(16,185,129,0.15)',
+                                        '& .MuiAlert-icon': { color: EMERALD },
+                                    }}
+                                >
+                                    {success}
+                                </Alert>
+                            </Fade>
+                        )}
+
+                        <CodeInput
+                            fullWidth
+                            value={verificationCode}
+                            onChange={handleCodeChange}
+                            onPaste={handlePaste}
+                            placeholder="000000"
+                            inputProps={{
+                                maxLength: 6,
+                                inputMode: 'numeric',
+                                autoComplete: 'one-time-code',
+                                ref: codeInputRef,
+                            }}
+                            error={codeError}
+                            sx={{ mb: 2 }}
+                        />
+
+                        <Typography sx={{ textAlign: 'center', color: TEXT_TERTIARY, fontSize: '0.8rem', mb: 3 }}>
+                            {verificationCode.length}/6 цифр
+                        </Typography>
+
+                        <SubmitButton
+                            fullWidth
+                            disabled={loading || verificationCode.length !== 6}
+                            onClick={handleVerifyCode}
+                            sx={{ mb: 2 }}
+                        >
+                            {loading ? (
+                                <CircularProgress size={22} sx={{ color: '#fff' }} />
+                            ) : (
+                                <>
+                                    Подтвердить
+                                    <CheckCircle sx={{ ml: 1.5, fontSize: 20 }} />
+                                </>
+                            )}
+                        </SubmitButton>
+
+                        <Box sx={{ textAlign: 'center' }}>
+                            {canResend ? (
+                                <TextLink onClick={handleResendCode} disabled={loading} startIcon={<Refresh />}>
+                                    Отправить новый код
+                                </TextLink>
+                            ) : (
+                                <Typography sx={{ color: TEXT_TERTIARY, fontSize: '0.8rem' }}>
+                                    Повторно через {formatTime(timer)}
+                                </Typography>
+                            )}
+                        </Box>
+                    </>
+                )}
+            </GlassCard>
         </PageWrapper>
     );
 };

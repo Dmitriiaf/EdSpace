@@ -83,6 +83,9 @@ public class TutorController {
             if (request.containsKey("experience")) tutor.setExperience(request.get("experience"));
             if (request.containsKey("source")) tutor.setSource(request.get("source"));
             if (request.containsKey("onboardingCompleted")) tutor.setOnboardingCompleted(Boolean.parseBoolean(request.get("onboardingCompleted")));
+            if (request.containsKey("password") && request.get("password") != null && !request.get("password").isEmpty()) {
+                tutor.setPasswordHash(tutorService.hashPassword(request.get("password")));
+            }
             tutorService.save(tutor);
 
             tutor.setPasswordHash(null);

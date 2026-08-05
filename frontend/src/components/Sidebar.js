@@ -48,6 +48,13 @@ const ICON_COLORS = {
     'Успеваемость': '#F59E0B',
 };
 
+// ========== TOUR TARGETS ==========
+const TOUR_TARGETS = {
+    'Ученики': 'students',
+    'Курсы': 'courses',
+    'Расписание': 'schedule',
+};
+
 // ========== СТИЛИ ==========
 const SidebarContainer = styled(Box)(({ collapsed }) => ({
     width: collapsed ? 68 : 260,
@@ -206,6 +213,7 @@ const Sidebar = () => {
     const handleMouseLeave = () => { if (!isMobile) setCollapsed(true); };
 
     const getIconColor = (label) => ICON_COLORS[label] || '#9CA3AF';
+    const getTourTarget = (label) => TOUR_TARGETS[label] || undefined;
 
     const menuGroups = isTutor ? [
         { title: 'Основное', items: [
@@ -319,9 +327,15 @@ const Sidebar = () => {
                         {group.items.map((item) => {
                             const active = isActive(item.path);
                             const color = getIconColor(item.label);
+                            const tourTarget = getTourTarget(item.label);
                             return (
                                 <ListItem key={item.path} disablePadding>
-                                    <NavButton onClick={() => handleNavigation(item.path)} active={active} iconcolor={color}>
+                                    <NavButton 
+                                        onClick={() => handleNavigation(item.path)} 
+                                        active={active} 
+                                        iconcolor={color}
+                                        data-tour={tourTarget}
+                                    >
                                         <ListItemIcon sx={{ color: active ? color : '#9CA3AF', minWidth: 40 }}>
                                             {iconMap[item.label] || <DashboardIcon />}
                                         </ListItemIcon>
@@ -399,11 +413,17 @@ const Sidebar = () => {
                         {group.items.map((item) => {
                             const active = isActive(item.path);
                             const color = getIconColor(item.label);
+                            const tourTarget = getTourTarget(item.label);
                             return (
                                 <ListItem key={item.path} disablePadding>
                                     <Tooltip title={collapsed ? item.label : ''} placement="right">
-                                        <NavButton onClick={() => handleNavigation(item.path)} active={active} iconcolor={color}
-                                            sx={{ justifyContent: collapsed ? 'center' : 'flex-start', px: collapsed ? 1.5 : 2 }}>
+                                        <NavButton 
+                                            onClick={() => handleNavigation(item.path)} 
+                                            active={active} 
+                                            iconcolor={color}
+                                            sx={{ justifyContent: collapsed ? 'center' : 'flex-start', px: collapsed ? 1.5 : 2 }}
+                                            data-tour={tourTarget}
+                                        >
                                             <ListItemIcon sx={{ color: active ? color : '#9CA3AF', minWidth: collapsed ? 0 : 40 }}>
                                                 {iconMap[item.label] || <DashboardIcon />}
                                             </ListItemIcon>

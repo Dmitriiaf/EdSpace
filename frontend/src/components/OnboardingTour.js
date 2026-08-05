@@ -1,288 +1,354 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Joyride, STATUS } from 'react-joyride';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Popper, Fade, Paper, Typography, Box, Button, keyframes } from '@mui/material';
+import { styled, alpha } from '@mui/material/styles';
 
-// Полный тур по всем страницам
-const tourSteps = {
-  '/dashboard': [
-    {
-      target: 'body',
-      title: '🎓 Добро пожаловать в EdSpace!',
-      content: 'Давайте познакомимся с платформой. Я покажу вам всё самое важное для комфортной работы с учениками. Этот тур займёт всего пару минут!',
-      placement: 'center',
-      disableBeacon: true,
-    },
-    {
-      target: '[data-tour="hero"]',
-      title: '📊 Главный дашборд',
-      content: 'Здесь отображаются все ваши уроки на сегодня. У каждого урока есть цветная метка статуса: зелёная — проведён, синяя — запланирован, красная — отменён.',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="date-nav"]',
-      title: '📅 Навигация по дням',
-      content: 'Используйте стрелки для переключения между днями. Кнопка «Сегодня» мгновенно вернёт вас к текущей дате.',
-      placement: 'bottom',
-    },
-    {
-      target: 'body',
-      title: '👥 Переходим к ученикам',
-      content: 'А теперь давайте посмотрим раздел «Ученики». Нажмите на соответствующий пункт в боковом меню слева, и я продолжу экскурсию там! 👈',
-      placement: 'center',
-    },
-  ],
-  '/students': [
-    {
-      target: '[data-tour="add-student-btn"]',
-      title: '➕ Добавление ученика',
-      content: 'Это главная кнопка для добавления новых учеников. Нажмите сюда, чтобы создать профиль ученика со всей необходимой информацией.',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="student-filters"]',
-      title: '🔍 Фильтры и поиск',
-      content: 'Здесь вы можете быстро найти нужного ученика по имени или отфильтровать список.',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="student-card"]',
-      title: '👤 Карточка ученика',
-      content: 'Нажмите на карточку ученика, чтобы открыть подробную информацию: контакты, история уроков, заметки и статистика.',
-      placement: 'right',
-    },
-    {
-      target: 'body',
-      title: '📅 Следующая остановка — Расписание',
-      content: 'Отлично! Теперь перейдите в раздел «Расписание» через боковое меню.',
-      placement: 'center',
-    },
-  ],
-  '/weekly-schedule': [
-    {
-      target: '[data-tour="add-template-btn"]',
-      title: '📝 Создание шаблона',
-      content: 'Шаблоны позволяют задать регулярное расписание. Укажите день недели, время и ученика — уроки будут создаваться автоматически.',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="template-list"]',
-      title: '📋 Список шаблонов',
-      content: 'Здесь отображаются все ваши шаблоны занятий. Любой шаблон можно изменить или удалить в пару кликов.',
-      placement: 'top',
-    },
-    {
-      target: '[data-tour="generate-lessons"]',
-      title: '⚡ Генерация уроков',
-      content: 'Нажмите, чтобы создать реальные уроки по всем активным шаблонам на выбранный период.',
-      placement: 'left',
-    },
-    {
-      target: 'body',
-      title: '💰 Переходим к финансам',
-      content: 'Теперь заглянем в раздел «Финансы». Нажмите на него в боковом меню.',
-      placement: 'center',
-    },
-  ],
-  '/finance': [
-    {
-      target: '[data-tour="finance-tabs"]',
-      title: '💎 Вкладки финансов',
-      content: 'Переключайтесь между вкладками: «Обзор», «Платежи», «Абонементы» и «Отчёт».',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="finance-overview"]',
-      title: '📈 Обзор финансов',
-      content: 'Здесь вы видите ключевые показатели: общий доход, доход по абонементам и поурочной оплате.',
-      placement: 'bottom',
-    },
-    {
-      target: 'body',
-      title: '📚 Последний раздел — Домашние задания',
-      content: 'Перейдите в «Домашние задания» через меню.',
-      placement: 'center',
-    },
-  ],
-  '/extracurricular': [
-    {
-      target: '[data-tour="homework-assign-btn"]',
-      title: '✍️ Назначение ДЗ',
-      content: 'Нажмите сюда, чтобы создать новое домашнее задание для ученика.',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="homework-filters"]',
-      title: '🔎 Фильтры заданий',
-      content: 'Фильтруйте задания по ученику, статусу или дате.',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="homework-table"]',
-      title: '📋 Таблица заданий',
-      content: 'В этой таблице собраны все домашние задания. Нажмите на задание, чтобы увидеть детали.',
-      placement: 'top',
-    },
-    {
-      target: 'body',
-      title: '🎉 Вы готовы!',
-      content: 'Поздравляю! Вы познакомились со всеми основными разделами EdSpace. Успехов в преподавании! 🚀',
-      placement: 'center',
-    },
-  ],
-};
+// ==================== АНИМАЦИИ ====================
 
-// Кастомные стили для тура
-const customStyles = {
-  options: {
-    primaryColor: '#4F46E5',
-    textColor: '#1F2937',
-    zIndex: 10000,
-    overlayColor: 'rgba(15, 23, 42, 0.75)',
-    arrowColor: '#FFFFFF',
-    backgroundColor: '#FFFFFF',
-    spotlightShadow: '0 0 0 8px rgba(79, 70, 229, 0.3), 0 0 30px rgba(79, 70, 229, 0.2)',
-    beaconSize: 44,
-    spotlightClicks: true,
-  },
-  tooltip: {
-    borderRadius: 16,
-    padding: '28px 32px',
-    fontSize: 15,
-    boxShadow: '0 20px 60px rgba(79, 70, 229, 0.25), 0 8px 20px rgba(0, 0, 0, 0.1)',
-    maxWidth: 420,
-  },
-  tooltipTitle: {
-    fontSize: 20,
-    fontWeight: 700,
-    marginBottom: 8,
-    color: '#4F46E5',
-  },
-  tooltipContent: {
-    fontSize: 15,
-    lineHeight: 1.7,
-    color: '#4B5563',
-  },
-  buttonNext: {
-    borderRadius: 12,
-    fontSize: 14,
+const pulse = keyframes`
+    0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.6); }
+    50% { box-shadow: 0 0 0 20px rgba(79, 70, 229, 0), 0 0 0 4px rgba(124, 58, 237, 0.8); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+`;
+
+const float = keyframes`
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+`;
+
+const softAppear = keyframes`
+    from { opacity: 0; filter: blur(12px); transform: scale(0.92) translateY(10px); }
+    to { opacity: 1; filter: blur(0); transform: scale(1) translateY(0); }
+`;
+
+const shimmer = keyframes`
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+`;
+
+const gradientFlow = keyframes`
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+`;
+
+// ==================== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ====================
+
+const AnimatedBackdrop = styled(Box)(({ theme }) => ({
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1300,
+    animation: `${softAppear} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.65)',
+        backdropFilter: 'blur(8px)',
+    },
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        inset: 0,
+        background: 'radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.7) 100%)',
+        pointerEvents: 'none',
+    },
+}));
+
+const Highlight = styled(Box)(({ theme }) => ({
+    position: 'fixed',
+    borderRadius: '14px',
+    animation: `${pulse} 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite`,
+    pointerEvents: 'none',
+    zIndex: 1350,
+    border: '2.5px solid rgba(79, 70, 229, 0.6)',
+    boxShadow: '0 0 40px rgba(79, 70, 229, 0.25), inset 0 0 20px rgba(124, 58, 237, 0.15)',
+    transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        inset: '-4px',
+        borderRadius: '18px',
+        background: 'linear-gradient(45deg, rgba(79,70,229,0.4), rgba(124,58,237,0.3), rgba(244,114,182,0.3))',
+        zIndex: -1,
+        animation: `${shimmer} 2s ease-in-out infinite`,
+    },
+}));
+
+const TourTooltip = styled(Paper)(({ theme }) => ({
+    padding: '24px 28px',
+    maxWidth: 380,
+    borderRadius: '24px',
+    boxShadow: '0 30px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1) inset',
+    position: 'relative',
+    animation: `${float} 4s ease-in-out infinite`,
+    background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 100%)',
+    backdropFilter: 'blur(20px)',
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '4px',
+        background: 'linear-gradient(90deg, #4F46E5, #7C3AED, #A855F7, #F472B6)',
+        borderRadius: '24px 24px 0 0',
+    },
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        top: '20%',
+        right: '10%',
+        width: '60px',
+        height: '60px',
+        background: 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)',
+        borderRadius: '50%',
+        pointerEvents: 'none',
+    },
+}));
+
+const NextButton = styled(Button)(({ theme }) => ({
+    borderRadius: '14px',
+    textTransform: 'none',
+    fontSize: '15px',
     fontWeight: 600,
-    padding: '12px 24px',
-    backgroundColor: '#4F46E5',
-    color: '#FFFFFF',
-    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.4)',
-  },
-  buttonBack: {
-    borderRadius: 12,
-    fontSize: 14,
-    fontWeight: 500,
-    padding: '12px 20px',
-    color: '#6B7280',
-    backgroundColor: '#F3F4F6',
-    marginRight: 10,
-  },
-  buttonSkip: {
-    borderRadius: 12,
-    fontSize: 13,
-    fontWeight: 500,
-    color: '#9CA3AF',
-  },
-  spotlight: {
-    borderRadius: 12,
-    boxShadow: '0 0 0 6px rgba(79, 70, 229, 0.4)',
-  },
-  overlay: {
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-  },
-};
-
-function OnboardingTour() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [run, setRun] = useState(false);
-  const [steps, setSteps] = useState([]);
-  const [currentPage, setCurrentPage] = useState('');
-
-  // Сброс тура Ctrl+Shift+T
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-        localStorage.removeItem('tour_completed_full');
-        window.location.reload();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // Запуск тура при смене страницы
-  useEffect(() => {
-    const hasCompletedTour = localStorage.getItem('tour_completed_full');
-    if (hasCompletedTour) {
-      setRun(false);
-      return;
-    }
-
-    const path = location.pathname;
-    const pageSteps = tourSteps[path];
-
-    if (pageSteps) {
-      setSteps(pageSteps);
-      setCurrentPage(path);
-      setRun(false);
-      const timer = setTimeout(() => setRun(true), 800);
-      return () => clearTimeout(timer);
-    } else {
-      setRun(false);
-    }
-  }, [location.pathname]);
-
-  // Обработчик событий тура
-  const handleCallback = useCallback(
-    (data) => {
-      const { status, action } = data;
-
-      if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
-        setRun(false);
-        // Всегда сохраняем флаг при закрытии
-        localStorage.setItem('tour_completed_full', 'true');
-
-        // Автопереход на следующую страницу (только если не skip)
-        if (action !== 'skip' && location.pathname !== '/extracurricular') {
-          const pageOrder = ['/dashboard', '/students', '/weekly-schedule', '/finance', '/extracurricular'];
-          const currentIndex = pageOrder.indexOf(location.pathname);
-          if (currentIndex !== -1 && currentIndex < pageOrder.length - 1) {
-            const nextPage = pageOrder[currentIndex + 1];
-            setTimeout(() => navigate(nextPage), 400);
-          }
-        }
-      }
+    padding: '10px 28px',
+    background: 'linear-gradient(135deg, #4F46E5, #7C3AED, #4F46E5)',
+    backgroundSize: '200% 200%',
+    animation: `${gradientFlow} 3s ease infinite`,
+    color: '#fff',
+    boxShadow: '0 8px 25px rgba(79, 70, 229, 0.45)',
+    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+    '&:hover': {
+        transform: 'translateY(-2px) scale(1.03)',
+        boxShadow: '0 14px 35px rgba(79, 70, 229, 0.55)',
     },
-    [location.pathname, navigate]
-  );
+    '&:active': {
+        transform: 'translateY(0) scale(0.98)',
+    },
+}));
 
-  if (!run || steps.length === 0) return null;
+const Dot = styled(Box)(({ active }) => ({
+    width: active ? 28 : 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: active ? '#4F46E5' : '#E5E7EB',
+    transition: 'all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+    cursor: 'pointer',
+    boxShadow: active ? '0 0 16px rgba(79, 70, 229, 0.6)' : 'none',
+    transform: active ? 'scale(1.1)' : 'scale(1)',
+    position: 'relative',
+    '&:hover': {
+        backgroundColor: active ? '#4F46E5' : '#D1D5DB',
+        transform: 'scale(1.2)',
+    },
+    '&:active::after': {
+        content: '""',
+        position: 'absolute',
+        inset: '-4px',
+        borderRadius: '9px',
+        background: 'rgba(79,70,229,0.3)',
+        animation: `${pulse} 0.8s ease-out`,
+    },
+}));
 
-  return (
-    <Joyride
-      steps={steps}
-      run={run}
-      continuous
-      showProgress
-      showSkipButton
-      scrollToFirstStep
-      scrollOffset={100}
-      disableOverlayClose
-      callback={handleCallback}
-      locale={{
-        back: '← Назад',
-        close: '✕',
-        last: 'Далее →',
-        next: 'Далее →',
-        skip: 'Пропустить тур',
-      }}
-      styles={customStyles}
-    />
-  );
-}
+// ==================== ШАГИ ====================
+
+const STEPS = [
+    { emoji: '👋', title: 'Добро пожаловать в EdSpace!', text: 'Здесь вы будете управлять расписанием, учениками, финансами и материалами. Я проведу вас по основным разделам.', target: 'hero', route: '/dashboard' },
+    { emoji: '📊', title: 'Дашборд — ваш центр управления', text: 'Здесь показаны уроки на сегодня, статистика дня и прогресс. Сюда вы будете попадать при входе.', target: 'hero', route: '/dashboard' },
+    { emoji: '📅', title: 'Навигация по дням', text: 'Переключайтесь между днями стрелками. Смотрите прошедшие уроки и планируйте будущие.', target: 'date-nav', route: '/dashboard' },
+    { emoji: '👥', title: 'Ученики — основа работы', text: 'Здесь список всех ваших учеников. Каждый отображается в виде карточки с именем, ставкой и типом оплаты.', target: 'students-page', route: '/students' },
+    { emoji: '🔍', title: 'Поиск и фильтры', text: 'Ищите учеников по имени, фильтруйте по типу оплаты: все, абонемент или поурочно.', target: 'students-page', route: '/students' },
+    { emoji: '📚', title: 'Курсы — это предметы', text: 'Создавайте курсы: Математика, Физика, Информатика. К каждому курсу привязываются ученики и уроки.', target: 'courses-page', route: '/courses' },
+    { emoji: '➕', title: 'Добавить курс', text: 'Нажмите сюда чтобы создать новый курс. Укажите название, выберите цвет для удобства.', target: 'courses-add-btn', route: '/courses' },
+    { emoji: '📅', title: 'Расписание — главный инструмент', text: 'Здесь вы создаёте уроки. Кликайте на свободную ячейку в сетке — и урок готов!', target: 'schedule-page', route: '/weekly-schedule' },
+    { emoji: '🔁', title: 'Разовые и постоянные уроки', text: 'Можно создать разовый урок на одну дату или шаблон — он будет повторяться каждую неделю.', target: 'schedule-page', route: '/weekly-schedule' },
+    { emoji: '👥', title: 'Группы для совместных занятий', text: 'Объединяйте учеников в группы. Удобно для групповых уроков — одно расписание на всех.', target: 'groups-page', route: '/groups' },
+    { emoji: '➕', title: 'Создать группу', text: 'Нажмите чтобы создать группу: выберите учеников, курс, укажите цену за урок.', target: 'groups-add-btn', route: '/groups' },
+    { emoji: '💰', title: 'Финансы — доходы и платежи', text: 'Здесь вы видите свой доход за месяц, динамику за год и прогноз на будущее.', target: 'finance-page', route: '/finance' },
+    { emoji: '📊', title: 'Обзор доходов', text: 'Доход разделён на абонементы и поурочные платежи. Видно количество проведённых занятий.', target: 'finance-page', route: '/finance' },
+    { emoji: '🔮', title: 'Прогноз дохода', text: 'Система рассчитывает ожидаемый доход на следующий месяц на основе постоянных уроков.', target: 'finance-page', route: '/finance' },
+    { emoji: '💳', title: 'Вкладки Платежи и Абонементы', text: 'Переключайтесь между вкладками: Обзор — статистика, Платежи — история оплат, Абонементы — управление подписками.', target: 'finance-page', route: '/finance' },
+    { emoji: '✅', title: 'Всё готово!', text: 'Вы освоили основные разделы. Остальные инструменты (банк заданий, материалы, домашние задания) найдёте в боковом меню слева.', target: null, route: '/dashboard' },
+];
+
+// ==================== КОМПОНЕНТ ====================
+
+const OnboardingTour = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    
+    const [step, setStep] = useState(() => {
+        if (localStorage.getItem('onboarding_done')) return -1;
+        return parseInt(localStorage.getItem('onboarding_step') || '0');
+    });
+    const [anchorEl, setAnchorEl] = useState(null);
+    const [highlight, setHighlight] = useState(null);
+    const [domReady, setDomReady] = useState(false);
+    const [isVisible, setIsVisible] = useState(false);
+    const [fadeKey, setFadeKey] = useState(0);
+
+    useEffect(() => {
+        if (step < 0 || step >= STEPS.length) {
+            setHighlight(null);
+            setAnchorEl(null);
+            setIsVisible(false);
+            return;
+        }
+        
+        if (location.pathname !== STEPS[step].route) {
+            navigate(STEPS[step].route, { replace: true });
+            return;
+        }
+
+        setDomReady(false);
+        setIsVisible(false);
+        
+        const timer = setTimeout(() => {
+            const el = STEPS[step].target 
+                ? document.querySelector(`[data-tour="${STEPS[step].target}"]`) 
+                : null;
+            
+            setAnchorEl(el);
+            
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                setHighlight({
+                    top: rect.top - 8,
+                    left: rect.left - 8,
+                    width: rect.width + 16,
+                    height: rect.height + 16,
+                });
+            } else {
+                setHighlight(null);
+            }
+            
+            setFadeKey(prev => prev + 1);
+            setDomReady(true);
+            setTimeout(() => setIsVisible(true), 100);
+        }, 500);
+        
+        return () => clearTimeout(timer);
+    }, [step, location.pathname]);
+
+    const next = useCallback(() => {
+        setIsVisible(false);
+        const ns = step + 1;
+        
+        if (ns >= STEPS.length) {
+            localStorage.setItem('onboarding_done', 'true');
+            localStorage.removeItem('onboarding_step');
+            setTimeout(() => {
+                setStep(-1);
+                setHighlight(null);
+                setAnchorEl(null);
+            }, 300);
+            return;
+        }
+        
+        localStorage.setItem('onboarding_step', ns.toString());
+        setTimeout(() => {
+            setStep(ns);
+            navigate(STEPS[ns].route, { replace: true });
+        }, 200);
+    }, [step, navigate]);
+
+    const skip = useCallback(() => {
+        setIsVisible(false);
+        localStorage.setItem('onboarding_done', 'true');
+        localStorage.removeItem('onboarding_step');
+        setTimeout(() => {
+            setStep(-1);
+            setHighlight(null);
+            setAnchorEl(null);
+        }, 300);
+    }, []);
+
+    const goToStep = useCallback((index) => {
+        setIsVisible(false);
+        localStorage.setItem('onboarding_step', index.toString());
+        setTimeout(() => {
+            setStep(index);
+            navigate(STEPS[index].route, { replace: true });
+        }, 200);
+    }, [navigate]);
+
+    // Не показывать на странице онбординга и если завершён
+    if (location.pathname === '/onboarding') return null;
+    if (step < 0 || !domReady) return null;
+
+    return (
+        <>
+            <AnimatedBackdrop onClick={skip} />
+            
+            {highlight && (
+                <Highlight
+                    sx={{
+                        top: highlight.top,
+                        left: highlight.left,
+                        width: highlight.width,
+                        height: highlight.height,
+                    }}
+                />
+            )}
+            
+            <Popper
+                open={isVisible}
+                anchorEl={anchorEl}
+                placement={anchorEl ? 'bottom' : 'center'}
+                sx={{
+                    zIndex: 1400,
+                    ...(anchorEl ? {} : {
+                        position: 'fixed !important',
+                        top: '50% !important',
+                        left: '50% !important',
+                        transform: 'translate(-50%, -50%) !important',
+                    }),
+                }}
+                modifiers={[
+                    { name: 'offset', options: { offset: anchorEl ? [0, 20] : [0, 0] } },
+                    { name: 'preventOverflow', options: { boundary: 'viewport', padding: 20 } },
+                ]}
+                transition
+            >
+                {({ TransitionProps }) => (
+                    <Fade in={isVisible} timeout={500} key={fadeKey} {...TransitionProps}>
+                        <TourTooltip>
+                            <Typography sx={{ fontSize: '48px', mb: 1, textAlign: 'center', animation: `${float} 3s ease-in-out infinite`, filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.1))' }}>
+                                {STEPS[step].emoji}
+                            </Typography>
+                            <Typography sx={{ fontSize: '12px', color: '#9CA3AF', mb: 1, textAlign: 'center', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 500 }}>
+                                Шаг {step + 1} из {STEPS.length}
+                            </Typography>
+                            <Typography sx={{ fontWeight: 700, fontSize: '20px', mb: 1, color: '#1F2937', textAlign: 'center', letterSpacing: '-0.3px' }}>
+                                {STEPS[step].title}
+                            </Typography>
+                            <Typography sx={{ color: '#6B7280', fontSize: '14px', mb: 3, lineHeight: 1.7, textAlign: 'center' }}>
+                                {STEPS[step].text}
+                            </Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1, mb: 2.5 }}>
+                                {STEPS.map((_, i) => (
+                                    <Dot key={i} active={i === step} onClick={() => goToStep(i)} />
+                                ))}
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Button onClick={skip} sx={{ color: '#9CA3AF', fontSize: '13px', textTransform: 'none', fontWeight: 500, '&:hover': { color: '#6B7280', background: 'rgba(0,0,0,0.03)' }, transition: 'all 0.2s ease', borderRadius: '10px', px: 2 }}>
+                                    Пропустить
+                                </Button>
+                                <NextButton variant="contained" onClick={next} endIcon={step === STEPS.length - 1 ? <span style={{ fontSize: '18px' }}>🚀</span> : <span style={{ fontSize: '18px' }}>→</span>}>
+                                    {step === STEPS.length - 1 ? 'Начать работу' : 'Далее'}
+                                </NextButton>
+                            </Box>
+                        </TourTooltip>
+                    </Fade>
+                )}
+            </Popper>
+        </>
+    );
+};
 
 export default OnboardingTour;

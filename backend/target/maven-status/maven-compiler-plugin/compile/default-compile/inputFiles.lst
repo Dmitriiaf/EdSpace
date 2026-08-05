@@ -40,7 +40,9 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\TutorController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\VariantController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\VideoRoomController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\VkOAuthController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\WeeklyTemplateController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\YandexOAuthController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\DemoApplication.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\CreateHomeworkRequest.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\GradeHomeworkRequest.java
