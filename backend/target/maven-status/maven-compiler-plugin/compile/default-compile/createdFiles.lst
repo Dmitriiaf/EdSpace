@@ -38,6 +38,7 @@ com\example\demo\entity\MaterialFolder.class
 com\example\demo\entity\ProgressRecord.class
 com\example\demo\entity\Course.class
 com\example\demo\dto\HomeworkDTO.class
+com\example\demo\controller\LeadController.class
 com\example\demo\exception\BusinessException.class
 com\example\demo\controller\LessonPlanController.class
 com\example\demo\entity\Material.class
@@ -81,6 +82,7 @@ com\example\demo\scheduler\LessonGeneratorScheduler.class
 com\example\demo\repository\GroupRepository.class
 com\example\demo\controller\TutorController.class
 com\example\demo\service\ExportService.class
+com\example\demo\controller\AdminController.class
 com\example\demo\service\TutorService.class
 com\example\demo\controller\NotificationController.class
 com\example\demo\service\StudentService.class

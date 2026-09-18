@@ -57,6 +57,12 @@ public class Student {
     @Column(name = "birthday")
     private LocalDate birthday;
 
+    @Column(name = "grade", length = 20)
+    private String grade;
+
+    @Column(name = "is_active")
+    private Boolean isActive = true;
+
     @Column(nullable = false)
     private String role = "ROLE_STUDENT";
 
@@ -126,6 +132,8 @@ public class Student {
     public String getPhone() { return phone; }
     public String getParentName() { return parentName; }
     public String getParentPhone() { return parentPhone; }
+    public String getGrade() { return grade; }
+    public Boolean getIsActive() { return isActive; }
     public LocalDate getBirthday() { return birthday; }
     public String getRole() { return role; }
     public Boolean getRegistrationCompleted() { return registrationCompleted; }
@@ -152,6 +160,8 @@ public class Student {
     public void setPhone(String phone) { this.phone = phone; }
     public void setParentName(String parentName) { this.parentName = parentName; }
     public void setParentPhone(String parentPhone) { this.parentPhone = parentPhone; }
+    public void setGrade(String grade) { this.grade = grade; }
+    public void setIsActive(Boolean isActive) { this.isActive = isActive; }
     public void setBirthday(LocalDate birthday) { this.birthday = birthday; }
     public void setRole(String role) { this.role = role; }
     public void setPaymentType(String paymentType) { this.paymentType = paymentType; }

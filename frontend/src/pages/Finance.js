@@ -213,8 +213,9 @@ function TabPanel({ children, value, index }) {
 }
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
-function Finance() {
+function Finance({ tutorIdOverride }) {
     const { user } = useAuth();
+    const effectiveUserId = tutorIdOverride || user?.id;
     useEffect(() => { document.title = 'EdSpace — Финансы'; }, []);
     const { getStudentRateForTutor } = useStudentRate();
     const [reportData, setReportData] = useState(null);
@@ -246,7 +247,7 @@ function Finance() {
     const [yearlyData, setYearlyData] = useState([]);
 
     useEffect(() => {
-        if (user && user.id) {
+        if (user && effectiveUserId) {
             fetchFinanceData();
         }
     }, [user, selectedMonth]);
@@ -254,7 +255,7 @@ function Finance() {
     const fetchReport = async () => {
         setReportLoading(true);
         try {
-            const res = await axiosInstance.get(`/payments/report/${user.id}?month=${reportMonth}`);
+            const res = await axiosInstance.get(`/payments/report/${effectiveUserId}?month=${reportMonth}`);
             setReportData(res.data);
         } catch (err) {
             console.error('Ошибка загрузки отчёта:', err);
@@ -270,7 +271,7 @@ function Finance() {
     const fetchUnpaidLessons = async () => {
         setUnpaidLoading(true);
         try {
-            const res = await getAllLessons(user.id);
+            const res = await getAllLessons(effectiveUserId);
             const allLessons = res.data !== undefined ? res.data : res;
             const unpaid = allLessons.filter(l => l.status === 'COMPLETED');
             setUnpaidLessons(unpaid);
@@ -281,16 +282,16 @@ function Finance() {
     useEffect(() => { if (user && tabValue === 1) fetchUnpaidLessons(); }, [user, tabValue]);
 
     const fetchFinanceData = async () => {
-        if (!user || !user.id) return;
+        if (!user || !effectiveUserId) return;
         
         try {
             setLoading(true);
             setError(null);
 
             const [paymentsRes, studentsRes, lessonsRes] = await Promise.all([
-                axiosInstance.get(`/payments/tutor/${user.id}`),
-                axiosInstance.get(`/students/tutor/${user.id}`),
-                getAllLessons(user.id)
+                axiosInstance.get(`/payments/tutor/${effectiveUserId}`),
+                axiosInstance.get(`/students/tutor/${effectiveUserId}`),
+                getAllLessons(effectiveUserId)
             ]);
             
             const payments = paymentsRes.data || [];
@@ -321,7 +322,7 @@ function Finance() {
                         .reduce((sum, l) => {
                             const student = studentsList.find(s => s.id === l.student?.id);
                             if (!student || student.paymentType === 'subscription') return sum;
-                            return sum + (getStudentRateForTutor(student, user.id) || 0);
+                            return sum + (getStudentRateForTutor(student, effectiveUserId) || 0);
                         }, 0)
                     : 0;
                 
@@ -351,14 +352,14 @@ function Finance() {
             monthLessons.filter(l => l.status === 'PAID' && !paidLessonIds.has(l.id)).forEach(l => {
                 const student = studentsList.find(s => s.id === l.student?.id);
                 if (student?.paymentType !== 'subscription') {
-                    singleIncome += (getStudentRateForTutor(student, user.id) || 0);
+                    singleIncome += (getStudentRateForTutor(student, effectiveUserId) || 0);
                 }
             });
 
             const totalLessons = monthLessons.length;
-            const activeStudents = studentsList.filter(s => getStudentRateForTutor(s, user.id) !== null);
+            const activeStudents = studentsList.filter(s => getStudentRateForTutor(s, effectiveUserId) !== null);
             const averageRate = activeStudents.length > 0 
-                ? activeStudents.reduce((sum, s) => sum + (getStudentRateForTutor(s, user.id) || 0), 0) / activeStudents.length 
+                ? activeStudents.reduce((sum, s) => sum + (getStudentRateForTutor(s, effectiveUserId) || 0), 0) / activeStudents.length 
                 : 0;
             const paidStudents = [...new Set(monthData.payments.map(p => p.student?.id).filter(id => id))].length;
 
@@ -408,7 +409,7 @@ function Finance() {
     };
 
     const calculateForecast = async () => {
-        if (!user || !user.id) return;
+        if (!user || !effectiveUserId) return;
         
         setForecastLoading(true);
         setForecastResult(null);
@@ -417,7 +418,7 @@ function Finance() {
             const monthStart = startOfMonth(forecastMonth);
             const monthEnd = endOfMonth(forecastMonth);
             
-            const templatesRes = await axiosInstance.get(`/weekly-template/tutor/${user.id}`);
+            const templatesRes = await axiosInstance.get(`/weekly-template/tutor/${effectiveUserId}`);
             const templates = templatesRes.data || [];
             
             const studentTemplates = {};
@@ -448,7 +449,7 @@ function Finance() {
                     const dayTemplates = studentTemplatesList.filter(t => t.dayOfWeek === dayOfWeek);
                     
                     for (const template of dayTemplates) {
-                        const rate = getStudentRateForTutor(student, user.id) || 0;
+                        const rate = getStudentRateForTutor(student, effectiveUserId) || 0;
                         dayTotal += rate;
                         lessonsDetails.push({
                             studentName: student?.fullName, 
@@ -985,7 +986,7 @@ function Finance() {
                                     </TableHead>
                                     <TableBody>
                                         {unpaidLessons.map(lesson => {
-                                            const rate = getStudentRateForTutor(lesson.student, user.id) || 0;
+                                            const rate = getStudentRateForTutor(lesson.student, effectiveUserId) || 0;
                                             const amount = rate * ((lesson.duration || 60) / 60);
                                             return (
                                                 <TableRow key={lesson.id} hover>
@@ -1015,7 +1016,7 @@ function Finance() {
                                             <TableRow>
                                                 <TableCell colSpan={4} align="right" sx={{ fontWeight: 700, color: '#1F2937' }}>Итого к оплате:</TableCell>
                                                 <TableCell align="right" sx={{ fontWeight: 800, color: '#10B981', fontSize: '16px' }}>
-                                                    {unpaidLessons.reduce((sum, l) => sum + (getStudentRateForTutor(l.student, user.id) || 0) * ((l.duration || 60) / 60), 0).toLocaleString()} ₽
+                                                    {unpaidLessons.reduce((sum, l) => sum + (getStudentRateForTutor(l.student, effectiveUserId) || 0) * ((l.duration || 60) / 60), 0).toLocaleString()} ₽
                                                 </TableCell>
                                                 <TableCell></TableCell>
                                             </TableRow>

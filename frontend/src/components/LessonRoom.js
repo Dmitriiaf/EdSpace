@@ -7,11 +7,14 @@ import {
 } from '@mui/material';
 import {
     Close as CloseIcon,
-    Videocam as VideocamIcon
+    Videocam as VideocamIcon,
+    Draw as DrawIcon
 } from '@mui/icons-material';
 import axiosInstance from '../api/axiosConfig';
 import { useAuth } from '../context/AuthContext';
 import DinoGame from './DinoGame';
+
+const MELETO_BOARD_URL = 'https://meleto.org/board/84dc92e5-6848-4e22-a31c-d16472b248d7';
 
 function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
     const { user } = useAuth();
@@ -24,11 +27,10 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [roomSelected, setRoomSelected] = useState(false);
     const [videoUrl, setVideoUrl] = useState('');
-
+    
     useEffect(() => {
         if (open && lessonId) {
             fetchLessonData();
-            // Автопроверка для ученика каждые 3 секунды
             if (!isTutor) {
                 const interval = setInterval(checkRoomStatus, 3000);
                 return () => clearInterval(interval);
@@ -62,7 +64,6 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
         }
     };
 
-    // Проверка статуса комнаты (для ученика)
     const checkRoomStatus = async () => {
         try {
             const res = await axiosInstance.get(`/lessons/${lessonId}`);
@@ -89,6 +90,8 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
         if (!room) return;
 
         try {
+            await axiosInstance.post(`/lessons/${lessonId}/start`);
+            
             await axiosInstance.post(`/lessons/${lessonId}/select-room`, {
                 videoPlatform: room.platform,
                 videoPlatformLink: room.url
@@ -105,6 +108,10 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
         if (videoUrl) {
             window.open(videoUrl, '_blank');
         }
+    };
+
+    const handleOpenBoard = () => {
+        window.open(MELETO_BOARD_URL, '_blank');
     };
 
     return (
@@ -155,28 +162,36 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                                                 ))}
                                             </Select>
                                         </FormControl>
-                                        <Button variant="contained" size="large" startIcon={<VideocamIcon />}
-                                            onClick={handleSelectAndStart} disabled={!selectedRoomId}
-                                            sx={{ bgcolor: '#4F46E5', px: 6, py: 2, borderRadius: 3, fontSize: '1.1rem' }}>
-                                            Начать видеовстречу
-                                        </Button>
+                                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                            <Button variant="contained" size="large" startIcon={<VideocamIcon />}
+                                                onClick={handleSelectAndStart} disabled={!selectedRoomId}
+                                                sx={{ bgcolor: '#4F46E5', px: 4, py: 1.5, borderRadius: 3, fontSize: '1rem' }}>
+                                                Начать видеовстречу
+                                            </Button>
+                                            <Button variant="outlined" size="large" startIcon={<DrawIcon />}
+                                                onClick={handleOpenBoard}
+                                                sx={{ px: 4, py: 1.5, borderRadius: 3, fontSize: '1rem' }}>
+                                                Доска
+                                            </Button>
+                                        </Box>
                                     </>
                                 ) : (
                                     <>
                                         <Typography variant="h6" sx={{ mb: 2, color: '#065F46' }}>✅ Урок начат</Typography>
-                                        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                            Если вы случайно вышли — нажмите кнопку ниже, чтобы вернуться
-                                        </Typography>
-                                        <Button variant="contained" size="large" startIcon={<VideocamIcon />}
-                                            onClick={handleJoinVideo}
-                                            sx={{ bgcolor: '#4F46E5', px: 6, py: 2, borderRadius: 3, fontSize: '1.1rem' }}>
-                                            Вернуться в конференцию
-                                        </Button>
+                                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                            <Button variant="contained" size="large" startIcon={<VideocamIcon />}
+                                                onClick={handleJoinVideo}
+                                                sx={{ bgcolor: '#4F46E5', px: 4, py: 1.5, borderRadius: 3, fontSize: '1rem' }}>
+                                                Вернуться в конференцию
+                                            </Button>
+                                            <Button variant="outlined" size="large" startIcon={<DrawIcon />}
+                                                onClick={handleOpenBoard}
+                                                sx={{ px: 4, py: 1.5, borderRadius: 3, fontSize: '1rem' }}>
+                                                Доска
+                                            </Button>
+                                        </Box>
                                     </>
                                 )}
-                                <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
-                                    Откроется в новой вкладке
-                                </Typography>
                             </Box>
                         )}
 
@@ -188,9 +203,6 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                                         <Typography variant="h6" sx={{ mb: 2, color: '#92400E' }}>
                                             ⏳ Ожидание репетитора...
                                         </Typography>
-                                        <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-                                            Репетитор ещё не начал урок. Пока можно поиграть:
-                                        </Typography>
                                         <DinoGame />
                                     </>
                                 ) : (
@@ -198,14 +210,18 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                                         <Typography variant="h6" sx={{ mb: 2, color: '#065F46' }}>
                                             ✅ Репетитор начал урок!
                                         </Typography>
-                                        <Button variant="contained" size="large" startIcon={<VideocamIcon />}
-                                            onClick={handleJoinVideo}
-                                            sx={{ bgcolor: '#10B981', px: 6, py: 2, borderRadius: 3, fontSize: '1.1rem', mb: 1 }}>
-                                            Подключиться к видеовстрече
-                                        </Button>
-                                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
-                                            Если не получилось — нажмите ещё раз
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                            <Button variant="contained" size="large" startIcon={<VideocamIcon />}
+                                                onClick={handleJoinVideo}
+                                                sx={{ bgcolor: '#10B981', px: 4, py: 1.5, borderRadius: 3, fontSize: '1rem' }}>
+                                                Подключиться
+                                            </Button>
+                                            <Button variant="outlined" size="large" startIcon={<DrawIcon />}
+                                                onClick={handleOpenBoard}
+                                                sx={{ px: 4, py: 1.5, borderRadius: 3, fontSize: '1rem' }}>
+                                                Доска
+                                            </Button>
+                                        </Box>
                                     </>
                                 )}
                             </Box>

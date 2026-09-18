@@ -1,8 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-    baseURL: 'https://ed-space.ru/api',
-    timeout: 30000,
+    baseURL: window.location.origin + '/api',    timeout: 30000,
 });
 
 // Добавляем токен к запросам

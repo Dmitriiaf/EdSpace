@@ -9,7 +9,9 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import com.example.demo.entity.Tutor;
 import com.example.demo.entity.Group;
+import com.example.demo.entity.Notification;
 import com.example.demo.repository.GroupRepository;
+import com.example.demo.repository.NotificationRepository;
 import com.example.demo.service.LessonService;
 import com.example.demo.service.LessonGeneratorService;
 import com.example.demo.service.SubscriptionService;
@@ -41,6 +43,7 @@ import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.PatchMapping;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/lessons")
@@ -82,6 +85,9 @@ public class LessonController {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     @Autowired
     private StudentRepository studentRepository;
@@ -167,7 +173,6 @@ public class LessonController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
-
 
     @GetMapping("/tutor/{tutorId}/range")
     @PreAuthorize("hasRole('TUTOR')")
@@ -305,6 +310,49 @@ public class LessonController {
         }
     }
 
+    @PostMapping("/{id}/request-reschedule")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> requestReschedule(@PathVariable Long id,
+                                               @RequestBody Map<String, String> request,
+                                               @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Lesson lesson = lessonService.getLessonById(id);
+            String tutorName = lesson.getTutor().getFullName();
+            String studentName = lesson.getStudent().getFullName();
+            // Конвертируем UTC в местное время (+7)
+            LocalTime utcStartTime = lesson.getStartTime();
+            LocalTime localStartTime = utcStartTime.plusHours(7);
+            String lessonInfo = lesson.getLessonDate() + " " + localStartTime.toString().substring(0, 5);
+            String desiredDate = request.get("desiredDate");
+            String desiredTime = request.get("desiredTime");
+
+            Tutor admin = tutorRepository.findAll().stream()
+                    .filter(t -> "ROLE_SCHOOL_ADMIN".equals(t.getRole()))
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Админ не найден"));
+
+            // Проверяем, нет ли уже активного запроса
+            boolean hasActiveRequest = notificationRepository.findAllByTutorId(admin.getId()).stream()
+                    .anyMatch(n -> !n.isRead() && n.getMessage().contains("урока " + lesson.getId()));
+            if (hasActiveRequest) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Запрос для этого урока уже отправлен"));
+            }
+
+            String desired = "";
+            if (desiredDate != null && !desiredDate.isBlank()) {
+                desired = " → желает: " + desiredDate + (desiredTime != null ? " " + desiredTime : "");
+            }
+
+            String message = String.format("📩 Запрос на перенос урока %d: %s (%s) от %s%s",
+                    lesson.getId(), studentName, lessonInfo, tutorName, desired);
+            notificationService.createTutorNotification(admin.getId(), message);
+
+            return ResponseEntity.ok(Map.of("message", "Запрос отправлен"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/upcoming")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getUpcomingLessons(@RequestParam Long tutorId,
@@ -399,8 +447,6 @@ public class LessonController {
         }
     }
 
-
-
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
     public ResponseEntity<?> getLessonById(@PathVariable Long id,
@@ -476,7 +522,6 @@ public class LessonController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
-
 
     @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PostMapping
@@ -680,6 +725,7 @@ public class LessonController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
     @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PostMapping("/{id}/complete")
     @PreAuthorize("hasRole('TUTOR')")
@@ -870,16 +916,54 @@ public class LessonController {
         }
     }
 
-    @PostMapping("/{id}/reschedule")
+    @PostMapping("/{id}/request-cancel")
     @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> requestCancel(@PathVariable Long id,
+                                           @RequestBody Map<String, String> request,
+                                           @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Lesson lesson = lessonService.getLessonById(id);
+            String reason = request.get("reason");
+            String tutorName = lesson.getTutor().getFullName();
+            String studentName = lesson.getStudent().getFullName();
+            LocalTime localStartTime = lesson.getStartTime().plusHours(7);
+            String lessonInfo = lesson.getLessonDate() + " " + localStartTime.toString().substring(0, 5);
+
+            Tutor admin = tutorRepository.findAll().stream()
+                    .filter(t -> "ROLE_SCHOOL_ADMIN".equals(t.getRole()))
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Админ не найден"));
+
+            // Проверяем, нет ли уже активного запроса
+            boolean hasActiveRequest = notificationRepository.findAllByTutorId(admin.getId()).stream()
+                    .anyMatch(n -> !n.isRead() && n.getMessage().contains("урока " + lesson.getId()));
+            if (hasActiveRequest) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Запрос для этого урока уже отправлен"));
+            }
+
+            // Создаём уведомление админу
+            String message = String.format("❌ Запрос на отмену: %s (%s) от %s. Причина: %s",
+                    studentName, lessonInfo, tutorName, reason != null ? reason : "не указана");
+            notificationService.createTutorNotification(admin.getId(), message);
+
+            return ResponseEntity.ok(Map.of("message", "Запрос отправлен"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/reschedule")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> rescheduleLesson(@PathVariable Long id,
                                               @RequestBody Map<String, Object> request,
-                                              @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                              @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                              @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Lesson lesson = lessonService.getLessonById(id);
             boolean hasTutor = lesson.getStudent().getTutors().stream()
                     .anyMatch(t -> t.getId().equals(currentUserId));
-            if (!hasTutor) {
+            boolean isAdmin = "ROLE_SCHOOL_ADMIN".equals(userRole);
+            if (!hasTutor && !isAdmin) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
@@ -1105,7 +1189,6 @@ public class LessonController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
-
 
     @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PutMapping("/{id}")

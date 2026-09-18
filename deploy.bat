@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo         EDSPACE DEPLOY v2.0
+echo         EDSPACE DEPLOY v3.0
 echo ============================================
 echo 1 - Backend only (mvn + restart)
 echo 2 - Frontend only (npm + reload)
@@ -24,14 +24,14 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo === [2/3] Uploading JAR ===
-scp target\demo-0.0.1-SNAPSHOT.jar root@72.56.238.224:/opt/EdSpace/backend/target/
+scp target\demo-0.0.1-SNAPSHOT.jar root@5.129.192.139:/opt/EdSpace/backend/target/
 if %errorlevel% neq 0 (
     echo ❌ UPLOAD FAILED
     goto end
 )
 echo.
 echo === [3/3] Restarting backend ===
-ssh edspace "cd /opt/EdSpace && docker compose stop backend && docker rm lmstutor-backend && docker compose up -d backend"
+ssh root@5.129.192.139 "cd /opt/EdSpace && docker compose stop backend && docker compose rm -f backend && docker compose up -d backend"
 echo.
 echo ✅ BACKEND DEPLOYED
 goto end
@@ -47,15 +47,15 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo === [2/4] Uploading build ===
-ssh edspace "rm -rf /opt/EdSpace/frontend/build/static /opt/EdSpace/frontend/build/asset-manifest.json /opt/EdSpace/frontend/build/index.html"
-scp -r build\* root@72.56.238.224:/opt/EdSpace/frontend/build/
+ssh root@5.129.192.139 "rm -rf /opt/EdSpace/frontend/build/static /opt/EdSpace/frontend/build/asset-manifest.json /opt/EdSpace/frontend/build/index.html"
+scp -r build\* root@5.129.192.139:/opt/EdSpace/frontend/build/
 if %errorlevel% neq 0 (
     echo ❌ UPLOAD FAILED
     goto end
 )
 echo.
 echo === [3/4] Copying to container + fixing permissions ===
-ssh edspace "docker exec lmstutor-frontend rm -f /usr/share/nginx/html/static/js/main.*.js /usr/share/nginx/html/static/js/main.*.js.map /usr/share/nginx/html/static/js/main.*.js.LICENSE.txt && docker cp /opt/EdSpace/frontend/build/static/js/. lmstutor-frontend:/usr/share/nginx/html/static/js/ && docker cp /opt/EdSpace/frontend/build/index.html lmstutor-frontend:/usr/share/nginx/html/index.html && docker exec lmstutor-frontend chown -R nginx:nginx /usr/share/nginx/html/ && docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
+ssh root@5.129.192.139 "docker exec lmstutor-frontend rm -f /usr/share/nginx/html/static/js/main.*.js /usr/share/nginx/html/static/js/main.*.js.map /usr/share/nginx/html/static/js/main.*.js.LICENSE.txt && docker cp /opt/EdSpace/frontend/build/static/js/. lmstutor-frontend:/usr/share/nginx/html/static/js/ && docker cp /opt/EdSpace/frontend/build/index.html lmstutor-frontend:/usr/share/nginx/html/index.html && docker exec lmstutor-frontend chown -R nginx:nginx /usr/share/nginx/html/ && docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
 echo.
 echo ✅ FRONTEND DEPLOYED
 goto end
@@ -79,25 +79,25 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo === [3/6] Uploading backend ===
-scp target\demo-0.0.1-SNAPSHOT.jar root@72.56.238.224:/opt/EdSpace/backend/target/
+scp target\demo-0.0.1-SNAPSHOT.jar root@5.129.192.139:/opt/EdSpace/backend/target/
 if %errorlevel% neq 0 (
     echo ❌ UPLOAD FAILED
     goto end
 )
 echo.
 echo === [4/6] Uploading frontend ===
-ssh edspace "rm -rf /opt/EdSpace/frontend/build/static /opt/EdSpace/frontend/build/asset-manifest.json /opt/EdSpace/frontend/build/index.html"
-scp -r build\* root@72.56.238.224:/opt/EdSpace/frontend/build/
+ssh root@5.129.192.139 "rm -rf /opt/EdSpace/frontend/build/static /opt/EdSpace/frontend/build/asset-manifest.json /opt/EdSpace/frontend/build/index.html"
+scp -r build\* root@5.129.192.139:/opt/EdSpace/frontend/build/
 if %errorlevel% neq 0 (
     echo ❌ UPLOAD FAILED
     goto end
 )
 echo.
 echo === [5/6] Deploying backend ===
-ssh edspace "cd /opt/EdSpace && docker compose stop backend && docker rm lmstutor-backend && docker compose up -d backend"
+ssh root@5.129.192.139 "cd /opt/EdSpace && docker compose stop backend && docker compose rm -f backend && docker compose up -d backend"
 echo.
 echo === [6/6] Deploying frontend ===
-ssh edspace "docker exec lmstutor-frontend rm -f /usr/share/nginx/html/static/js/main.*.js /usr/share/nginx/html/static/js/main.*.js.map /usr/share/nginx/html/static/js/main.*.js.LICENSE.txt && docker cp /opt/EdSpace/frontend/build/static/js/. lmstutor-frontend:/usr/share/nginx/html/static/js/ && docker cp /opt/EdSpace/frontend/build/index.html lmstutor-frontend:/usr/share/nginx/html/index.html && docker exec lmstutor-frontend chown -R nginx:nginx /usr/share/nginx/html/ && docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
+ssh root@5.129.192.139 "docker exec lmstutor-frontend rm -f /usr/share/nginx/html/static/js/main.*.js /usr/share/nginx/html/static/js/main.*.js.map /usr/share/nginx/html/static/js/main.*.js.LICENSE.txt && docker cp /opt/EdSpace/frontend/build/static/js/. lmstutor-frontend:/usr/share/nginx/html/static/js/ && docker cp /opt/EdSpace/frontend/build/index.html lmstutor-frontend:/usr/share/nginx/html/index.html && docker exec lmstutor-frontend chown -R nginx:nginx /usr/share/nginx/html/ && docker exec lmstutor-frontend chmod -R 755 /usr/share/nginx/html/ && docker exec lmstutor-frontend nginx -s reload"
 echo.
 echo ✅ ALL DEPLOYED
 goto end

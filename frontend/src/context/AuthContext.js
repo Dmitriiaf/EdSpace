@@ -31,10 +31,19 @@ export const AuthProvider = ({ children }) => {
     }, [token]);
 
     const login = async (email, password) => {
-        try {
-            const response = await axiosInstance.post('auth/login', { email, password });
-            const { token, id, email: userEmail, fullName, referralCode } = response.data;
-            const userData = { id, email: userEmail, fullName, role: 'tutor', referralCode };
+    try {
+        const response = await axiosInstance.post('auth/login', { email, password });
+        const { token, id, email: userEmail, fullName, referralCode, role } = response.data;
+        // Нормализуем роль: ROLE_TUTOR -> tutor, ROLE_SCHOOL_ADMIN -> school_admin
+        let normalizedRole = 'tutor';
+        if (role === 'ROLE_SCHOOL_ADMIN' || role === 'school_admin') {
+            normalizedRole = 'school_admin';
+        } else if (role === 'student' || role === 'ROLE_STUDENT') {
+            normalizedRole = 'student';
+        } else if (role === 'parent' || role === 'ROLE_PARENT') {
+            normalizedRole = 'parent';
+        }
+        const userData = { id, email: userEmail, fullName, role: normalizedRole, referralCode };
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(userData));
             setToken(token);

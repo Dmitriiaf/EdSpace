@@ -7,6 +7,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\Sch
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\SecurityConfig.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\WebConfig.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\config\WebSocketConfig.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\AdminController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\AIGenerationController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\AuthController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardController.java
@@ -20,6 +21,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\IntegrationController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\InvitationController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\JitsiController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\LeadController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\LessonController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\LessonNotesController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\LessonPlanController.java

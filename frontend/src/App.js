@@ -26,6 +26,7 @@ import Login from './pages/Login';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import Students from './pages/Students';
 import Courses from './pages/Courses';
 import WeeklySchedule from './pages/WeeklyScheduleNew';
@@ -119,6 +120,7 @@ const AppContent = () => {
     const isTutor = user?.role === 'tutor';
     const isStudent = user?.role === 'student';
     const isParent = user?.role === 'parent';
+    const isAdmin = user?.role === 'school_admin' || user?.role === 'ROLE_SCHOOL_ADMIN';
     const sidebarWidth = isSidebarHovered ? 260 : 70;
 
     const publicRoutes = (
@@ -212,6 +214,7 @@ const AppContent = () => {
                 >
                     <Routes>
                         <Route path="/dashboard" element={<PrivateRoute requiredRole="tutor"><Dashboard /></PrivateRoute>} />
+                        <Route path="/admin" element={<PrivateRoute requiredRole="school_admin"><AdminDashboard /></PrivateRoute>} />
                         <Route path="/students" element={<PrivateRoute requiredRole="tutor"><Students /></PrivateRoute>} />
                         <Route path="/courses" element={<PrivateRoute requiredRole="tutor"><Courses /></PrivateRoute>} />
                         <Route path="/groups" element={<PrivateRoute requiredRole="tutor"><Groups /></PrivateRoute>} />
@@ -243,8 +246,7 @@ const AppContent = () => {
                         <Route path="/complete-registration" element={<CompleteRegistration />} />
                         <Route path="/parent-registration" element={<ParentRegistration />} />
                         <Route path="/stepik/callback" element={<StepikCallback />} />
-                        <Route path="/" element={<Navigate to={isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
-                        <Route path="*" element={<NotFoundPage />} />
+                        <Route path="/" element={<Navigate to={isAdmin ? "/admin" : isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />                        <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                 </Box>
             </Box>

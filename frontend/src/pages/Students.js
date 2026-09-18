@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Students.js (РЕДИЗАЙН v4 — КАРТОЧКИ КАК В СОЦСЕТЯХ) ==========
+// ========== frontend/src/pages/Students.js (РЕДИЗАЙН v5 — SOCIAL MEDIA STYLE) ==========
 import React, { useState, useEffect } from 'react';
 import axiosInstance, { getAllLessons } from '../services/api';
 import EdSpaceLoader from '../components/EdSpaceLoader';
@@ -8,20 +8,19 @@ import {
     Chip, Typography, Tabs, Tab,
     FormControl, InputLabel, Select, MenuItem,
     CircularProgress, Avatar, Tooltip, InputAdornment,
-    Card, CardContent, Grid, Divider, Collapse, 
-    Checkbox, FormControlLabel, Stack
+    Card, CardContent, Grid, Divider, 
+    Menu, // Добавлено для меню действий
+    Checkbox, FormControlLabel
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { 
     Add, Edit, Delete, PersonAdd, Search, 
-    CheckCircle, Cake,
-    ExpandMore, ExpandLess, TrendingUp,
-    AttachMoney, Link as LinkIcon,
+    CheckCircle, Cake, TrendingUp,
     Archive as ArchiveIcon, Unarchive as UnarchiveIcon,
     People as PeopleIcon, Repeat as RepeatIcon,
     AccessTime as ClockIcon, PersonOutline as ParentIcon,
-    CalendarMonth as CalendarIcon, Mail as MailIcon,
-    Phone as PhoneIcon, MoreVert as MoreIcon
+    CalendarMonth as CalendarIcon, MoreVert as MoreIcon,
+    AttachMoney
 } from '@mui/icons-material';
 import { PageContainer, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon } from '../styles/shared';
 import { useAuth } from '../context/AuthContext';
@@ -32,99 +31,92 @@ import { useNavigate } from 'react-router-dom';
 
 // ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
 
-const StudentCard = styled(Card)({
-    borderRadius: '16px',
+const StudentCard = styled(Card)(({ theme }) => ({
+    borderRadius: '20px',
     border: '1px solid #F3F4F6',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
     backgroundColor: '#FFFFFF',
-    transition: 'all 0.2s ease',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     position: 'relative',
     overflow: 'visible',
-    '&:hover': {
-        boxShadow: '0 8px 25px rgba(0,0,0,0.1)',
-        transform: 'translateY(-4px)',
-        '& .quick-actions': {
-            opacity: 1,
-            transform: 'translateY(0)',
-        },
-    },
-});
-
-const QuickActions = styled(Box)({
-    position: 'absolute',
-    top: -12,
-    right: 12,
     display: 'flex',
-    gap: 4,
-    opacity: 0,
-    transform: 'translateY(8px)',
-    transition: 'all 0.2s ease',
-    zIndex: 10,
-    '& .MuiIconButton-root': {
-        backgroundColor: '#FFFFFF',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-        width: 32,
-        height: 32,
-        '&:hover': {
-            backgroundColor: '#F9FAFB',
-        },
+    flexDirection: 'column',
+    height: '100%',
+    '&:hover': {
+        boxShadow: '0 12px 30px rgba(0,0,0,0.08)',
+        transform: 'translateY(-4px)',
+        borderColor: '#E0E7FF',
     },
+}));
+
+const CardFooter = styled(Box)({
+    padding: '16px 20px',
+    borderTop: '1px solid #F3F4F6',
+    marginTop: 'auto',
+    backgroundColor: '#FAFAFA',
+    borderBottomLeftRadius: '20px',
+    borderBottomRightRadius: '20px',
 });
 
 const BirthdayBanner = styled(Paper)({
     padding: '16px 20px',
-    marginBottom: '20px',
-    borderRadius: '12px',
+    marginBottom: '24px',
+    borderRadius: '16px',
     backgroundColor: '#FFFBEB',
     border: '1px solid #FDE68A',
     boxShadow: 'none',
 });
 
 const StyledTabs = styled(Tabs)({
-    marginBottom: '20px',
+    marginBottom: '24px',
     '& .MuiTab-root': {
         textTransform: 'none',
-        fontWeight: 500,
-        fontSize: '14px',
+        fontWeight: 600,
+        fontSize: '15px',
         color: '#6B7280',
-        padding: '10px 20px',
+        padding: '12px 24px',
+        minHeight: '48px',
         '&.Mui-selected': {
             color: '#4F46E5',
         },
     },
     '& .MuiTabs-indicator': {
         backgroundColor: '#4F46E5',
-        height: '2px',
+        height: '3px',
+        borderRadius: '3px 3px 0 0',
     },
 });
 
 const FilterChip = styled(Chip)(({ active }) => ({
-    borderRadius: '8px',
-    fontWeight: 500,
+    borderRadius: '10px',
+    fontWeight: 600,
     fontSize: '13px',
+    padding: '0 4px',
+    height: '32px',
     backgroundColor: active ? '#4F46E5' : 'transparent',
     color: active ? '#FFFFFF' : '#6B7280',
     border: active ? 'none' : '1px solid #E5E7EB',
     cursor: 'pointer',
+    transition: 'all 0.2s',
     '&:hover': {
         backgroundColor: active ? '#4338CA' : '#F9FAFB',
     },
 }));
 
 const MiniProgress = styled(Box)({
-    height: '3px',
-    backgroundColor: '#E5E7EB',
-    borderRadius: '2px',
+    height: '6px',
+    backgroundColor: '#F3F4F6',
+    borderRadius: '3px',
     overflow: 'hidden',
-    marginTop: '8px',
+    marginTop: '6px',
 });
 
-const MiniProgressFill = styled(Box)(({ width }) => ({
+const MiniProgressFill = styled(Box)(({ width, color }) => ({
     height: '100%',
-    backgroundColor: '#4F46E5',
-    borderRadius: '2px',
+    backgroundColor: color || '#4F46E5',
+    borderRadius: '3px',
     width: `${width}%`,
-    transition: 'width 0.4s ease',
+    transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
 }));
 
 // ========== УТИЛИТЫ ==========
@@ -173,7 +165,6 @@ function Students() {
     const [filterType, setFilterType] = useState('all');
     const [sortBy, setSortBy] = useState('name');
     const [openDialog, setOpenDialog] = useState(false);
-    const [expandedId, setExpandedId] = useState(null);
     const [editingStudent, setEditingStudent] = useState(null);
     const [checkingEmail, setCheckingEmail] = useState(false);
     const [existingStudent, setExistingStudent] = useState(null);
@@ -183,9 +174,13 @@ function Students() {
     const [subscriptions, setSubscriptions] = useState([]);
     const [submitting, setSubmitting] = useState(false);
     
+    // Меню действий для карточки
+    const [anchorEl, setAnchorEl] = useState(null);
+    const [activeStudentId, setActiveStudentId] = useState(null);
+
     const [formData, setFormData] = useState({
         fullName: '', email: '', ratePerLesson: '', discount: 0,
-        paymentType: 'single', parentEmail: '', tutorId: user?.id
+        paymentType: 'single', parentEmail: '', selfPaid: false, tutorId: user?.id
     });
     const [stats, setStats] = useState({ total: 0, subscription: 0, single: 0, withParent: 0 });
 
@@ -208,16 +203,6 @@ function Students() {
         try { const r = await axiosInstance.get(`/subscriptions/tutor/${user.id}`); setSubscriptions(r.data); } catch (err) {}
     };
 
-    const handleGenerateInviteLink = async () => {
-        try {
-            const res = await axiosInstance.post('/invitations/generate');
-            await navigator.clipboard.writeText(res.data.link);
-            setSnackbar({ open: true, message: '✅ Ссылка скопирована! Отправьте её ученику', severity: 'success' });
-        } catch (err) {
-            setSnackbar({ open: true, message: 'Ошибка при создании ссылки', severity: 'error' });
-        }
-    };
-
     const calculateStats = () => {
         setStats({
             total: students.length,
@@ -225,16 +210,6 @@ function Students() {
             single: students.filter(s => s.paymentType === 'single').length,
             withParent: students.filter(s => s.parent).length
         });
-    };
-
-    const getStudentStats = (email) => {
-        const now = new Date();
-        const month = allLessons.filter(l => l.student?.email === email && new Date(l.lessonDate).getMonth() === now.getMonth());
-        return {
-            total: month.length,
-            completed: month.filter(l => l.status === 'COMPLETED' || l.status === 'PAID').length,
-            upcoming: month.filter(l => new Date(l.lessonDate) >= now && l.status === 'SCHEDULED').length
-        };
     };
 
     const getNextLesson = (email) => {
@@ -246,7 +221,12 @@ function Students() {
     const getSubscriptionProgress = (id) => {
         const sub = subscriptions.find(s => s.student?.id === id && (s.status === 'ACTIVE' || s.status === 'active'));
         if (!sub) return null;
-        return { used: sub.lessonsUsed || 0, total: sub.lessonsCount, percent: sub.lessonsCount > 0 ? ((sub.lessonsUsed || 0) / sub.lessonsCount) * 100 : 0, debt: sub.debtLessons || 0 };
+        return { 
+            used: sub.lessonsUsed || 0, 
+            total: sub.lessonsCount, 
+            percent: sub.lessonsCount > 0 ? ((sub.lessonsUsed || 0) / sub.lessonsCount) * 100 : 0, 
+            debt: sub.debtLessons || 0 
+        };
     };
 
     const getUpcomingBirthdays = () => {
@@ -275,24 +255,31 @@ function Students() {
     const handleEmailBlur = () => { if (formData.email && !editingStudent) checkExistingStudent(formData.email); };
     const handleUseExistingStudent = () => {
         if (existingStudent) {
-            setFormData({ fullName: existingStudent.fullName, email: existingStudent.email, ratePerLesson: '', paymentType: existingStudent.paymentType || 'single', parentEmail: existingStudent.parent?.email || '', tutorId: user.id });
+            setFormData({ fullName: existingStudent.fullName, email: existingStudent.email, ratePerLesson: '', paymentType: existingStudent.paymentType || 'single', parentEmail: existingStudent.parent?.email || '', selfPaid: existingStudent.selfPaid || false, tutorId: user.id });
             setShowExistingDialog(false); setExistingStudent(null);
         }
     };
+    
     const handleOpenDialog = (student) => {
-        if (!student) return;
-        setEditingStudent(student);
-        setFormData({ 
-            fullName: student.fullName, 
-            email: student.email || '', 
-            ratePerLesson: getStudentRate(student) || '', 
-            paymentType: student.paymentType || 'single', 
-            parentEmail: student.parent?.email || '', 
-            selfPaid: student.selfPaid || false, 
-            tutorId: user.id 
-        });
+        if (!student) {
+            setEditingStudent(null);
+            setFormData({ fullName: '', email: '', ratePerLesson: '', discount: 0, paymentType: 'single', parentEmail: '', selfPaid: false, tutorId: user.id });
+        } else {
+            setEditingStudent(student);
+            setFormData({ 
+                fullName: student.fullName, 
+                email: student.email || '', 
+                ratePerLesson: getStudentRate(student) || '', 
+                discount: student.discount || 0,
+                paymentType: student.paymentType || 'single', 
+                parentEmail: student.parent?.email || '', 
+                selfPaid: student.selfPaid || false, 
+                tutorId: user.id 
+            });
+        }
         setOpenDialog(true);
     };
+
     const handleCloseDialog = () => { setOpenDialog(false); setEditingStudent(null); setExistingStudent(null); setShowExistingDialog(false); };
     const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -300,20 +287,43 @@ function Students() {
         if (submitting) return;
         setSubmitting(true);
         try {
-            const d = { fullName: formData.fullName, email: formData.email, ratePerLesson: formData.ratePerLesson ? parseFloat(formData.ratePerLesson) : null, discount: formData.discount || 0, paymentType: formData.paymentType, parentEmail: formData.parentEmail || null, selfPaid: formData.selfPaid || false, tutorId: user.id };
-            if (editingStudent) { await axiosInstance.put(`/students/${editingStudent.id}`, d); showSnackbar('Ученик обновлён', 'success'); }
-            else { await axiosInstance.post('/students', d); showSnackbar('📧 Приглашение отправлено', 'success'); }
+            const d = { 
+                fullName: formData.fullName, 
+                email: formData.email, 
+                ratePerLesson: formData.ratePerLesson ? parseFloat(formData.ratePerLesson) : null, 
+                discount: formData.discount || 0, 
+                paymentType: formData.paymentType, 
+                parentEmail: formData.parentEmail || null, 
+                selfPaid: formData.selfPaid || false, 
+                tutorId: user.id 
+            };
+            if (editingStudent) { 
+                await axiosInstance.put(`/students/${editingStudent.id}`, d); 
+                showSnackbar('Ученик обновлён', 'success'); 
+            } else { 
+                await axiosInstance.post('/students', d); 
+                showSnackbar('✅ Ученик успешно добавлен', 'success'); 
+            }
             handleCloseDialog();
             fetchStudents(); fetchArchivedStudents(); fetchAllLessons(); fetchSubscriptions();
         } catch (err) { showSnackbar(err.response?.data?.error || 'Ошибка', 'error'); }
         finally { setSubmitting(false); }
     };
 
-    const handleDelete = async (id) => { if (window.confirm('Удалить?')) { try { await axiosInstance.delete(`/students/${id}`); showSnackbar('Удалён', 'success'); fetchStudents(); fetchArchivedStudents(); } catch (err) { showSnackbar('Ошибка', 'error'); } } };
-    const handleArchive = async (id, name) => { if (window.confirm(`В архив: ${name}?`)) { try { await axiosInstance.put(`/students/${id}`, { archived: true }); showSnackbar('В архив', 'success'); fetchStudents(); fetchArchivedStudents(); } catch (err) { showSnackbar('Ошибка', 'error'); } } };
+    const handleDelete = async (id) => { if (window.confirm('Удалить ученика безвозвратно?')) { try { await axiosInstance.delete(`/students/${id}`); showSnackbar('Удалён', 'success'); fetchStudents(); fetchArchivedStudents(); } catch (err) { showSnackbar('Ошибка', 'error'); } } };
+    const handleArchive = async (id, name) => { if (window.confirm(`Отправить в архив: ${name}?`)) { try { await axiosInstance.put(`/students/${id}`, { archived: true }); showSnackbar('В архив', 'success'); fetchStudents(); fetchArchivedStudents(); } catch (err) { showSnackbar('Ошибка', 'error'); } } };
     const handleUnarchive = async (id, name) => { if (window.confirm(`Восстановить: ${name}?`)) { try { await axiosInstance.put(`/students/${id}`, { archived: false }); showSnackbar('Восстановлен', 'success'); fetchStudents(); fetchArchivedStudents(); } catch (err) { showSnackbar('Ошибка', 'error'); } } };
     const showSnackbar = (m, s) => setSnackbar({ open: true, message: m, severity: s });
-    const handleExpandClick = (id) => setExpandedId(expandedId === id ? null : id);
+
+    // Управление меню карточки
+    const handleMenuOpen = (event, studentId) => {
+        setAnchorEl(event.currentTarget);
+        setActiveStudentId(studentId);
+    };
+    const handleMenuClose = () => {
+        setAnchorEl(null);
+        setActiveStudentId(null);
+    };
 
     const currentStudents = tabValue === 0 ? students : archivedStudents;
     const filteredStudents = currentStudents
@@ -327,41 +337,43 @@ function Students() {
         });
     const upcomingBirthdays = getUpcomingBirthdays();
 
-    const statCards = [
-        { v: stats.total, l: 'Всего учеников', icon: <PeopleIcon sx={{ fontSize: 22, color: '#4F46E5' }} />, bg: '#EEF2FF' },
-        { v: stats.subscription, l: 'Абонемент', icon: <RepeatIcon sx={{ fontSize: 22, color: '#10B981' }} />, bg: '#ECFDF5' },
-        { v: stats.single, l: 'Поурочно', icon: <ClockIcon sx={{ fontSize: 22, color: '#3B82F6' }} />, bg: '#EFF6FF' },
-        { v: stats.withParent, l: 'С родителем', icon: <ParentIcon sx={{ fontSize: 22, color: '#7C3AED' }} />, bg: '#F5F3FF' },
-    ];
-
     if (loading) return (
-        <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
+        <PageContainer sx={{ px: { xs: 2, sm: 4 }, py: 4 }}>
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <EdSpaceLoader text="Загрузка..." />
+                <EdSpaceLoader text="Загрузка учеников..." />
             </Box>
         </PageContainer>
     );
 
     return (
-        <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
+        <PageContainer sx={{ px: { xs: 2, sm: 4 }, py: 4 }}>
             {/* ========== ЗАГОЛОВОК ========== */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-                <Box data-tour="students-page">
-                    <Typography sx={{ fontSize: '28px', fontWeight: 700, color: '#1F2937', mb: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4, flexWrap: 'wrap', gap: 3 }}>
+                <Box>
+                    <Typography sx={{ fontSize: '32px', fontWeight: 800, color: '#111827', mb: 1, letterSpacing: '-0.5px' }}>
                         Мои ученики
                     </Typography>
-                    <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
+                    <Typography sx={{ fontSize: '15px', color: '#6B7280', fontWeight: 500 }}>
                         {stats.total} учеников · {stats.subscription} на абонементе · {stats.single} поурочно
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', gap: 2 }}>
                     <StyledButton 
-                        variant="outlined" 
-                        startIcon={<LinkIcon />}
-                        onClick={handleGenerateInviteLink}
-                        sx={{ color: '#4F46E5', borderColor: '#C7D2FE' }}
+                        variant="contained" 
+                        startIcon={<Add />}
+                        onClick={() => handleOpenDialog(null)}
+                        sx={{ 
+                            bgcolor: '#4F46E5', 
+                            color: '#fff', 
+                            fontWeight: 600, 
+                            borderRadius: '12px',
+                            px: 3,
+                            py: 1.2,
+                            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
+                            '&:hover': { bgcolor: '#4338CA', boxShadow: '0 6px 16px rgba(79, 70, 229, 0.4)' }
+                        }}
                     >
-                        Пригласить по ссылке
+                        Добавить ученика
                     </StyledButton>
                 </Box>
             </Box>
@@ -375,26 +387,30 @@ function Students() {
             {/* ========== ДНИ РОЖДЕНИЯ ========== */}
             {upcomingBirthdays.length > 0 && tabValue === 0 && (
                 <BirthdayBanner elevation={0}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                        <Cake sx={{ color: '#D97706', fontSize: 20 }} />
-                        <Typography sx={{ fontWeight: 600, color: '#92400E', fontSize: '14px' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                        <Box sx={{ bgcolor: '#FEF3C7', p: 1, borderRadius: '10px' }}>
+                            <Cake sx={{ color: '#D97706', fontSize: 22 }} />
+                        </Box>
+                        <Typography sx={{ fontWeight: 700, color: '#92400E', fontSize: '15px' }}>
                             Ближайшие дни рождения
                         </Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
                         {upcomingBirthdays.map(s => (
                             <Chip 
                                 key={s.id} 
-                                avatar={<Avatar sx={{ bgcolor: '#D97706', width: 24, height: 24, fontSize: 12, fontWeight: 600 }}>{s.fullName?.charAt(0)}</Avatar>}
+                                avatar={<Avatar sx={{ bgcolor: '#F59E0B', width: 28, height: 28, fontSize: 12, fontWeight: 700 }}>{s.fullName?.charAt(0)}</Avatar>}
                                 label={`${s.fullName} — ${getBirthdayText(s.birthday)}`} 
                                 variant="outlined" 
                                 sx={{ 
                                     bgcolor: '#FFFFFF', 
                                     borderColor: '#FDE68A', 
                                     color: '#92400E', 
-                                    fontSize: '12px',
-                                    fontWeight: 500,
-                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    borderRadius: '10px',
+                                    height: '36px',
+                                    px: 1,
                                 }} 
                             />
                         ))}
@@ -407,8 +423,8 @@ function Students() {
                 display: 'flex', 
                 justifyContent: 'space-between', 
                 alignItems: 'center', 
-                mb: 3, 
-                gap: 2, 
+                mb: 4, 
+                gap: 3, 
                 flexWrap: 'wrap' 
             }}>
                 <TextField 
@@ -417,28 +433,28 @@ function Students() {
                     value={searchTerm} 
                     onChange={(e) => setSearchTerm(e.target.value)}
                     sx={{ 
-                        width: { xs: '100%', sm: 280 },
+                        width: { xs: '100%', sm: 320 },
                         '& .MuiOutlinedInput-root': { 
-                            borderRadius: '10px', 
+                            borderRadius: '12px', 
                             bgcolor: '#FFFFFF',
                             '& fieldset': { borderColor: '#E5E7EB' },
                             '&:hover fieldset': { borderColor: '#D1D5DB' },
-                            '&.Mui-focused fieldset': { borderColor: '#4F46E5', boxShadow: '0 0 0 3px rgba(79,70,229,0.1)' },
+                            '&.Mui-focused fieldset': { borderColor: '#4F46E5', boxShadow: '0 0 0 4px rgba(79,70,229,0.1)' },
                         },
                     }}
                     InputProps={{ 
                         startAdornment: (
                             <InputAdornment position="start">
-                                <Search sx={{ color: '#9CA3AF', fontSize: 18 }} />
+                                <Search sx={{ color: '#9CA3AF', fontSize: 20 }} />
                             </InputAdornment>
                         ),
                         endAdornment: (
                             <InputAdornment position="end">
-                                <Tooltip title={sortBy === 'name' ? 'По алфавиту' : 'По дате добавления'}>
+                                <Tooltip title={sortBy === 'name' ? 'Сортировать по алфавиту' : 'Сортировать по дате добавления'}>
                                     <IconButton 
                                         size="small" 
                                         onClick={() => setSortBy(sortBy === 'name' ? 'date' : 'name')}
-                                        sx={{ color: '#9CA3AF' }}
+                                        sx={{ color: '#9CA3AF', bgcolor: '#F9FAFB', '&:hover': { bgcolor: '#F3F4F6' } }}
                                     >
                                         {sortBy === 'name' ? 'А-Я' : '↓'}
                                     </IconButton>
@@ -447,7 +463,7 @@ function Students() {
                         ),
                     }}
                 />
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
                     {[
                         { value: 'all', label: 'Все' },
                         { value: 'subscription', label: 'Абонемент' },
@@ -458,7 +474,6 @@ function Students() {
                             label={t.label}
                             active={filterType === t.value}
                             onClick={() => setFilterType(t.value)}
-                            variant={filterType === t.value ? 'filled' : 'outlined'}
                         />
                     ))}
                 </Box>
@@ -466,206 +481,243 @@ function Students() {
 
             {/* ========== КОНТЕНТ ========== */}
             {error ? (
-                <Alert severity="error" sx={{ borderRadius: '12px', mb: 3 }}>{error}</Alert>
+                <Alert severity="error" sx={{ borderRadius: '16px', mb: 3, fontSize: '15px' }}>{error}</Alert>
             ) : filteredStudents.length === 0 ? (
-                <Paper sx={{ borderRadius: '16px', bgcolor: '#FFFFFF', border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <Paper sx={{ borderRadius: '20px', bgcolor: '#FFFFFF', border: '1px solid #F3F4F6', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', p: 6 }}>
                     <EmptyStateContainer>
-                        <EmptyStateIcon>
-                            <PersonAdd sx={{ fontSize: 48, color: '#9CA3AF' }} />
+                        <EmptyStateIcon sx={{ bgcolor: '#F3F4F6', width: 80, height: 80, borderRadius: '50%', mb: 3 }}>
+                            <PersonAdd sx={{ fontSize: 40, color: '#9CA3AF' }} />
                         </EmptyStateIcon>
-                        <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>
+                        <Typography sx={{ fontSize: '20px', fontWeight: 700, color: '#1F2937', mb: 1 }}>
                             {tabValue === 0 ? (searchTerm ? 'Ничего не найдено' : 'У вас пока нет учеников') : 'Архив пуст'}
                         </Typography>
-                        <Typography sx={{ fontSize: '14px', color: '#6B7280', mb: 3 }}>
-                            {tabValue === 0 && !searchTerm ? 'Отправьте ссылку-приглашение первому ученику' : 'Попробуйте изменить параметры поиска'}
+                        <Typography sx={{ fontSize: '15px', color: '#6B7280', mb: 4, maxWidth: 400, mx: 'auto', textAlign: 'center' }}>
+                            {tabValue === 0 && !searchTerm ? 'Нажмите кнопку «Добавить ученика», чтобы создать первую карточку и начать работу.' : 'Попробуйте изменить параметры поиска или переключитесь на вкладку активных.'}
                         </Typography>
                         {!searchTerm && tabValue === 0 && (
                             <StyledButton 
-                                variant="outlined" 
-                                startIcon={<LinkIcon />} 
-                                onClick={handleGenerateInviteLink}
-                                sx={{ color: '#4F46E5', borderColor: '#C7D2FE' }}
+                                variant="contained" 
+                                startIcon={<Add />} 
+                                onClick={() => handleOpenDialog(null)}
+                                sx={{ bgcolor: '#4F46E5', borderRadius: '12px', px: 4, py: 1.5 }}
                             >
-                                Пригласить по ссылке
+                                Добавить первого ученика
                             </StyledButton>
                         )}
                     </EmptyStateContainer>
                 </Paper>
             ) : (
-                <Grid container spacing={1.5}>
-                    {filteredStudents.map((student, index) => {
+                <Grid container spacing={3}>
+                    {filteredStudents.map((student) => {
                         const next = getNextLesson(student.email);
                         const birthday = getBirthdayText(student.birthday);
                         const sub = getSubscriptionProgress(student.id);
-                        const isExp = expandedId === student.id;
                         const rate = getStudentRate(student);
                         const avatarColor = getAvatarColor(student.fullName);
+                        const isActiveMenu = Boolean(anchorEl && activeStudentId === student.id);
 
                         return (
-                            <Grid item xs={6} sm={4} md={3} lg={2.4} key={student.id}>
+                            <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={student.id}>
                                 <StudentCard>
-                                    {/* Быстрые действия при наведении */}
-                                    <QuickActions className="quick-actions">
-                                        <Tooltip title="Редактировать" placement="top">
-                                            <IconButton size="small" onClick={() => handleOpenDialog(student)}>
-                                                <Edit sx={{ fontSize: 15, color: '#6B7280' }} />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Успеваемость" placement="top">
-                                            <IconButton size="small" onClick={() => navigate(`/student-progress/${student.id}`)}>
-                                                <TrendingUp sx={{ fontSize: 15, color: '#4F46E5' }} />
-                                            </IconButton>
-                                        </Tooltip>
-                                        {tabValue === 0 ? (
-                                            <Tooltip title="Архивировать" placement="top">
-                                                <IconButton size="small" onClick={() => handleArchive(student.id, student.fullName)}>
-                                                    <ArchiveIcon sx={{ fontSize: 15, color: '#9CA3AF' }} />
-                                                </IconButton>
-                                            </Tooltip>
-                                        ) : (
-                                            <Tooltip title="Восстановить" placement="top">
-                                                <IconButton size="small" onClick={() => handleUnarchive(student.id, student.fullName)}>
-                                                    <UnarchiveIcon sx={{ fontSize: 15, color: '#10B981' }} />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
-                                    </QuickActions>
-
-                                    {/* Бейдж дня рождения */}
-                                    {birthday && (
-                                        <Box sx={{ 
+                                    {/* Меню действий (три точки) */}
+                                    <IconButton 
+                                        size="small" 
+                                        onClick={(e) => handleMenuOpen(e, student.id)}
+                                        sx={{ 
                                             position: 'absolute', 
-                                            top: 8, 
-                                            left: 8, 
-                                            bgcolor: '#FEF3C7', 
-                                            color: '#92400E', 
-                                            px: 1, 
-                                            py: 0.3, 
-                                            borderRadius: '6px', 
-                                            fontSize: '10px', 
-                                            fontWeight: 600, 
-                                            zIndex: 2 
-                                        }}>
-                                            {birthday}
-                                        </Box>
-                                    )}
-                                    
-                                    <CardContent sx={{ p: 2, pb: '12px !important', textAlign: 'center' }}>
-                                        {/* Аватар */}
-                                        <Avatar 
-                                            sx={{ 
-                                                width: 52, height: 52, 
-                                                bgcolor: avatarColor, 
-                                                fontSize: 22, 
-                                                fontWeight: 700, 
-                                                mx: 'auto',
-                                                mb: 1.5,
-                                                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                                            }}
-                                        >
-                                            {getInitials(student.fullName)}
-                                        </Avatar>
+                                            top: 16, 
+                                            right: 16, 
+                                            bgcolor: 'rgba(255,255,255,0.8)', 
+                                            backdropFilter: 'blur(4px)',
+                                            '&:hover': { bgcolor: '#F3F4F6' }
+                                        }}
+                                    >
+                                        <MoreIcon sx={{ fontSize: 20, color: '#6B7280' }} />
+                                    </IconButton>
 
-                                        {/* Имя */}
-                                        <Typography sx={{ 
-                                            fontWeight: 600, 
-                                            color: '#1F2937', 
-                                            fontSize: '14px', 
-                                            lineHeight: 1.3,
-                                            mb: 0.5,
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                        }}>
-                                            {student.fullName}
-                                        </Typography>
-
-                                        {/* Тип оплаты */}
-                                        <Chip 
-                                            label={student.paymentType === 'subscription' ? 'Абонемент' : 'Поурочно'}
-                                            size="small"
-                                            sx={{ 
-                                                fontSize: '10px', 
-                                                height: 20, 
-                                                fontWeight: 500,
-                                                bgcolor: student.paymentType === 'subscription' ? '#ECFDF5' : '#EFF6FF',
-                                                color: student.paymentType === 'subscription' ? '#065F46' : '#1E40AF',
-                                                mb: 1,
-                                            }}
-                                        />
-
-                                        {/* Ставка */}
-                                        <Typography sx={{ 
-                                            fontWeight: 700, 
-                                            color: student.discount > 0 ? '#F59E0B' : '#10B981', 
-                                            fontSize: '18px',
-                                            mb: 0.5,
-                                        }}>
-                                            {rate || '—'} ₽
-                                        </Typography>
-                                        {student.discount > 0 && (
-                                            <Typography sx={{ fontSize: '11px', color: '#9CA3AF', mt: -0.5, mb: 0.5 }}>
-                                                Скидка {student.discount}%
-                                            </Typography>
+                                    <CardContent sx={{ p: 3, pb: 2, flexGrow: 1 }}>
+                                        {/* Бейдж дня рождения */}
+                                        {birthday && (
+                                            <Box sx={{ 
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 0.5,
+                                                bgcolor: '#FEF3C7', 
+                                                color: '#92400E', 
+                                                px: 1.5, 
+                                                py: 0.5, 
+                                                borderRadius: '8px', 
+                                                fontSize: '11px', 
+                                                fontWeight: 700,
+                                                mb: 2,
+                                                zIndex: 2 
+                                            }}>
+                                                <Cake sx={{ fontSize: 14 }} /> {birthday}
+                                            </Box>
                                         )}
 
-                                        {/* Ближайший урок */}
-                                        {next && (
+                                        {/* Аватар и Имя */}
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5 }}>
+                                            <Avatar 
+                                                sx={{ 
+                                                    width: 56, height: 56, 
+                                                    bgcolor: avatarColor, 
+                                                    fontSize: 20, 
+                                                    fontWeight: 800, 
+                                                    boxShadow: `0 4px 12px ${avatarColor}40`,
+                                                    border: '3px solid #FFFFFF'
+                                                }}
+                                            >
+                                                {getInitials(student.fullName)}
+                                            </Avatar>
+                                            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                                                <Typography sx={{ 
+                                                    fontWeight: 700, 
+                                                    color: '#111827', 
+                                                    fontSize: '16px', 
+                                                    lineHeight: 1.3,
+                                                    mb: 0.5,
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap',
+                                                }}>
+                                                    {student.fullName}
+                                                </Typography>
+                                                <Chip 
+                                                    label={student.paymentType === 'subscription' ? 'Абонемент' : 'Поурочно'}
+                                                    size="small"
+                                                    sx={{ 
+                                                        fontSize: '11px', 
+                                                        height: 22, 
+                                                        fontWeight: 700,
+                                                        letterSpacing: '0.3px',
+                                                        bgcolor: student.paymentType === 'subscription' ? '#ECFDF5' : '#EFF6FF',
+                                                        color: student.paymentType === 'subscription' ? '#065F46' : '#1E40AF',
+                                                    }}
+                                                />
+                                            </Box>
+                                        </Box>
+
+                                        <Divider sx={{ my: 2, borderColor: '#F3F4F6' }} />
+
+                                        {/* Основная информация (Сетка) */}
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                            {/* Ставка */}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#6B7280' }}>
+                                                    <AttachMoney sx={{ fontSize: 18 }} />
+                                                    <Typography sx={{ fontSize: '13px', fontWeight: 500 }}>Ставка</Typography>
+                                                </Box>
+                                                <Box sx={{ textAlign: 'right' }}>
+                                                    <Typography sx={{ fontWeight: 800, color: '#111827', fontSize: '18px' }}>
+                                                        {rate || '—'} ₽
+                                                    </Typography>
+                                                    {student.discount > 0 && (
+                                                        <Typography sx={{ fontSize: '11px', color: '#F59E0B', fontWeight: 700 }}>
+                                                            Скидка {student.discount}%
+                                                        </Typography>
+                                                    )}
+                                                </Box>
+                                            </Box>
+
+                                            {/* Ближайший урок */}
+                                            {next && (
+                                                <Box sx={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: 1.5, 
+                                                    p: 1.5,
+                                                    bgcolor: '#F9FAFB',
+                                                    borderRadius: '12px',
+                                                    border: '1px solid #F3F4F6'
+                                                }}>
+                                                    <Box sx={{ bgcolor: '#EEF2FF', p: 1, borderRadius: '8px' }}>
+                                                        <CalendarIcon sx={{ fontSize: 18, color: '#4F46E5' }} />
+                                                    </Box>
+                                                    <Box>
+                                                        <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 500, mb: 0.2 }}>
+                                                            Ближайший урок
+                                                        </Typography>
+                                                        <Typography sx={{ fontSize: '13px', color: '#111827', fontWeight: 700 }}>
+                                                            {format(new Date(next.lessonDate), 'd MMMM', { locale: ru })} в {next.startTime?.slice(0, 5)}
+                                                        </Typography>
+                                                    </Box>
+                                                </Box>
+                                            )}
+
+                                            {/* Прогресс абонемента */}
+                                            {sub && (
+                                                <Box sx={{ p: 1.5, bgcolor: '#F9FAFB', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                                        <Typography sx={{ fontSize: '12px', color: '#6B7280', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                            <RepeatIcon sx={{ fontSize: 14 }} /> Абонемент
+                                                        </Typography>
+                                                        <Typography sx={{ fontSize: '12px', fontWeight: 800, color: '#4F46E5' }}>
+                                                            {sub.used} / {sub.total}
+                                                        </Typography>
+                                                    </Box>
+                                                    <MiniProgress>
+                                                        <MiniProgressFill 
+                                                            width={sub.percent} 
+                                                            color={sub.percent > 80 ? '#EF4444' : '#4F46E5'} 
+                                                        />
+                                                    </MiniProgress>
+                                                    {sub.debt > 0 && (
+                                                        <Typography sx={{ fontSize: '11px', color: '#EF4444', fontWeight: 700, mt: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                            ⚠️ Долг: {sub.debt} занятий
+                                                        </Typography>
+                                                    )}
+                                                </Box>
+                                            )}
+
+                                            {/* Родитель */}
                                             <Box sx={{ 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
-                                                justifyContent: 'center',
-                                                gap: 0.5, 
-                                                mt: 0.5,
-                                                px: 1,
-                                                py: 0.5,
-                                                bgcolor: '#F9FAFB',
-                                                borderRadius: '6px',
+                                                gap: 1,
+                                                p: 1,
+                                                borderRadius: '8px',
+                                                bgcolor: student.parent ? '#ECFDF5' : '#F9FAFB',
                                             }}>
-                                                <CalendarIcon sx={{ fontSize: 12, color: '#9CA3AF' }} />
-                                                <Typography sx={{ fontSize: '11px', color: '#6B7280' }}>
-                                                    {format(new Date(next.lessonDate), 'd MMM', { locale: ru })} {next.startTime?.slice(0, 5)}
+                                                {student.parent ? (
+                                                    <CheckCircle sx={{ fontSize: 16, color: '#10B981' }} />
+                                                ) : (
+                                                    <ParentIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+                                                )}
+                                                <Typography sx={{ 
+                                                    fontSize: '12px', 
+                                                    fontWeight: 600,
+                                                    color: student.parent ? '#065F46' : '#6B7280'
+                                                }}>
+                                                    {student.parent ? `Родитель: ${student.parent.fullName || student.parent.email}` : 'Без привязки к родителю'}
                                                 </Typography>
                                             </Box>
-                                        )}
-
-                                        {/* Прогресс абонемента */}
-                                        {sub && (
-                                            <Box sx={{ mt: 1 }}>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <Typography sx={{ fontSize: '10px', color: '#9CA3AF' }}>
-                                                        Абонемент
-                                                    </Typography>
-                                                    <Typography sx={{ fontSize: '10px', fontWeight: 600, color: '#4F46E5' }}>
-                                                        {sub.used}/{sub.total}
-                                                    </Typography>
-                                                </Box>
-                                                <MiniProgress>
-                                                    <MiniProgressFill width={sub.percent} />
-                                                </MiniProgress>
-                                                {sub.debt > 0 && (
-                                                    <Typography sx={{ fontSize: '10px', color: '#EF4444', fontWeight: 500, mt: 0.3 }}>
-                                                        Долг: {sub.debt} занятий
-                                                    </Typography>
-                                                )}
-                                            </Box>
-                                        )}
-
-                                        {/* Родитель */}
-                                        <Box sx={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            justifyContent: 'center',
-                                            gap: 0.5, 
-                                            mt: 1,
-                                            color: student.parent ? '#10B981' : '#D1D5DB',
-                                        }}>
-                                            <CheckCircle sx={{ fontSize: 12 }} />
-                                            <Typography sx={{ fontSize: '10px' }}>
-                                                {student.parent ? 'Родитель подключён' : 'Без родителя'}
-                                            </Typography>
                                         </Box>
                                     </CardContent>
+
+                                    {/* Футер карточки с действиями */}
+                                    <CardFooter>
+                                        <Button 
+                                            fullWidth 
+                                            variant="outlined"
+                                            startIcon={<TrendingUp />}
+                                            onClick={() => navigate(`/student-progress/${student.id}`)}
+                                            sx={{ 
+                                                borderRadius: '10px', 
+                                                borderColor: '#E0E7FF', 
+                                                color: '#4F46E5',
+                                                fontWeight: 600,
+                                                fontSize: '13px',
+                                                py: 1,
+                                                '&:hover': {
+                                                    bgcolor: '#EEF2FF',
+                                                    borderColor: '#C7D2FE'
+                                                }
+                                            }}
+                                        >
+                                            Успеваемость
+                                        </Button>
+                                    </CardFooter>
                                 </StudentCard>
                             </Grid>
                         );
@@ -673,29 +725,55 @@ function Students() {
                 </Grid>
             )}
 
+            {/* ========== МЕНЮ ДЕЙСТВИЙ КАРТОЧКИ ========== */}
+            <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleMenuClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{
+                    sx: { borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', minWidth: 180, mt: 0.5 }
+                }}
+            >
+                <MenuItem onClick={() => { handleOpenDialog(filteredStudents.find(s => s.id === activeStudentId)); handleMenuClose(); }} sx={{ gap: 1.5, py: 1.5 }}>
+                    <Edit sx={{ fontSize: 18, color: '#6B7280' }} />
+                    <Typography sx={{ fontSize: '14px', fontWeight: 500 }}>Редактировать</Typography>
+                </MenuItem>
+                {tabValue === 0 ? (
+                    <MenuItem onClick={() => { handleArchive(activeStudentId, filteredStudents.find(s => s.id === activeStudentId)?.fullName); handleMenuClose(); }} sx={{ gap: 1.5, py: 1.5, color: '#D97706' }}>
+                        <ArchiveIcon sx={{ fontSize: 18 }} />
+                        <Typography sx={{ fontSize: '14px', fontWeight: 500 }}>В архив</Typography>
+                    </MenuItem>
+                ) : (
+                    <MenuItem onClick={() => { handleUnarchive(activeStudentId, filteredStudents.find(s => s.id === activeStudentId)?.fullName); handleMenuClose(); }} sx={{ gap: 1.5, py: 1.5, color: '#059669' }}>
+                        <UnarchiveIcon sx={{ fontSize: 18 }} />
+                        <Typography sx={{ fontSize: '14px', fontWeight: 500 }}>Восстановить</Typography>
+                    </MenuItem>
+                )}
+                <Divider />
+                <MenuItem onClick={() => { handleDelete(activeStudentId); handleMenuClose(); }} sx={{ gap: 1.5, py: 1.5, color: '#EF4444' }}>
+                    <Delete sx={{ fontSize: 18 }} />
+                    <Typography sx={{ fontSize: '14px', fontWeight: 500 }}>Удалить</Typography>
+                </MenuItem>
+            </Menu>
+
             {/* ========== ДИАЛОГ ДОБАВЛЕНИЯ/РЕДАКТИРОВАНИЯ ========== */}
             <StyledDialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ 
-                    fontSize: '20px', 
-                    fontWeight: 700, 
-                    color: '#1F2937',
-                    px: 3,
-                    pt: 3,
-                    pb: 1,
-                }}>
+                <DialogTitle sx={{ fontSize: '22px', fontWeight: 700, color: '#111827', px: 4, pt: 4, pb: 1 }}>
                     {editingStudent ? 'Редактировать ученика' : 'Новый ученик'}
                 </DialogTitle>
-                <DialogContent sx={{ px: 3 }}>
-                    <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <DialogContent sx={{ px: 4, py: 2 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
                         <TextField 
                             fullWidth 
-                            label="Имя ученика" 
+                            label="ФИО ученика" 
                             name="fullName" 
                             value={formData.fullName} 
                             onChange={handleInputChange} 
                             required 
                             autoFocus 
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                         />
                         <TextField 
                             fullWidth 
@@ -706,29 +784,31 @@ function Students() {
                             onChange={handleInputChange} 
                             onBlur={handleEmailBlur} 
                             required 
-                            helperText="На этот email придёт приглашение"
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                            helperText="На этот email придут данные для входа"
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                         />
-                        <TextField 
-                            fullWidth 
-                            label="Ставка (₽)" 
-                            name="ratePerLesson" 
-                            type="number" 
-                            value={formData.ratePerLesson} 
-                            onChange={handleInputChange} 
-                            required 
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                        />
-                        <TextField 
-                            fullWidth 
-                            label="Скидка (%)" 
-                            name="discount" 
-                            type="number" 
-                            value={formData.discount || 0} 
-                            onChange={handleInputChange}
-                            inputProps={{ min: 0, max: 100 }}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                        />
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            <TextField 
+                                fullWidth 
+                                label="Ставка за урок (₽)" 
+                                name="ratePerLesson" 
+                                type="number" 
+                                value={formData.ratePerLesson} 
+                                onChange={handleInputChange} 
+                                required 
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                            />
+                            <TextField 
+                                fullWidth 
+                                label="Скидка (%)" 
+                                name="discount" 
+                                type="number" 
+                                value={formData.discount || 0} 
+                                onChange={handleInputChange}
+                                inputProps={{ min: 0, max: 100 }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                            />
+                        </Box>
                         <FormControl fullWidth>
                             <InputLabel>Тип оплаты</InputLabel>
                             <Select 
@@ -736,7 +816,7 @@ function Students() {
                                 value={formData.paymentType} 
                                 onChange={handleInputChange} 
                                 label="Тип оплаты"
-                                sx={{ borderRadius: '10px' }}
+                                sx={{ borderRadius: '12px' }}
                             >
                                 <MenuItem value="single">Поурочно</MenuItem>
                                 <MenuItem value="subscription">Абонемент</MenuItem>
@@ -744,80 +824,102 @@ function Students() {
                         </FormControl>
                         <TextField 
                             fullWidth 
-                            label="Email родителя" 
+                            label="Email родителя (необязательно)" 
                             name="parentEmail" 
                             type="email" 
                             value={formData.parentEmail || ''} 
                             onChange={handleInputChange} 
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                         />
                         <FormControlLabel 
                             control={
                                 <Checkbox 
                                     checked={formData.selfPaid || false} 
                                     onChange={(e) => setFormData({ ...formData, selfPaid: e.target.checked })} 
+                                    sx={{ '&.Mui-checked': { color: '#4F46E5' } }}
                                 />
                             } 
-                            label="Самостоятельная оплата" 
+                            label={<Typography sx={{ fontSize: '14px', color: '#374151' }}>Ученик оплачивает занятия самостоятельно</Typography>} 
                         />
-                        <Alert severity="info" sx={{ borderRadius: '10px', fontSize: '13px' }}>
-                            После сохранения ученик и родитель получат приглашения на email.
-                        </Alert>
-                        <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-                            <StyledButton fullWidth variant="outlined" onClick={handleCloseDialog}
-                                sx={{ borderColor: '#D1D5DB', color: '#374151' }}>
-                                Отмена
-                            </StyledButton>
-                            <StyledButton fullWidth variant="contained" onClick={handleSubmit} 
-                                disabled={!formData.fullName || !formData.email || !formData.ratePerLesson || submitting}
-                                sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}>
-                                {submitting ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : (editingStudent ? 'Сохранить' : 'Отправить')}
-                            </StyledButton>
-                        </Box>
                     </Box>
                 </DialogContent>
+                <DialogActions sx={{ px: 4, pb: 4, pt: 1 }}>
+                    <Button onClick={handleCloseDialog} sx={{ color: '#6B7280', fontWeight: 600, px: 3, py: 1.2, borderRadius: '10px' }}>
+                        Отмена
+                    </Button>
+                    <Button 
+                        variant="contained" 
+                        onClick={handleSubmit} 
+                        disabled={!formData.fullName || !formData.email || !formData.ratePerLesson || submitting}
+                        sx={{ 
+                            bgcolor: '#4F46E5', 
+                            fontWeight: 600,
+                            px: 4, 
+                            py: 1.2, 
+                            borderRadius: '10px',
+                            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
+                            '&:hover': { bgcolor: '#4338CA' },
+                            '&.Mui-disabled': { bgcolor: '#C7D2FE' }
+                        }}
+                    >
+                        {submitting ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : (editingStudent ? 'Сохранить' : 'Добавить')}
+                    </Button>
+                </DialogActions>
             </StyledDialog>
 
             {/* ========== ДИАЛОГ СУЩЕСТВУЮЩЕГО УЧЕНИКА ========== */}
             <StyledDialog open={showExistingDialog} onClose={() => setShowExistingDialog(false)}>
-                <DialogTitle sx={{ fontSize: '18px', fontWeight: 600 }}>
+                <DialogTitle sx={{ fontSize: '20px', fontWeight: 700, color: '#111827', px: 4, pt: 4 }}>
                     Ученик уже существует
                 </DialogTitle>
-                <DialogContent>
-                    <Typography sx={{ mb: 2, fontSize: '14px', color: '#374151' }}>
-                        Найден: <strong>{existingStudent?.email}</strong>
+                <DialogContent sx={{ px: 4, py: 2 }}>
+                    <Typography sx={{ mb: 2, fontSize: '15px', color: '#374151' }}>
+                        В системе уже есть ученик с таким email:
                     </Typography>
-                    <Paper sx={{ p: 2, bgcolor: '#F9FAFB', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-                        <Typography sx={{ fontSize: '14px' }}>
-                            <strong>ФИО:</strong> {existingStudent?.fullName}
+                    <Paper sx={{ p: 2.5, bgcolor: '#F9FAFB', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                        <Typography sx={{ fontSize: '16px', fontWeight: 600, color: '#111827', mb: 0.5 }}>
+                            {existingStudent?.fullName}
+                        </Typography>
+                        <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
+                            {existingStudent?.email}
                         </Typography>
                     </Paper>
+                    <Typography sx={{ mt: 2, fontSize: '14px', color: '#6B7280' }}>
+                        Хотите привязать его к себе как куратору?
+                    </Typography >
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 3 }}>
-                    <StyledButton onClick={() => setShowExistingDialog(false)} sx={{ color: '#6B7280' }}>
-                        Новые данные
-                    </StyledButton>
-                    <StyledButton 
+                <DialogActions sx={{ px: 4, pb: 4, pt: 1 }}>
+                    <Button onClick={() => setShowExistingDialog(false)} sx={{ color: '#6B7280', fontWeight: 600, px: 3, py: 1.2, borderRadius: '10px' }}>
+                        Ввести новые данные
+                    </Button>
+                    <Button 
                         onClick={handleUseExistingStudent} 
                         variant="contained" 
-                        sx={{ bgcolor: '#4F46E5', '&:hover': { bgcolor: '#4338CA' } }}
+                        sx={{ 
+                            bgcolor: '#4F46E5', 
+                            fontWeight: 600,
+                            px: 4, 
+                            py: 1.2, 
+                            borderRadius: '10px',
+                            '&:hover': { bgcolor: '#4338CA' } 
+                        }}
                     >
-                        Использовать
-                    </StyledButton>
+                        Привязать существующего
+                    </Button>
                 </DialogActions>
             </StyledDialog>
 
             {/* ========== SNACKBAR ========== */}
             <Snackbar 
                 open={snackbar.open} 
-                autoHideDuration={5000} 
+                autoHideDuration={4000} 
                 onClose={() => setSnackbar({ ...snackbar, open: false })} 
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
                 <Alert 
                     severity={snackbar.severity} 
                     onClose={() => setSnackbar({ ...snackbar, open: false })}
-                    sx={{ borderRadius: '10px' }}
+                    sx={{ borderRadius: '12px', fontSize: '14px', fontWeight: 500, boxShadow: '0 8px 20px rgba(0,0,0,0.1)' }}
                 >
                     {snackbar.message}
                 </Alert>

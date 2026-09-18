@@ -10,6 +10,8 @@ import { styled, alpha } from '@mui/material/styles';
 import {
     Dashboard as DashboardIcon,
     People as PeopleIcon,
+    Videocam as VideocamIcon,
+    Draw as DrawIcon,
     Assignment as AssignmentIcon,
     Book as BookIcon,
     CalendarMonth as CalendarIcon,
@@ -22,7 +24,6 @@ import {
     TrendingUp as TrendingUpIcon,
     Notifications as NotificationsIcon,
     Group as GroupIcon,
-    Draw as DrawIcon,
     School,
     AutoAwesome,
     ChevronLeft,
@@ -216,22 +217,19 @@ const Sidebar = () => {
     const getTourTarget = (label) => TOUR_TARGETS[label] || undefined;
 
     const menuGroups = isTutor ? [
-        { title: 'Основное', items: [
+        { title: 'Рабочий центр', items: [
             { path: '/dashboard', label: 'Главная' },
             { path: '/weekly-schedule', label: 'Расписание' },
-            { path: '/students', label: 'Ученики' },
-            { path: '/groups', label: 'Группы' },
-            { path: '/finance', label: 'Финансы' },
-        ]},
-        { title: 'Обучение', items: [
-            { path: '/courses', label: 'Курсы' },
-            { path: '/task-bank', label: 'Банк заданий' },
-            { path: '/materials', label: 'Материалы' },
-            { path: '/tools', label: 'Инструменты' },
             { path: '/extracurricular', label: 'Домашние задания' },
         ]},
+        { title: 'Ученики', items: [
+            { path: '/students', label: 'Мои ученики' },
+        ]},
+        { title: 'Инструменты', items: [
+            { path: '/tools', label: 'Инструменты' },
+        ]},
         { title: 'Ещё', items: [
-            { path: '/lessons-archive', label: 'Архив' },
+            { path: '/materials', label: 'Материалы' },
             { path: '/profile', label: 'Профиль' },
         ]},
     ] : isStudent ? [
@@ -254,6 +252,7 @@ const Sidebar = () => {
         'Главная': <DashboardIcon />,
         'Расписание': <CalendarIcon />,
         'Ученики': <PeopleIcon />,
+        'Инструменты': <VideocamIcon />,
         'Финансы': <MoneyIcon />,
         'Группы': <GroupIcon />,
         'Курсы': <BookIcon />,

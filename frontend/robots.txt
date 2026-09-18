@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /students/
+Disallow: /finance/
+Disallow: /profile/
+Disallow: /student/
+Disallow: /parent/
+Sitemap: https://ed-space.ru/sitemap.xml

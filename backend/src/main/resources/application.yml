@@ -24,18 +24,23 @@ spring:
       max-request-size: 50MB
   mail:
     host: ${MAIL_HOST:smtp.timeweb.ru}
-    port: ${MAIL_PORT:587}
+    port: ${MAIL_PORT:465}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
-    protocol: smtp
+    protocol: smtps
     properties:
       mail:
         smtp:
           auth: true
-          starttls:
-            enable: true
           ssl:
+            enable: true
             trust: smtp.timeweb.ru
+          starttls:
+            enable: false
+          socketFactory:
+            class: jakarta.net.ssl.SSLSocketFactory
+            port: 465
+            fallback: false
 
 logging:
   level:

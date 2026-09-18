@@ -11,9 +11,16 @@ function PrivateRoute({ children, requiredRole }) {
 
     // Проверка роли, если требуется
     if (requiredRole && user?.role !== requiredRole) {
-        // Перенаправление на соответствующую страницу в зависимости от роли
-        if (user?.role === 'tutor') {
-            return <Navigate to="/dashboard" />;
+        // Для админа проверяем оба варианта роли
+        const isAdmin = user?.role === 'school_admin' || user?.role === 'ROLE_SCHOOL_ADMIN';
+        const isRequiredAdmin = requiredRole === 'school_admin' || requiredRole === 'ROLE_SCHOOL_ADMIN';
+        
+        if (isRequiredAdmin && isAdmin) {
+            return children;
+        }
+        
+        if (user?.role === 'tutor' || isAdmin) {
+            return <Navigate to={isAdmin ? "/admin" : "/dashboard"} />;
         } else if (user?.role === 'student') {
             return <Navigate to="/student" />;
         } else if (user?.role === 'parent') {

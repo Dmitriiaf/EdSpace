@@ -152,6 +152,7 @@ public class Tutor {
     public String getAbout() { return about; }
     public String getCity() { return city; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public Boolean getIsActive() { return isActive; }
     public List<Course> getCourses() { return courses; }
     public String getAvatar() { return avatar; }

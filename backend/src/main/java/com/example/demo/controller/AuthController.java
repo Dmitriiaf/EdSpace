@@ -200,9 +200,9 @@ public class AuthController {
                 Tutor tutor = (Tutor) user;
                 tutor.resetFailedAttempts();
                 tutorService.save(tutor);
-                String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR", tutor.getFullName());                return ResponseEntity.ok(Map.of(
+                String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), tutor.getRole(), tutor.getFullName());                return ResponseEntity.ok(Map.of(
                         "token", token, "id", tutor.getId(), "email", tutor.getEmail(),
-                        "fullName", tutor.getFullName(), "role", "tutor",
+                        "fullName", tutor.getFullName(), "role", tutor.getRole() != null ? tutor.getRole().replace("ROLE_", "").toLowerCase() : "tutor",
                         "referralCode", tutor.getReferralCode()
                 ));
             } else if (userType.equals("student")) {
@@ -282,14 +282,13 @@ public class AuthController {
         tutorService.save(tutor);
 
         // Выдаём токен
-        String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), "ROLE_TUTOR", tutor.getFullName());
-        return ResponseEntity.ok(Map.of(
+        String token = jwtUtils.generateToken(tutor.getEmail(), tutor.getId(), tutor.getRole(), tutor.getFullName());        return ResponseEntity.ok(Map.of(
                 "message", "Email подтверждён",
                 "token", token,
                 "id", tutor.getId(),
                 "email", tutor.getEmail(),
                 "fullName", tutor.getFullName(),
-                "role", "tutor",
+                "role", tutor.getRole() != null ? tutor.getRole().replace("ROLE_", "").toLowerCase() : "tutor",
                 "referralCode", tutor.getReferralCode()
         ));
     }

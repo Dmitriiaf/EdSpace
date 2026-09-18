@@ -574,4 +574,24 @@ public class HomeworkController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+    // ========== НЕПРОВЕРЕННЫЕ ДЗ ==========
+    @GetMapping("/tutor/{tutorId}/unreviewed")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> getUnreviewedHomework(
+            @PathVariable Long tutorId,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            if (!tutorId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+            List<Homework> all = homeworkService.getHomeworkByTutor(tutorId);
+            List<Homework> unreviewed = all.stream()
+                    .filter(h -> "SUBMITTED".equals(h.getStatus()))
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(unreviewed);
+        } catch (RuntimeException e) {
+            return ResponseEntity.ok(List.of());
+        }
+    }
 }

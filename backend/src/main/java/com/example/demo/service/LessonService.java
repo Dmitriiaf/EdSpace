@@ -553,8 +553,10 @@ public class LessonService {
         }
 
         if (original.isRescheduled()) {
-            log.warn("Попытка перенести уже перенесённое занятие: id={}", lessonId);
-            throw new BusinessException("Это занятие уже было перенесено. Перенесите новое занятие или создайте другое.");
+            // Если занятие уже перенесено, удаляем текущую запись и создаём новую
+            log.info("Повторный перенос занятия: id={}", lessonId);
+            lessonRepository.delete(original);
+            return createRescheduledLesson(original.getOriginalLesson(), newDate, newStartTime, newEndTime);
         }
 
         if ("PAID".equals(original.getStatus())) {
@@ -632,6 +634,27 @@ public class LessonService {
         log.info("Занятие успешно перенесено: исходное id={}, новое id={}", lessonId, savedNewLesson.getId());
         return savedNewLesson;
     }
+
+    @Transactional
+    public Lesson createRescheduledLesson(Lesson originalLesson, LocalDate newDate, LocalTime newStartTime, LocalTime newEndTime) {
+        Lesson newLesson = new Lesson(
+                originalLesson.getTutor(),
+                originalLesson.getStudent(),
+                originalLesson.getCourse(),
+                newDate,
+                newStartTime,
+                newEndTime
+        );
+        newLesson.setDuration(originalLesson.getDuration());
+        newLesson.setStatus("RESCHEDULED");
+        newLesson.setOriginalLesson(originalLesson.getOriginalLesson() != null ? originalLesson.getOriginalLesson() : originalLesson);
+        newLesson.setNotes(originalLesson.getNotes());
+        newLesson.setNextLessonPlan(originalLesson.getNextLessonPlan());
+        newLesson.setVideoPlatform(originalLesson.getVideoPlatform());
+        newLesson.setVideoPlatformLink(originalLesson.getVideoPlatformLink());
+        return lessonRepository.save(newLesson);
+    }
+
 
     @Autowired
     private GroupRepository groupRepository;
