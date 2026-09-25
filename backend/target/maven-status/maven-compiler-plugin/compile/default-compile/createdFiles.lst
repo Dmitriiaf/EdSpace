@@ -44,6 +44,7 @@ com\example\demo\controller\LessonPlanController.class
 com\example\demo\entity\Material.class
 com\example\demo\controller\MaterialController.class
 com\example\demo\service\AIGenerationService$1.class
+com\example\demo\controller\ChatController.class
 com\example\demo\service\AIGenerationService.class
 com\example\demo\entity\Subject.class
 com\example\demo\controller\SubscriptionRenewalController.class
@@ -86,8 +87,10 @@ com\example\demo\controller\AdminController.class
 com\example\demo\service\TutorService.class
 com\example\demo\controller\NotificationController.class
 com\example\demo\service\StudentService.class
+com\example\demo\repository\GameScoreRepository.class
 com\example\demo\repository\VariantRepository.class
 com\example\demo\config\RequestLoggingInterceptor.class
+com\example\demo\repository\ChatMessageRepository.class
 com\example\demo\controller\BoardSessionController.class
 com\example\demo\controller\StudentAuthController.class
 com\example\demo\controller\LessonController.class
@@ -115,14 +118,17 @@ com\example\demo\repository\SubscriptionRepository.class
 com\example\demo\controller\PasswordResetController.class
 com\example\demo\controller\YandexOAuthController.class
 com\example\demo\repository\BoardSessionRepository.class
+com\example\demo\controller\GameController.class
 com\example\demo\controller\LessonNotesController.class
 com\example\demo\repository\LessonPlanRepository.class
 com\example\demo\controller\HomeworkController.class
+com\example\demo\entity\ChatMessage.class
 com\example\demo\controller\ParentAuthController.class
 com\example\demo\exception\GlobalExceptionHandler.class
 com\example\demo\service\ExcalidrawService$BoardInfo.class
 com\example\demo\config\ScheduledTasks.class
 com\example\demo\service\CourseService.class
+com\example\demo\entity\GameScore.class
 com\example\demo\exception\ValidationException.class
 com\example\demo\controller\BoardWebSocketController.class
 com\example\demo\repository\CourseRepository.class

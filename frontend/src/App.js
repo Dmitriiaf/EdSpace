@@ -17,7 +17,6 @@ import StepikPage from './pages/StepikPage';
 import StepikCallback from './pages/StepikCallback';
 import LessonPlans from './pages/LessonPlans';
 import TaskBank from './pages/TaskBank';
-import TutorProgress from './pages/TutorProgress';
 import CompleteRegistration from './pages/CompleteRegistration';
 import ParentRegistration from './pages/ParentRegistration';
 import ForgotPassword from './pages/ForgotPassword';
@@ -70,7 +69,6 @@ const BG_IMAGE_DARK = `
 
 const AppContent = () => {
     const { user } = useAuth();
-    const [isSidebarHovered, setIsSidebarHovered] = useState(false);
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('darkMode');
         return saved ? JSON.parse(saved) : false;
@@ -121,7 +119,6 @@ const AppContent = () => {
     const isStudent = user?.role === 'student';
     const isParent = user?.role === 'parent';
     const isAdmin = user?.role === 'school_admin' || user?.role === 'ROLE_SCHOOL_ADMIN';
-    const sidebarWidth = isSidebarHovered ? 260 : 70;
 
     const publicRoutes = (
         <Routes>
@@ -185,31 +182,20 @@ const AppContent = () => {
                 .MuiTab-root:hover { background: rgba(79, 70, 229, 0.04); }
             `}</style>
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-                <Sidebar onHoverChange={setIsSidebarHovered} darkMode={darkMode} />
+                <Sidebar />
                 {isTutor && <OnboardingTour />}
-                <Tooltip title={darkMode ? 'Светлая тема' : 'Тёмная тема'}>
-                    <IconButton
-                        onClick={toggleDarkMode}
-                        sx={{
-                            position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
-                            bgcolor: darkMode ? '#333' : '#4F46E5', color: 'white',
-                            '&:hover': { bgcolor: darkMode ? '#555' : '#4338CA' },
-                            width: 48, height: 48, boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-                        }}
-                    >
-                        {darkMode ? <LightIcon /> : <DarkIcon />}
-                    </IconButton>
-                </Tooltip>
+
 
                 <Box
                     component="main"
                     className="fade-in"
                     sx={{
-                        flexGrow: 1, ml: { xs: 0, md: `${sidebarWidth}px` },
-                        minHeight: '100vh', transition: 'margin-left 0.2s ease-in-out',
+                        flexGrow: 1,
+                        ml: { xs: 0, md: '260px' },
+                        minHeight: '100vh',
                         bgcolor: darkMode ? '#0f0f0f' : '#F3F4F6',
                         backgroundImage: darkMode ? BG_IMAGE_DARK : BG_IMAGE_LIGHT,
-                        width: { xs: '100%', md: `calc(100% - ${sidebarWidth}px)` },
+                        width: { xs: '100%', md: 'calc(100% - 260px)' },
                     }}
                 >
                     <Routes>
@@ -246,7 +232,8 @@ const AppContent = () => {
                         <Route path="/complete-registration" element={<CompleteRegistration />} />
                         <Route path="/parent-registration" element={<ParentRegistration />} />
                         <Route path="/stepik/callback" element={<StepikCallback />} />
-                        <Route path="/" element={<Navigate to={isAdmin ? "/admin" : isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />                        <Route path="*" element={<NotFoundPage />} />
+                        <Route path="/" element={<Navigate to={isAdmin ? "/admin" : isTutor ? "/dashboard" : isStudent ? "/student" : "/parent/dashboard"} />} />
+                        <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                 </Box>
             </Box>

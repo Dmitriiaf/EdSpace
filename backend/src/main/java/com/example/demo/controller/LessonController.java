@@ -370,11 +370,12 @@ public class LessonController {
 
     @Cacheable(value = "lessons", key = "#tutorId")
     @GetMapping("/all")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getAllLessons(@RequestParam Long tutorId,
                                            @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                            @RequestAttribute(name = "userRole", required = false) String userRole) {
-        if (!tutorId.equals(currentUserId)) {
+        boolean isAdmin = "ROLE_SCHOOL_ADMIN".equals(userRole);
+        if (!isAdmin && !tutorId.equals(currentUserId)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
         try {
@@ -842,7 +843,7 @@ public class LessonController {
 
     @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> cancelLesson(@PathVariable Long id,
                                           @RequestBody(required = false) Map<String, String> request,
                                           @RequestAttribute(name = "userId", required = false) Long currentUserId,
@@ -850,7 +851,9 @@ public class LessonController {
         try {
             Lesson lesson = lessonService.getLessonById(id);
 
-            if ("ROLE_TUTOR".equals(userRole)) {
+            if ("ROLE_SCHOOL_ADMIN".equals(userRole)) {
+                // Админ может отменять любой урок
+            } else if ("ROLE_TUTOR".equals(userRole)) {
                 boolean hasTutor = lesson.getStudent().getTutors().stream()
                         .anyMatch(t -> t.getId().equals(currentUserId));
                 if (!hasTutor) {
@@ -893,6 +896,75 @@ public class LessonController {
             List<Lesson> lessons = lessonService.getCompletedLessons(studentId, tutorId, courseId, limit);
             return ResponseEntity.ok(lessons);
         } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/pair")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
+    public ResponseEntity<?> createPairLesson(@RequestBody Map<String, Object> request,
+                                              @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                              @RequestAttribute(name = "userRole", required = false) String userRole) {
+        try {
+            Long tutorId = Long.parseLong(request.get("tutorId").toString());
+            List<?> studentIdsRaw = (List<?>) request.get("studentIds");
+            if (studentIdsRaw == null || studentIdsRaw.size() < 2) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Нужно минимум 2 ученика"));
+            }
+            List<Long> studentIds = studentIdsRaw.stream()
+                    .map(x -> Long.parseLong(x.toString()))
+                    .collect(Collectors.toList());
+
+            Integer duration = request.get("duration") != null
+                    ? Integer.parseInt(request.get("duration").toString()) : 60;
+
+            Tutor tutor = tutorRepository.findById(tutorId)
+                    .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
+            String tutorTimezone = tutor.getTimezone() != null ? tutor.getTimezone() : "Asia/Krasnoyarsk";
+
+            LocalDate localLessonDate = LocalDate.parse(request.get("lessonDate").toString());
+            LocalTime localStartTime = LocalTime.parse(request.get("startTime").toString());
+
+            ZonedDateTime tutorZoned = ZonedDateTime.of(localLessonDate, localStartTime, ZoneId.of(tutorTimezone));
+            ZonedDateTime utcZoned = tutorZoned.withZoneSameInstant(ZoneId.of("UTC"));
+            LocalDate utcDate = utcZoned.toLocalDate();
+            LocalTime utcStart = utcZoned.toLocalTime();
+            LocalTime utcEnd = utcStart.plusMinutes(duration);
+
+            Course course = null;
+            if (request.get("courseId") != null && !request.get("courseId").toString().isEmpty()) {
+                course = courseRepository.findById(Long.parseLong(request.get("courseId").toString())).orElse(null);
+            }
+
+            long pairGroupId = System.currentTimeMillis();
+            String sharedJitsiRoom = "edspace-jitsi-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+            String sharedBoardRoom = "edspace-board-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+
+            List<Lesson> created = new ArrayList<>();
+            for (Long sid : studentIds) {
+                Student s = studentRepository.findById(sid)
+                        .orElseThrow(() -> new RuntimeException("Ученик не найден: " + sid));
+
+                Lesson lesson = new Lesson(tutor, s, course, utcDate, utcStart, utcEnd);
+                lesson.setDuration(duration);
+                lesson.setGroupId(pairGroupId);
+                lesson.setJitsiRoomName(sharedJitsiRoom);
+                lesson.setBoardRoomName(sharedBoardRoom);
+                lesson.setStatus("SCHEDULED");
+                lessonService.saveLesson(lesson);
+                created.add(lesson);
+            }
+
+            log.info("✅ Парное занятие создано: pairGroupId={}, учеников={}", pairGroupId, created.size());
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "✅ Создано " + created.size() + " уроков (парное занятие)",
+                    "pairGroupId", pairGroupId,
+                    "lessons", created,
+                    "count", created.size()
+            ));
+        } catch (RuntimeException e) {
+            log.error("Ошибка создания парного занятия: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -967,9 +1039,11 @@ public class LessonController {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
-            Tutor tutor = tutorRepository.findById(currentUserId)
-                    .orElseThrow(() -> new RuntimeException("Репетитор не найден"));
-            String tutorTimezone = tutor.getTimezone() != null ? tutor.getTimezone() : "Asia/Krasnoyarsk";
+            // ✅ Используем часовой пояс РЕПЕТИТОРА УРОКА (а не того, кто запрашивает перенос)
+            Tutor lessonTutor = lesson.getTutor();
+            String tutorTimezone = lessonTutor.getTimezone() != null
+                    ? lessonTutor.getTimezone()
+                    : "Asia/Krasnoyarsk";
 
             LocalDate localNewDate = LocalDate.parse(request.get("newDate").toString());
 
@@ -1311,18 +1385,24 @@ public class LessonController {
         }
     }
 
+    @CacheEvict(value = {"lessons", "lessons_date"}, allEntries = true)
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> deleteLesson(@PathVariable Long id,
                                           @RequestParam(required = false, defaultValue = "false") boolean deleteFromTemplate,
-                                          @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                          @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                          @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Lesson lesson = lessonService.getLessonById(id);
 
-            boolean hasTutor = lesson.getStudent().getTutors().stream()
-                    .anyMatch(t -> t.getId().equals(currentUserId));
-            if (!hasTutor) {
-                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            // ✅ Админ может удалять любой урок
+            boolean isAdmin = "ROLE_SCHOOL_ADMIN".equals(userRole);
+            if (!isAdmin) {
+                boolean hasTutor = lesson.getStudent().getTutors().stream()
+                        .anyMatch(t -> t.getId().equals(currentUserId));
+                if (!hasTutor) {
+                    return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+                }
             }
 
             int deletedCount = 1;

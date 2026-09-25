@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import com.example.demo.repository.ParentRepository;
+import org.springframework.web.multipart.MultipartFile;
+
 import com.example.demo.service.NotificationService;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -163,14 +165,15 @@ public class StudentController {
     }
 
     @GetMapping("/tutor/{tutorId}")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getStudentsByTutor(@PathVariable Long tutorId,
                                                 @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                 @RequestAttribute(name = "userRole", required = false) String userRole) {
-        if (!"ROLE_TUTOR".equals(userRole)) {
+        boolean isAdmin = "ROLE_SCHOOL_ADMIN".equals(userRole);
+        if (!isAdmin && !"ROLE_TUTOR".equals(userRole)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
-        if (!tutorId.equals(currentUserId)) {
+        if (!isAdmin && !tutorId.equals(currentUserId)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
         try {
@@ -200,14 +203,15 @@ public class StudentController {
     }
 
     @GetMapping("/tutor/{tutorId}/archived")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getArchivedStudentsByTutor(@PathVariable Long tutorId,
                                                         @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                                         @RequestAttribute(name = "userRole", required = false) String userRole) {
-        if (!"ROLE_TUTOR".equals(userRole)) {
+        boolean isAdmin = "ROLE_SCHOOL_ADMIN".equals(userRole);
+        if (!isAdmin && !"ROLE_TUTOR".equals(userRole)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
-        if (!tutorId.equals(currentUserId)) {
+        if (!isAdmin && !tutorId.equals(currentUserId)) {
             return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
         }
         try {
@@ -604,6 +608,102 @@ public class StudentController {
 
         } catch (Exception e) {
             log.error("Ошибка отправки приглашения родителю {}: {}", parentEmail, e.getMessage());
+        }
+    }
+
+    // ================== ПРОФИЛЬ УЧЕНИКА ==================
+
+    /**
+     * Обновление профиля ученика (bio, interests, school, goal, fullName, grade)
+     * PATCH /api/students/{id}/profile
+     */
+    @PatchMapping("/{id}/profile")
+    public ResponseEntity<?> updateProfile(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> payload
+    ) {
+        try {
+            Student student = studentRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Ученик не найден"));
+
+            if (payload.containsKey("fullName")) {
+                String fn = (String) payload.get("fullName");
+                if (fn != null && !fn.isBlank()) student.setFullName(fn.trim());
+            }
+            if (payload.containsKey("school")) student.setSchool((String) payload.get("school"));
+            if (payload.containsKey("grade")) student.setGrade((String) payload.get("grade"));
+            if (payload.containsKey("bio")) {
+                String bio = (String) payload.get("bio");
+                if (bio != null && bio.length() > 300) bio = bio.substring(0, 300);
+                student.setBio(bio);
+            }
+            if (payload.containsKey("interests")) {
+                Object interests = payload.get("interests");
+                if (interests instanceof String) {
+                    student.setInterests((String) interests);
+                } else if (interests instanceof List) {
+                    // Сохраняем как JSON-строку
+                    student.setInterests(new com.fasterxml.jackson.databind.ObjectMapper()
+                            .writeValueAsString(interests));
+                }
+            }
+            if (payload.containsKey("goal")) student.setGoal((String) payload.get("goal"));
+
+            Student saved = studentRepository.save(student);
+            return ResponseEntity.ok(saved);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Загрузка аватара ученика
+     * POST /api/students/{id}/avatar
+     */
+    @PostMapping("/{id}/avatar")
+    public ResponseEntity<?> uploadAvatar(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file
+    ) {
+        try {
+            Student student = studentRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Ученик не найден"));
+
+            if (file.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Файл пуст"));
+            }
+            if (file.getSize() > 2 * 1024 * 1024) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Файл больше 2MB"));
+            }
+
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Только изображения"));
+            }
+
+            // Папка загрузки
+            String uploadDir = "/opt/EdSpace/uploads/avatars";
+            java.io.File dir = new java.io.File(uploadDir);
+            if (!dir.exists()) dir.mkdirs();
+
+            // Имя файла: student_{id}_{timestamp}.{ext}
+            String ext = "jpg";
+            if (contentType.contains("png")) ext = "png";
+            else if (contentType.contains("webp")) ext = "webp";
+            else if (contentType.contains("gif")) ext = "gif";
+
+            String fileName = "student_" + id + "_" + System.currentTimeMillis() + "." + ext;
+            java.io.File dest = new java.io.File(dir, fileName);
+            file.transferTo(dest);
+
+            // URL (фронт через nginx отдаёт /uploads/)
+            String avatarUrl = "/uploads/avatars/" + fileName;
+            student.setAvatar(avatarUrl);
+            studentRepository.save(student);
+
+            return ResponseEntity.ok(Map.of("avatarUrl", avatarUrl));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 }

@@ -50,6 +50,8 @@ const AdminDashboard = () => {
     const [showNotifications, setShowNotifications] = useState(false);
     const [activeNotification, setActiveNotification] = useState(null);
     const [lessonsFilter, setLessonsFilter] = useState('all');
+    // Новое состояние: 'tabs' — обычные вкладки, 'tutor-schedule' — расписание выбранного репетитора
+    const [view, setView] = useState('tabs');
     // Форма репетитора
     const [tutorDialog, setTutorDialog] = useState(false);
     const [tutorForm, setTutorForm] = useState({ fullName: '', email: '', phone: '', subjects: '' });
@@ -151,7 +153,7 @@ const AdminDashboard = () => {
         weekAgo.setDate(now.getDate() - 7);
         const monthAgo = new Date(now);
         monthAgo.setMonth(now.getMonth() - 1);
-        
+
         return lessons.filter(l => {
             const lessonDate = new Date(l.lessonDate);
             if (lessonsFilter === 'week') return lessonDate >= weekAgo;
@@ -268,7 +270,7 @@ const AdminDashboard = () => {
                                 </Box>
                                 {!n.read && (
                                     <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                        <Button size="small" variant="contained" 
+                                        <Button size="small" variant="contained"
                                             onClick={() => {
                                                 const match = n.message.match(/урока (\d+)/);
                                                 if (match) {
@@ -280,7 +282,7 @@ const AdminDashboard = () => {
                                                         const tutor = tutors.find(t => t.fullName === lesson.tutorName);
                                                         if (tutor) {
                                                             setSelectedTutorId(tutor.id);
-                                                            setTab(3);
+                                                            setView('tutor-schedule');
                                                         }
                                                     }
                                                 }
@@ -303,16 +305,18 @@ const AdminDashboard = () => {
                     </StyledCard>
                 )}
 
-                {/* TABS */}
-                <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 3 }}>
-                    <Tab label="Репетиторы" />
-                    <Tab label="Ученики" />
-                    <Tab label="Расписание" />
-                    <Tab label="Финансы" />
-                </Tabs>
+                {/* TABS — показываем только когда view === 'tabs' */}
+                {view === 'tabs' && (
+                    <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 3 }}>
+                        <Tab label="Репетиторы" />
+                        <Tab label="Ученики" />
+                        <Tab label="Расписание" />
+                        <Tab label="Финансы" />
+                    </Tabs>
+                )}
 
                 {/* РЕПЕТИТОРЫ */}
-                {tab === 0 && (
+                {view === 'tabs' && tab === 0 && (
                     <Box>
                         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                             <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: TEXT }}>
@@ -360,7 +364,7 @@ const AdminDashboard = () => {
                 )}
 
                 {/* УЧЕНИКИ */}
-                {tab === 1 && (
+                {view === 'tabs' && tab === 1 && (
                     <Box>
                         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                             <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: TEXT }}>
@@ -381,6 +385,7 @@ const AdminDashboard = () => {
                                         <TableCell sx={{ fontWeight: 700, color: TEXT_DIM }}>Телефон</TableCell>
                                         <TableCell sx={{ fontWeight: 700, color: TEXT_DIM }}>Класс</TableCell>
                                         <TableCell sx={{ fontWeight: 700, color: TEXT_DIM }}>Репетитор</TableCell>
+                                        <TableCell sx={{ fontWeight: 700, color: TEXT_DIM }}>Ставка</TableCell>
                                         <TableCell sx={{ fontWeight: 700, color: TEXT_DIM }}>Действия</TableCell>
                                     </TableRow>
                                 </TableHead>
@@ -396,8 +401,8 @@ const AdminDashboard = () => {
                                                 ) : '—'}
                                             </TableCell>
                                             <TableCell>
-                                                <Select 
-                                                    value={s.tutorId || ''} 
+                                                <Select
+                                                    value={s.tutorId || ''}
                                                     size="small"
                                                     onChange={async (e) => {
                                                         const tutorId = e.target.value;
@@ -415,8 +420,52 @@ const AdminDashboard = () => {
                                                 >
                                                     <MenuItem value="">Не назначен</MenuItem>
                                                     {tutors.filter(t => t.id !== user?.id).map(t => (
-                                                        <MenuItem key={t.id} value={t.id}>{t.fullName}</MenuItem>                                                    ))}
+                                                        <MenuItem key={t.id} value={t.id}>{t.fullName}</MenuItem>
+                                                    ))}
                                                 </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                                <TextField
+                                                    size="small"
+                                                    type="number"
+                                                    defaultValue={s.ratePerLesson ?? ''}
+                                                    placeholder="—"
+                                                    onBlur={async (e) => {
+                                                        const newRate = e.target.value;
+                                                        if (newRate === '' || newRate === null) return;
+                                                        if (parseFloat(newRate) === parseFloat(s.ratePerLesson)) return;
+                                                        try {
+                                                            await axios.put(`/admin/students/${s.id}/rate`, {
+                                                                ratePerLesson: parseFloat(newRate),
+                                                                tutorId: s.tutorId
+                                                            });
+                                                            setSnackbar({ open: true, message: '✅ Ставка обновлена', severity: 'success' });
+                                                            loadData();
+                                                        } catch (error) {
+                                                            setSnackbar({
+                                                                open: true,
+                                                                message: error.response?.data?.error || 'Ошибка сохранения ставки',
+                                                                severity: 'error'
+                                                            });
+                                                        }
+                                                    }}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                                                    sx={{
+                                                        width: 110,
+                                                        '& .MuiOutlinedInput-root': {
+                                                            borderRadius: 2,
+                                                            '& fieldset': { borderColor: BORDER },
+                                                            '&:hover fieldset': { borderColor: PRIMARY },
+                                                            '&.Mui-focused fieldset': { borderColor: PRIMARY },
+                                                        },
+                                                        '& input': { fontSize: '13px', color: TEXT, textAlign: 'right', padding: '8px 4px' },
+                                                    }}
+                                                    InputProps={{
+                                                        endAdornment: (
+                                                            <Typography sx={{ fontSize: '12px', color: TEXT_DIM, ml: 0.5 }}>₽</Typography>
+                                                        ),
+                                                    }}
+                                                />
                                             </TableCell>
                                             <TableCell>
                                                 <IconButton size="small" onClick={() => handleDeleteStudent(s.id)} sx={{ color: '#EF4444' }}>
@@ -432,20 +481,20 @@ const AdminDashboard = () => {
                 )}
 
                 {/* РАСПИСАНИЕ - ТАБЛИЦА РЕПЕТИТОРОВ */}
-                {tab === 2 && (
+                {view === 'tabs' && tab === 2 && (
                     <Box>
                         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                             <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: TEXT }}>
                                 Репетиторы и расписание
                             </Typography>
                             <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Button size="small" variant={lessonsFilter === 'all' ? "contained" : "outlined"} 
+                                <Button size="small" variant={lessonsFilter === 'all' ? "contained" : "outlined"}
                                     onClick={() => setLessonsFilter('all')}
                                     sx={{ textTransform: 'none', borderRadius: 2, fontSize: '12px' }}>Все</Button>
-                                <Button size="small" variant={lessonsFilter === 'week' ? "contained" : "outlined"} 
+                                <Button size="small" variant={lessonsFilter === 'week' ? "contained" : "outlined"}
                                     onClick={() => setLessonsFilter('week')}
                                     sx={{ textTransform: 'none', borderRadius: 2, fontSize: '12px' }}>Неделя</Button>
-                                <Button size="small" variant={lessonsFilter === 'month' ? "contained" : "outlined"} 
+                                <Button size="small" variant={lessonsFilter === 'month' ? "contained" : "outlined"}
                                     onClick={() => setLessonsFilter('month')}
                                     sx={{ textTransform: 'none', borderRadius: 2, fontSize: '12px' }}>Месяц</Button>
                             </Box>
@@ -471,7 +520,7 @@ const AdminDashboard = () => {
                                         const activeLessons = tutorLessons.filter(l => l.status === 'SCHEDULED');
                                         // Занятость: активные уроки / 20 (5 дней * 4 слота)
                                         const occupancy = Math.round((activeLessons.length / 20) * 100);
-                                        const tutorStudents = tutor.studentCount || 0;                                        
+                                        const tutorStudents = tutor.studentCount || 0;
                                         return (
                                             <TableRow key={tutor.id} sx={{ '&:hover': { bgcolor: '#F8FAFC' } }}>
                                                 <TableCell sx={{ fontWeight: 600 }}>{tutor.fullName}</TableCell>
@@ -484,22 +533,22 @@ const AdminDashboard = () => {
                                                 </TableCell>
                                                 <TableCell>{tutorLessons.length}</TableCell>
                                                 <TableCell>
-                                                    <Chip 
-                                                        label={`${occupancy}%`} 
-                                                        size="small" 
-                                                        sx={{ 
-                                                            bgcolor: occupancy > 80 ? '#FEE2E2' : occupancy > 50 ? '#FEF3C7' : '#D1FAE5', 
-                                                            color: occupancy > 80 ? '#991B1B' : occupancy > 50 ? '#92400E' : '#065F46' 
-                                                        }} 
+                                                    <Chip
+                                                        label={`${occupancy}%`}
+                                                        size="small"
+                                                        sx={{
+                                                            bgcolor: occupancy > 80 ? '#FEE2E2' : occupancy > 50 ? '#FEF3C7' : '#D1FAE5',
+                                                            color: occupancy > 80 ? '#991B1B' : occupancy > 50 ? '#92400E' : '#065F46'
+                                                        }}
                                                     />
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Button 
-                                                        size="small" 
+                                                    <Button
+                                                        size="small"
                                                         variant="outlined"
                                                         onClick={() => {
                                                             setSelectedTutorId(tutor.id);
-                                                            setTab(3);
+                                                            setView('tutor-schedule');
                                                         }}
                                                         sx={{ textTransform: 'none', borderRadius: 2, fontSize: '12px' }}
                                                     >
@@ -515,12 +564,12 @@ const AdminDashboard = () => {
                     </Box>
                 )}
 
-                {/* РАСПИСАНИЕ ВЫБРАННОГО РЕПЕТИТОРА */}
-                {tab === 3 && selectedTutorId && (() => {
+                {/* РАСПИСАНИЕ ВЫБРАННОГО РЕПЕТИТОРА — открывается поверх вкладок */}
+                {view === 'tutor-schedule' && selectedTutorId && (() => {
                     const selectedTutor = tutors.find(t => t.id === selectedTutorId);
                     const tutorLessons = getFilteredLessons().filter(l => l.tutorName === selectedTutor?.fullName);
                     const tutorStudents = students.filter(s => s.tutorName === selectedTutor?.fullName);
-                    
+
                     return (
                         <Box>
                             {activeNotification && (
@@ -531,7 +580,7 @@ const AdminDashboard = () => {
                                 </Alert>
                             )}
                             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-                                <Button onClick={() => setTab(2)} sx={{ textTransform: 'none', color: TEXT_DIM }}>
+                                <Button onClick={() => { setView('tabs'); setSelectedTutorId(null); }} sx={{ textTransform: 'none', color: TEXT_DIM }}>
                                     ← Назад
                                 </Button>
                             </Stack>
@@ -548,7 +597,8 @@ const AdminDashboard = () => {
                     );
                 })()}
 
-                {tab === 4 && (
+                {/* ФИНАНСЫ ШКОЛЫ */}
+                {view === 'tabs' && tab === 3 && (
                     <Box>
                         <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: TEXT, mb: 2 }}>
                             💰 Финансы школы

@@ -1,4 +1,5 @@
-// ========== backend/src/main/java/com/example/demo/controller/SubscriptionController.java (ИСПРАВЛЕННАЯ ВЕРСИЯ — ЕДИНЫЙ РЕГИСТР) ==========
+// ========== backend/src/main/java/com/example/demo/controller/SubscriptionController.java ==========
+// v5 — добавлена поддержка SCHOOL_ADMIN во всех методах
 package com.example.demo.controller;
 
 import com.example.demo.entity.Lesson;
@@ -37,9 +38,17 @@ public class SubscriptionController {
     @Autowired
     private LessonRepository lessonRepository;
 
+    private boolean isAdmin(String userRole) {
+        return "ROLE_SCHOOL_ADMIN".equals(userRole);
+    }
+
+    private boolean ownsSubscription(Subscription sub, Long currentUserId) {
+        return sub.getTutor() != null && sub.getTutor().getId().equals(currentUserId);
+    }
+
     // ========== GET /tutor/{tutorId} ==========
     @GetMapping("/tutor/{tutorId}")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getSubscriptionsByTutor(@PathVariable Long tutorId) {
         try {
             List<Subscription> subscriptions = subscriptionService.getSubscriptionsByTutor(tutorId);
@@ -51,7 +60,7 @@ public class SubscriptionController {
 
     // ========== GET /student/{studentId} ==========
     @GetMapping("/student/{studentId}")
-    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getSubscriptionsByStudent(@PathVariable Long studentId) {
         try {
             List<Subscription> subscriptions = subscriptionService.getSubscriptionsByStudent(studentId);
@@ -63,14 +72,15 @@ public class SubscriptionController {
 
     // ========== PUT /{id} ==========
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> updateSubscription(@PathVariable Long id,
                                                 @RequestBody Map<String, Object> request,
-                                                @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                                @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                                @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Subscription sub = subscriptionService.getSubscriptionById(id);
 
-            if (!sub.getTutor().getId().equals(currentUserId)) {
+            if (!isAdmin(userRole) && !ownsSubscription(sub, currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
@@ -99,7 +109,7 @@ public class SubscriptionController {
 
     // ========== GET /student/{studentId}/pending ==========
     @GetMapping("/student/{studentId}/pending")
-    @PreAuthorize("hasAnyRole('TUTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'PARENT', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getPendingSubscriptions(@PathVariable Long studentId) {
         try {
             List<Subscription> subscriptions = subscriptionService.getPendingSubscriptionsByStudent(studentId);
@@ -111,7 +121,7 @@ public class SubscriptionController {
 
     // ========== GET /student/{studentId}/active ==========
     @GetMapping("/student/{studentId}/active")
-    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getActiveSubscription(@PathVariable Long studentId) {
         try {
             Subscription subscription = subscriptionService.getActiveSubscription(studentId);
@@ -123,13 +133,14 @@ public class SubscriptionController {
 
     // ========== PATCH /{id}/activate ==========
     @PatchMapping("/{id}/activate")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> activateSubscription(@PathVariable Long id,
-                                                  @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                                  @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                                  @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Subscription sub = subscriptionService.getSubscriptionById(id);
 
-            if (!sub.getTutor().getId().equals(currentUserId)) {
+            if (!isAdmin(userRole) && !ownsSubscription(sub, currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
@@ -137,7 +148,6 @@ public class SubscriptionController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Можно активировать только ожидающий абонемент"));
             }
 
-            // Вызываем paySubscription — он создаст платёж и сменит статус на ACTIVE
             Subscription activated = subscriptionService.paySubscription(id);
 
             return ResponseEntity.ok(Map.of(
@@ -149,8 +159,9 @@ public class SubscriptionController {
         }
     }
 
+    // ========== POST /{id}/recalculate ==========
     @PostMapping("/{id}/recalculate")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> recalculateSubscription(@PathVariable Long id) {
         try {
             Subscription subscription = subscriptionRepository.findById(id)
@@ -186,7 +197,7 @@ public class SubscriptionController {
 
     // ========== POST / ==========
     @PostMapping
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> createSubscription(@RequestBody Map<String, Object> request) {
         try {
             Subscription subscription = subscriptionService.createSubscription(
@@ -205,7 +216,7 @@ public class SubscriptionController {
 
     // ========== POST /{id}/pay ==========
     @PostMapping("/{id}/pay")
-    @PreAuthorize("hasAnyRole('PARENT', 'TUTOR')")
+    @PreAuthorize("hasAnyRole('PARENT', 'TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> paySubscription(@PathVariable Long id,
                                              @RequestAttribute(name = "userId", required = false) Long currentUserId,
                                              @RequestAttribute(name = "userRole", required = false) String userRole) {
@@ -217,8 +228,8 @@ public class SubscriptionController {
                         !subscription.getStudent().getParent().getId().equals(currentUserId)) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
-            } else if ("ROLE_TUTOR".equals(userRole)) {
-                if (!subscription.getTutor().getId().equals(currentUserId)) {
+            } else if (!isAdmin(userRole)) {
+                if (!ownsSubscription(subscription, currentUserId)) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
             }
@@ -235,7 +246,7 @@ public class SubscriptionController {
 
     // ========== POST /{id}/additional-pay ==========
     @PostMapping("/{id}/additional-pay")
-    @PreAuthorize("hasAnyRole('PARENT', 'TUTOR')")
+    @PreAuthorize("hasAnyRole('PARENT', 'TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> makeAdditionalPayment(@PathVariable Long id,
                                                    @RequestBody Map<String, Object> request,
                                                    @RequestAttribute(name = "userId", required = false) Long currentUserId,
@@ -248,8 +259,8 @@ public class SubscriptionController {
                         !subscription.getStudent().getParent().getId().equals(currentUserId)) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
-            } else if ("ROLE_TUTOR".equals(userRole)) {
-                if (!subscription.getTutor().getId().equals(currentUserId)) {
+            } else if (!isAdmin(userRole)) {
+                if (!ownsSubscription(subscription, currentUserId)) {
                     return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
                 }
             }
@@ -268,7 +279,7 @@ public class SubscriptionController {
 
     // ========== POST /{id}/use ==========
     @PostMapping("/{id}/use")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> useLesson(@PathVariable Long id) {
         try {
             Subscription subscription = subscriptionService.useLesson(id);
@@ -283,7 +294,7 @@ public class SubscriptionController {
 
     // ========== POST /renew ==========
     @PostMapping("/renew")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> renewAllSubscriptions() {
         try {
             subscriptionService.renewAllSubscriptions();
@@ -295,9 +306,15 @@ public class SubscriptionController {
 
     // ========== DELETE /{id} ==========
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('TUTOR')")
-    public ResponseEntity<?> deleteSubscription(@PathVariable Long id) {
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
+    public ResponseEntity<?> deleteSubscription(@PathVariable Long id,
+                                                @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                                @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
+            Subscription sub = subscriptionService.getSubscriptionById(id);
+            if (!isAdmin(userRole) && !ownsSubscription(sub, currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
             subscriptionService.deleteSubscription(id);
             return ResponseEntity.ok(Map.of("message", "Абонемент удалён"));
         } catch (RuntimeException e) {

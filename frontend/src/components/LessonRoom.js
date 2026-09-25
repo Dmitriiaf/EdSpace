@@ -12,7 +12,7 @@ import {
 } from '@mui/icons-material';
 import axiosInstance from '../api/axiosConfig';
 import { useAuth } from '../context/AuthContext';
-import DinoGame from './DinoGame';
+import FlappyBird from './FlappyBird';
 
 const MELETO_BOARD_URL = 'https://meleto.org/board/84dc92e5-6848-4e22-a31c-d16472b248d7';
 
@@ -203,7 +203,7 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                                         <Typography variant="h6" sx={{ mb: 2, color: '#92400E' }}>
                                             ⏳ Ожидание репетитора...
                                         </Typography>
-                                        <DinoGame />
+                                        <FlappyBird />
                                     </>
                                 ) : (
                                     <>

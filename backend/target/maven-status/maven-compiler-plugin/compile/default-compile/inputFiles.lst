@@ -13,9 +13,11 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardSessionController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardWebSocketController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ChatController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\CourseController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ExcalidrawController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ExportController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\GameController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\GroupController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\HomeworkController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\IntegrationController.java
@@ -54,7 +56,9 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\Lesson
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\StudentDTO.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\SubscriptionDTO.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\BoardSession.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\ChatMessage.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Course.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\GameScore.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Group.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Homework.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\InvitationToken.java
@@ -85,7 +89,9 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\NotFoundException.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\ValidationException.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\BoardSessionRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\ChatMessageRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\CourseRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\GameScoreRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\GroupRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\HomeworkRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\InvitationTokenRepository.java

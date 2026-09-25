@@ -54,6 +54,22 @@ public class Student {
     private String parentName;
     private String parentPhone;
 
+    // ===== Профиль ученика (НОВОЕ) =====
+    @Column(name = "avatar", length = 500)
+    private String avatar;
+
+    @Column(name = "bio", columnDefinition = "TEXT")
+    private String bio;
+
+    @Column(name = "interests", columnDefinition = "TEXT")
+    private String interests;
+
+    @Column(name = "school")
+    private String school;
+
+    @Column(name = "goal")
+    private String goal;
+
     @Column(name = "birthday")
     private LocalDate birthday;
 
@@ -133,6 +149,11 @@ public class Student {
     public String getParentName() { return parentName; }
     public String getParentPhone() { return parentPhone; }
     public String getGrade() { return grade; }
+    public String getAvatar() { return avatar; }
+    public String getBio() { return bio; }
+    public String getInterests() { return interests; }
+    public String getSchool() { return school; }
+    public String getGoal() { return goal; }
     public Boolean getIsActive() { return isActive; }
     public LocalDate getBirthday() { return birthday; }
     public String getRole() { return role; }
@@ -161,6 +182,11 @@ public class Student {
     public void setParentName(String parentName) { this.parentName = parentName; }
     public void setParentPhone(String parentPhone) { this.parentPhone = parentPhone; }
     public void setGrade(String grade) { this.grade = grade; }
+    public void setAvatar(String avatar) { this.avatar = avatar; }
+    public void setBio(String bio) { this.bio = bio; }
+    public void setInterests(String interests) { this.interests = interests; }
+    public void setSchool(String school) { this.school = school; }
+    public void setGoal(String goal) { this.goal = goal; }
     public void setIsActive(Boolean isActive) { this.isActive = isActive; }
     public void setBirthday(LocalDate birthday) { this.birthday = birthday; }
     public void setRole(String role) { this.role = role; }

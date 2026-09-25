@@ -85,13 +85,15 @@ public class PaymentController {
     }
 
     @GetMapping("/report/{tutorId}")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getMonthlyReport(
             @PathVariable Long tutorId,
             @RequestParam String month, // формат: "2026-05"
-            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+            @RequestAttribute(name = "userId", required = false) Long currentUserId,
+            @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
-            if (!tutorId.equals(currentUserId)) {
+            boolean isAdmin = "ROLE_SCHOOL_ADMIN".equals(userRole);
+            if (!isAdmin && !tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
@@ -268,11 +270,13 @@ public class PaymentController {
 
     // ========== ПОЛУЧИТЬ ВСЕ ПЛАТЕЖИ РЕПЕТИТОРА ==========
     @GetMapping("/tutor/{tutorId}")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> getPaymentsByTutor(@PathVariable Long tutorId,
-                                                @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                                @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                                @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
-            if (!tutorId.equals(currentUserId)) {
+            boolean isAdmin = "ROLE_SCHOOL_ADMIN".equals(userRole);
+            if (!isAdmin && !tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
             List<Payment> payments = paymentService.getPaymentsByTutor(tutorId);
@@ -343,13 +347,15 @@ public class PaymentController {
 
     // ========== ПОДТВЕРДИТЬ / ОТКЛОНИТЬ ПЛАТЁЖ (РЕПЕТИТОР) ==========
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('TUTOR')")
+    @PreAuthorize("hasAnyRole('TUTOR', 'SCHOOL_ADMIN')")
     public ResponseEntity<?> updatePaymentStatus(@PathVariable Long id,
                                                  @RequestBody Map<String, String> request,
-                                                 @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+                                                 @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                                 @RequestAttribute(name = "userRole", required = false) String userRole) {
         try {
             Payment payment = paymentService.getPaymentById(id);
-            if (!payment.getTutor().getId().equals(currentUserId)) {
+            boolean isAdmin = "ROLE_SCHOOL_ADMIN".equals(userRole);
+            if (!isAdmin && !payment.getTutor().getId().equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
             String newStatus = request.get("status");

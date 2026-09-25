@@ -10,7 +10,6 @@ import { styled, alpha } from '@mui/material/styles';
 import {
     Dashboard as DashboardIcon,
     People as PeopleIcon,
-    Videocam as VideocamIcon,
     Draw as DrawIcon,
     Assignment as AssignmentIcon,
     Book as BookIcon,
@@ -24,15 +23,13 @@ import {
     TrendingUp as TrendingUpIcon,
     Notifications as NotificationsIcon,
     Group as GroupIcon,
-    School,
-    AutoAwesome,
-    ChevronLeft,
-    ChevronRight
+    Brush as BrushIcon,
+    OpenInNew as OpenInNewIcon,
+    AutoAwesome
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 
-// ========== ЦВЕТА ИКОНОК ==========
 const ICON_COLORS = {
     'Главная': '#6366F1',
     'Расписание': '#10B981',
@@ -47,28 +44,28 @@ const ICON_COLORS = {
     'Профиль': '#4F46E5',
     'Задания': '#10B981',
     'Успеваемость': '#F59E0B',
+    'Онлайн-доска': '#FF5FA2',
 };
 
-// ========== TOUR TARGETS ==========
 const TOUR_TARGETS = {
     'Ученики': 'students',
     'Курсы': 'courses',
     'Расписание': 'schedule',
 };
 
-// ========== СТИЛИ ==========
-const SidebarContainer = styled(Box)(({ collapsed }) => ({
-    width: collapsed ? 68 : 260,
+const MELETO_URL = 'https://meleto.org/board/84dc92e5-6848-4e22-a31c-d16472b248d7';
+
+const SidebarContainer = styled(Box)({
+    width: 260,
     height: '100vh',
     background: 'linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%)',
     display: 'flex',
     flexDirection: 'column',
     position: 'fixed',
     left: 0, top: 0, zIndex: 1200,
-    transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
     overflow: 'hidden',
     boxShadow: '4px 0 20px rgba(0,0,0,0.3)',
-}));
+});
 
 const LogoBox = styled(Box)({
     height: 64,
@@ -103,16 +100,13 @@ const UserSection = styled(Box)({
 });
 
 const SIDEBAR_WIDTH = 260;
-const SIDEBAR_COLLAPSED = 68;
 const MOBILE_BREAKPOINT = 900;
 
-// ========== КОМПОНЕНТ ==========
 const Sidebar = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user, logout } = useAuth();
-    
-    const [collapsed, setCollapsed] = useState(true);
+
     const [mobileOpen, setMobileOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
     const [avatar, setAvatar] = useState(null);
@@ -122,23 +116,12 @@ const Sidebar = () => {
 
     const isTutor = user?.role === 'tutor';
     const isStudent = user?.role === 'student';
-    const isParent = user?.role === 'parent';
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
-
-    useEffect(() => {
-        if (!isMobile) {
-            document.body.style.transition = 'margin-left 0.25s ease';
-            document.body.style.marginLeft = collapsed ? `${SIDEBAR_COLLAPSED}px` : `${SIDEBAR_WIDTH}px`;
-        } else {
-            document.body.style.marginLeft = '0px';
-        }
-        return () => { document.body.style.marginLeft = '0px'; };
-    }, [collapsed, isMobile]);
 
     const fetchAvatar = async () => {
         if (!user?.id || !isTutor) return;
@@ -194,7 +177,7 @@ const Sidebar = () => {
 
     const handleMarkAllAsRead = async () => {
         try {
-            const endpoint = isTutor 
+            const endpoint = isTutor
                 ? `/notifications/tutor/${user.id}/read-all`
                 : `/notifications/student/${user.id}/read-all`;
             await axiosInstance.patch(endpoint);
@@ -204,14 +187,15 @@ const Sidebar = () => {
     };
 
     const handleLogout = () => { logout(); navigate('/login'); };
-    
-    const handleNavigation = (path) => {
-        navigate(path);
+
+    const handleNavigation = (path, external = false) => {
+        if (external) {
+            window.open(path, '_blank', 'noopener,noreferrer');
+        } else {
+            navigate(path);
+        }
         if (isMobile) setMobileOpen(false);
     };
-
-    const handleMouseEnter = () => { if (!isMobile) setCollapsed(false); };
-    const handleMouseLeave = () => { if (!isMobile) setCollapsed(true); };
 
     const getIconColor = (label) => ICON_COLORS[label] || '#9CA3AF';
     const getTourTarget = (label) => TOUR_TARGETS[label] || undefined;
@@ -238,6 +222,7 @@ const Sidebar = () => {
             { path: '/student/homework', label: 'Задания' },
             { path: '/student/materials', label: 'Материалы' },
             { path: '/student/tools', label: 'Инструменты' },
+            { path: MELETO_URL, label: 'Онлайн-доска', external: true },
             { path: '/student/progress', label: 'Успеваемость' },
             { path: '/student/profile', label: 'Профиль' },
         ]},
@@ -252,21 +237,21 @@ const Sidebar = () => {
         'Главная': <DashboardIcon />,
         'Расписание': <CalendarIcon />,
         'Ученики': <PeopleIcon />,
-        'Инструменты': <VideocamIcon />,
+        'Инструменты': <DrawIcon />,
         'Финансы': <MoneyIcon />,
         'Группы': <GroupIcon />,
         'Курсы': <BookIcon />,
         'Банк заданий': <AssignmentIcon />,
         'Материалы': <FolderIcon />,
-        'Инструменты': <DrawIcon />,
         'Домашние задания': <AssignmentIcon />,
         'Архив': <ArchiveIcon />,
         'Профиль': <PersonIcon />,
         'Задания': <AssignmentIcon />,
         'Успеваемость': <TrendingUpIcon />,
+        'Онлайн-доска': <BrushIcon />,
     };
 
-    const isActive = (path) => location.pathname === path;
+    const isActive = (path) => !path.startsWith('http') && location.pathname === path;
 
     const NotificationBell = () => (
         <>
@@ -304,6 +289,44 @@ const Sidebar = () => {
         </>
     );
 
+    const renderMenu = () => (
+        <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
+            {menuGroups.map((group, gi) => (
+                <Box key={gi} sx={{ mb: 1 }}>
+                    {group.title && (
+                        <Typography sx={{ px: 3, py: 1, color: '#6B7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
+                            {group.title}
+                        </Typography>
+                    )}
+                    {group.items.map((item) => {
+                        const active = isActive(item.path);
+                        const color = getIconColor(item.label);
+                        const tourTarget = getTourTarget(item.label);
+                        return (
+                            <ListItem key={item.path} disablePadding>
+                                <NavButton
+                                    onClick={() => handleNavigation(item.path, item.external)}
+                                    active={active}
+                                    iconcolor={color}
+                                    data-tour={tourTarget}
+                                >
+                                    <ListItemIcon sx={{ color: active ? color : (item.external ? color : '#9CA3AF'), minWidth: 40 }}>
+                                        {iconMap[item.label] || <DashboardIcon />}
+                                    </ListItemIcon>
+                                    <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 600 : 400 } }} />
+                                    {item.external && (
+                                        <OpenInNewIcon sx={{ fontSize: 14, color: '#6B7280' }} />
+                                    )}
+                                    {active && <Box sx={{ width: 3, height: 20, borderRadius: 2, bgcolor: color }} />}
+                                </NavButton>
+                            </ListItem>
+                        );
+                    })}
+                </Box>
+            ))}
+        </Box>
+    );
+
     const sidebarContent = (
         <Box sx={{ height: '100%', bgcolor: '#111827', display: 'flex', flexDirection: 'column' }}>
             <LogoBox>
@@ -315,38 +338,7 @@ const Sidebar = () => {
                 </Box>
             </LogoBox>
 
-            <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
-                {menuGroups.map((group, gi) => (
-                    <Box key={gi} sx={{ mb: 1 }}>
-                        {group.title && (
-                            <Typography sx={{ px: 3, py: 1, color: '#6B7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
-                                {group.title}
-                            </Typography>
-                        )}
-                        {group.items.map((item) => {
-                            const active = isActive(item.path);
-                            const color = getIconColor(item.label);
-                            const tourTarget = getTourTarget(item.label);
-                            return (
-                                <ListItem key={item.path} disablePadding>
-                                    <NavButton 
-                                        onClick={() => handleNavigation(item.path)} 
-                                        active={active} 
-                                        iconcolor={color}
-                                        data-tour={tourTarget}
-                                    >
-                                        <ListItemIcon sx={{ color: active ? color : '#9CA3AF', minWidth: 40 }}>
-                                            {iconMap[item.label] || <DashboardIcon />}
-                                        </ListItemIcon>
-                                        <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 600 : 400 } }} />
-                                        {active && <Box sx={{ width: 3, height: 20, borderRadius: 2, bgcolor: color }} />}
-                                    </NavButton>
-                                </ListItem>
-                            );
-                        })}
-                    </Box>
-                ))}
-            </Box>
+            {renderMenu()}
 
             <UserSection>
                 <NotificationBell />
@@ -385,78 +377,35 @@ const Sidebar = () => {
     }
 
     return (
-        <SidebarContainer collapsed={collapsed} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+        <SidebarContainer>
             <LogoBox>
-                {collapsed ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <Box sx={{ width: 34, height: 34, borderRadius: '12px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <AutoAwesome sx={{ color: '#fff', fontSize: 18 }} />
                     </Box>
-                ) : (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box sx={{ width: 34, height: 34, borderRadius: '12px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <AutoAwesome sx={{ color: '#fff', fontSize: 18 }} />
-                        </Box>
-                        <Typography sx={{ color: '#fff', fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px' }}>EdSpace</Typography>
-                    </Box>
-                )}
+                    <Typography sx={{ color: '#fff', fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px' }}>EdSpace</Typography>
+                </Box>
             </LogoBox>
 
-            <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
-                {menuGroups.map((group, gi) => (
-                    <Box key={gi} sx={{ mb: 1 }}>
-                        {group.title && !collapsed && (
-                            <Typography sx={{ px: 3, py: 1, color: '#6B7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
-                                {group.title}
-                            </Typography>
-                        )}
-                        {group.items.map((item) => {
-                            const active = isActive(item.path);
-                            const color = getIconColor(item.label);
-                            const tourTarget = getTourTarget(item.label);
-                            return (
-                                <ListItem key={item.path} disablePadding>
-                                    <Tooltip title={collapsed ? item.label : ''} placement="right">
-                                        <NavButton 
-                                            onClick={() => handleNavigation(item.path)} 
-                                            active={active} 
-                                            iconcolor={color}
-                                            sx={{ justifyContent: collapsed ? 'center' : 'flex-start', px: collapsed ? 1.5 : 2 }}
-                                            data-tour={tourTarget}
-                                        >
-                                            <ListItemIcon sx={{ color: active ? color : '#9CA3AF', minWidth: collapsed ? 0 : 40 }}>
-                                                {iconMap[item.label] || <DashboardIcon />}
-                                            </ListItemIcon>
-                                            {!collapsed && <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 600 : 400 } }} />}
-                                        </NavButton>
-                                    </Tooltip>
-                                </ListItem>
-                            );
-                        })}
-                    </Box>
-                ))}
-            </Box>
+            {renderMenu()}
 
-            <UserSection sx={{ justifyContent: collapsed ? 'center' : 'flex-start', flexDirection: collapsed ? 'column' : 'row', gap: collapsed ? 0.5 : 1.5 }}>
+            <UserSection>
                 <NotificationBell />
                 <Avatar src={isTutor ? avatar : null} sx={{ width: 34, height: 34, bgcolor: '#6366F1', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
                     onClick={() => handleNavigation(isTutor ? '/dashboard' : isStudent ? '/student' : '/parent/dashboard')}>
                     {(!isTutor || !avatar) && (user?.fullName?.charAt(0) || 'U')}
                 </Avatar>
-                {!collapsed && (
-                    <>
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography sx={{ color: '#F3F4F6', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {user?.fullName?.split(' ')[0] || 'Пользователь'}
-                            </Typography>
-                            <Typography sx={{ color: '#6B7280', fontSize: 11 }}>
-                                {isTutor ? 'Репетитор' : isStudent ? 'Ученик' : 'Родитель'}
-                            </Typography>
-                        </Box>
-                        <IconButton onClick={handleLogout} sx={{ color: '#6B7280', '&:hover': { color: '#EF4444' } }}>
-                            <LogoutIcon fontSize="small" />
-                        </IconButton>
-                    </>
-                )}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ color: '#F3F4F6', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {user?.fullName?.split(' ')[0] || 'Пользователь'}
+                    </Typography>
+                    <Typography sx={{ color: '#6B7280', fontSize: 11 }}>
+                        {isTutor ? 'Репетитор' : isStudent ? 'Ученик' : 'Родитель'}
+                    </Typography>
+                </Box>
+                <IconButton onClick={handleLogout} sx={{ color: '#6B7280', '&:hover': { color: '#EF4444' } }}>
+                    <LogoutIcon fontSize="small" />
+                </IconButton>
             </UserSection>
         </SidebarContainer>
     );
