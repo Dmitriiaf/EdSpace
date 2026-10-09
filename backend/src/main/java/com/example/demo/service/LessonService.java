@@ -102,7 +102,12 @@ public class LessonService {
     }
 
     public List<Lesson> getCompletedLessons(Long studentId, Long tutorId, Long courseId, int limit) {
-        List<Lesson> lessons = lessonRepository.findCompletedLessonsByStudentAndCourse(studentId, tutorId, courseId);
+        List<Lesson> lessons;
+        if (courseId != null) {
+            lessons = lessonRepository.findCompletedLessonsByStudentAndCourse(studentId, tutorId, courseId);
+        } else {
+            lessons = lessonRepository.findCompletedLessonsByStudentAndTutor(studentId, tutorId);
+        }
         return lessons.stream().limit(limit).collect(Collectors.toList());
     }
 
@@ -600,7 +605,7 @@ public class LessonService {
         newLesson.setOriginalLesson(original);
         newLesson.setNotes(original.getNotes());
         newLesson.setNextLessonPlan(original.getNextLessonPlan());
-        newLesson.setStatus("RESCHEDULED");
+        newLesson.setStatus("SCHEDULED");
         newLesson.setWeeklyTemplateId(original.getWeeklyTemplateId());
 
         // ✅ VIDEO-1: Копируем настройки видео при переносе
@@ -646,7 +651,7 @@ public class LessonService {
                 newEndTime
         );
         newLesson.setDuration(originalLesson.getDuration());
-        newLesson.setStatus("RESCHEDULED");
+        newLesson.setStatus("SCHEDULED");
         newLesson.setOriginalLesson(originalLesson.getOriginalLesson() != null ? originalLesson.getOriginalLesson() : originalLesson);
         newLesson.setNotes(originalLesson.getNotes());
         newLesson.setNextLessonPlan(originalLesson.getNextLessonPlan());

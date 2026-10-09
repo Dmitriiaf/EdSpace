@@ -95,6 +95,127 @@ public class HomeworkService {
         return homeworkRepository.save(homework);
     }
 
+    // ========== ФИЛЬТР ПО ТИПУ ==========
+
+    public List<Homework> getHomeworkByStudentAndType(Long studentId, String type) {
+        List<Homework> all = homeworkRepository.findByStudentId(studentId);
+        if (type == null || "ALL".equalsIgnoreCase(type)) return all;
+        return all.stream()
+                .filter(h -> type.equalsIgnoreCase(h.getType()))
+                .collect(Collectors.toList());
+    }
+
+    public List<Homework> getHomeworkByTutorAndType(Long tutorId, String type) {
+        List<Homework> all = homeworkRepository.findByTutorId(tutorId);
+        if (type == null || "ALL".equalsIgnoreCase(type)) return all;
+        return all.stream()
+                .filter(h -> type.equalsIgnoreCase(h.getType()))
+                .collect(Collectors.toList());
+    }
+
+// ========== СТАТИСТИКА ПО ТИПУ ==========
+
+    public Map<String, Long> getHomeworkStatsByStudentAndType(Long studentId, String type) {
+        List<Homework> allHomework = getHomeworkByStudentAndType(studentId, type);
+        long total = allHomework.size();
+        long submitted = allHomework.stream().filter(h -> "SUBMITTED".equals(h.getStatus())).count();
+        long checked = allHomework.stream().filter(h -> "CHECKED".equals(h.getStatus())).count();
+        long revision = allHomework.stream().filter(h -> "RETURNED".equals(h.getStatus())).count();
+        long overdue = allHomework.stream()
+                .filter(h -> "ASSIGNED".equals(h.getStatus()) && h.getDueDate() != null && h.getDueDate().isBefore(LocalDateTime.now()))
+                .count();
+        Map<String, Long> stats = new HashMap<>();
+        stats.put("totalHomework", total);
+        stats.put("submitted", submitted);
+        stats.put("checked", checked);
+        stats.put("revision", revision);
+        stats.put("overdue", overdue);
+        return stats;
+    }
+
+    public Map<String, Object> getDetailedProgressStatsByType(Long studentId, Long courseId, String type) {
+        List<Homework> all = homeworkRepository.findByStudentIdAndOptionalCourse(studentId, courseId);
+        if (type != null && !"ALL".equalsIgnoreCase(type)) {
+            all = all.stream().filter(h -> type.equalsIgnoreCase(h.getType())).collect(Collectors.toList());
+        }
+
+        List<Homework> checkedHomework = all.stream()
+                .filter(h -> "CHECKED".equals(h.getStatus())).toList();
+
+        double averageGrade = checkedHomework.stream()
+                .mapToInt(h -> h.getGrade() != null ? h.getGrade() : 0)
+                .average().orElse(0);
+        double averagePercentage = checkedHomework.stream()
+                .mapToDouble(h -> h.getPercentage() != null ? h.getPercentage() : 0)
+                .average().orElse(0);
+        double averageScore = checkedHomework.stream()
+                .filter(h -> "MOCK_EXAM".equalsIgnoreCase(h.getType()))
+                .mapToInt(h -> h.getScore() != null ? h.getScore() : 0)
+                .average().orElse(0);
+
+        Map<String, Long> gradeDistribution = new HashMap<>();
+        gradeDistribution.put("5", checkedHomework.stream().filter(h -> h.getGrade() != null && h.getGrade() == 5).count());
+        gradeDistribution.put("4", checkedHomework.stream().filter(h -> h.getGrade() != null && h.getGrade() == 4).count());
+        gradeDistribution.put("3", checkedHomework.stream().filter(h -> h.getGrade() != null && h.getGrade() == 3).count());
+        gradeDistribution.put("2", checkedHomework.stream().filter(h -> h.getGrade() != null && h.getGrade() == 2).count());
+        gradeDistribution.put("1", checkedHomework.stream().filter(h -> h.getGrade() != null && h.getGrade() == 1).count());
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalHomework", all.size());
+        stats.put("checkedHomework", checkedHomework.size());
+        stats.put("averageGrade", Math.round(averageGrade * 10) / 10.0);
+        stats.put("averagePercentage", Math.round(averagePercentage));
+        stats.put("averageScore", Math.round(averageScore));
+        stats.put("gradeDistribution", gradeDistribution);
+        stats.put("type", type != null ? type : "ALL");
+        return stats;
+    }
+
+    public List<Map<String, Object>> getStudentProgressTimelineByType(Long studentId, Long courseId, String type) {
+        List<Homework> checkedHomework;
+        if (courseId != null) {
+            checkedHomework = homeworkRepository.findByStudentIdAndOptionalCourse(studentId, courseId);
+        } else {
+            checkedHomework = homeworkRepository.findByStudentIdAndStatus(studentId, "CHECKED");
+        }
+        checkedHomework = checkedHomework.stream()
+                .filter(h -> "CHECKED".equals(h.getStatus()))
+                .filter(h -> type == null || "ALL".equalsIgnoreCase(type) || type.equalsIgnoreCase(h.getType()))
+                .collect(Collectors.toList());
+
+        checkedHomework.sort((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
+
+        List<Map<String, Object>> timeline = new ArrayList<>();
+        for (Homework hw : checkedHomework) {
+            Map<String, Object> point = new HashMap<>();
+            point.put("date", hw.getCreatedAt().toString());
+            point.put("homeworkId", hw.getId());
+            point.put("type", hw.getType());
+            point.put("examType", hw.getExamType());
+            point.put("subject", hw.getSubject());
+            point.put("examDate", hw.getExamDate() != null ? hw.getExamDate().toString() : null);
+            point.put("task", hw.getTask() != null ?
+                    hw.getTask().substring(0, Math.min(100, hw.getTask().length())) : "Задание");
+
+            if (hw.getScore() != null && hw.getMaxScore() != null) {
+                point.put("score", hw.getScore());
+                point.put("maxScore", hw.getMaxScore());
+                point.put("percentage", Math.round(hw.getPercentage() != null ? hw.getPercentage() : 0));
+            } else {
+                point.put("score", 0);
+                point.put("maxScore", 100);
+                point.put("percentage", 0);
+            }
+            point.put("grade", hw.getGrade() != null ? hw.getGrade() : 0);
+            point.put("gradeType", hw.getGradeType() != null ? hw.getGradeType() : "GRADE_5");
+            point.put("status", hw.getStatus());
+            point.put("courseName", hw.getCourse() != null ? hw.getCourse().getName() : "Без предмета");
+
+            timeline.add(point);
+        }
+        return timeline;
+    }
+
     public Homework submitHomework(Long id, String attachments) {
         log.info("Сдача ДЗ: id={}", id);
         Homework homework = getHomeworkById(id);

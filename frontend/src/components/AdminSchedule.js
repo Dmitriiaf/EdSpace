@@ -89,6 +89,7 @@ function AdminSchedule({
     const [openCreateDialog, setOpenCreateDialog] = useState(false);
     const [openRescheduleDialog, setOpenRescheduleDialog] = useState(false);
     const [openBulkDialog, setOpenBulkDialog] = useState(false);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     const [createForm, setCreateForm] = useState({ studentIds: [], date: '', startTime: '10:00', duration: 60 });
     const [rescheduleForm, setRescheduleForm] = useState({ date: null, time: '' });
     const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
@@ -166,36 +167,34 @@ function AdminSchedule({
         }
     };
 
-        const handleBulkCreate = async () => {
-            if (!bulkForm.studentIds || bulkForm.studentIds.length === 0 || bulkForm.daysOfWeek.length === 0) {
-                onShowSnackbar?.('Выберите учеников и дни недели', 'error');
-                return;
-            }
+    const handleBulkCreate = async () => {
+        if (!bulkForm.studentIds || bulkForm.studentIds.length === 0 || bulkForm.daysOfWeek.length === 0) {
+            onShowSnackbar?.('Выберите учеников и дни недели', 'error');
+            return;
+        }
 
-            setBulkLoading(true);
-            try {
-                const endHour = (parseInt(bulkForm.startTime.split(':')[0]) + 1).toString().padStart(2, '0');
-                const utcStart = localToUtc('2026-01-01', bulkForm.startTime);
+        setBulkLoading(true);
+        try {
+            const utcStart = localToUtc('2026-01-01', bulkForm.startTime);
 
-                const response = await axiosInstance.post('/admin/lessons/bulk', {
-                    studentIds: bulkForm.studentIds,
-                    tutorId: tutorId,
-                    startTime: utcStart.time,
-                    duration: bulkForm.duration,
-                    weeks: bulkForm.weeks,
-                    daysOfWeek: bulkForm.daysOfWeek
-                });
+            const response = await axiosInstance.post('/admin/lessons/bulk', {
+                studentIds: bulkForm.studentIds,
+                tutorId: tutorId,
+                startTime: utcStart.time,
+                duration: bulkForm.duration,
+                weeks: bulkForm.weeks,
+                daysOfWeek: bulkForm.daysOfWeek
+            });
 
-                onShowSnackbar?.(`✅ Создано ${response.data.created} уроков`, 'success');
-                setOpenBulkDialog(false);
-                onRefresh?.();
-            } catch (err) {
-                onShowSnackbar?.('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
-            } finally {
-                setBulkLoading(false);
-            }
-        };
-
+            onShowSnackbar?.(`✅ Создано ${response.data.created} уроков`, 'success');
+            setOpenBulkDialog(false);
+            onRefresh?.();
+        } catch (err) {
+            onShowSnackbar?.('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
+        } finally {
+            setBulkLoading(false);
+        }
+    };
 
     const toggleDayOfWeek = (day) => {
         setBulkForm(prev => ({
@@ -255,15 +254,13 @@ function AdminSchedule({
 
     const handleDelete = async () => {
         if (!selectedLesson) return;
-        if (!window.confirm(`Удалить урок ${selectedLesson.studentName} на ${selectedLesson.lessonDate}? Это действие нельзя отменить.`)) {
-            return;
-        }
         const lessonIdToDelete = selectedLesson.id;
         try {
             await axiosInstance.delete(`/lessons/${lessonIdToDelete}`);
             onShowSnackbar?.('🗑️ Урок удалён', 'success');
+            setConfirmDeleteOpen(false);
             setOpenLessonDetails(false);
-            setSelectedLesson(null);   // ← ЯВНО сбрасываем
+            setSelectedLesson(null);
             onRefresh?.();
         } catch (err) {
             onShowSnackbar?.('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
@@ -427,7 +424,7 @@ function AdminSchedule({
                                         variant="contained"
                                         color="error"
                                         startIcon={<DeleteIcon />}
-                                        onClick={handleDelete}
+                                        onClick={() => setConfirmDeleteOpen(true)}
                                         sx={{ mt: 1, bgcolor: '#DC2626', '&:hover': { bgcolor: '#B91C1C' } }}
                                     >
                                         Удалить навсегда
@@ -436,6 +433,21 @@ function AdminSchedule({
                             </DialogContent>
                         </>
                     )}
+                </StyledDialog>
+
+                {/* ДИАЛОГ ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ */}
+                <StyledDialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth>
+                    <DialogTitle sx={{ fontWeight: 700 }}>Удалить урок?</DialogTitle>
+                    <DialogContent>
+                        <Typography>
+                            Удалить урок <b>{selectedLesson?.studentName}</b> на {selectedLesson?.lessonDate}?
+                            Это действие нельзя отменить.
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setConfirmDeleteOpen(false)}>Отмена</Button>
+                        <Button variant="contained" color="error" onClick={handleDelete}>Удалить</Button>
+                    </DialogActions>
                 </StyledDialog>
 
                 {/* ДИАЛОГ СОЗДАНИЯ */}

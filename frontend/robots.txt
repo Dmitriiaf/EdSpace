@@ -1,5 +1,10 @@
 User-agent: *
 Allow: /
+Allow: /repetitor-informatika
+Allow: /repetitor-informatika-ege
+Allow: /repetitor-informatika-oge
+Allow: /repetitor-matematika-ege
+
 Disallow: /api/
 Disallow: /dashboard/
 Disallow: /students/
@@ -7,4 +12,21 @@ Disallow: /finance/
 Disallow: /profile/
 Disallow: /student/
 Disallow: /parent/
+Disallow: /admin/
+Disallow: /materials/
+Disallow: /weekly-schedule/
+Disallow: /lessons-archive/
+Disallow: /task-bank/
+Disallow: /lesson-plans/
+Disallow: /stepik/
+Disallow: /tools/
+Disallow: /extracurricular/
+Disallow: /groups/
+Disallow: /courses/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /oauth-callback
+Disallow: /complete-registration
+Disallow: /parent-registration
+
 Sitemap: https://ed-space.ru/sitemap.xml

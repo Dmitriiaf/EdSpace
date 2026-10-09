@@ -1,21 +1,39 @@
-// ========== frontend/src/components/ChatDrawer.js ==========
-import React, { useState } from 'react';
-import { Drawer, Box, IconButton, Badge, Fab, Typography } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Drawer, Box, IconButton, Fab, Typography } from '@mui/material';
 import {
     Chat as ChatIcon,
     Close as CloseIcon,
 } from '@mui/icons-material';
 import ChatPanel from './ChatPanel';
+import axiosInstance from '../api/axiosConfig';
 
 const PURPLE = '#7B5CFA';
 const INK = '#141414';
+const POLL_MS = 10000;
 
 export default function ChatDrawer() {
     const [open, setOpen] = useState(false);
+    const [unread, setUnread] = useState(0);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadUnread = async () => {
+            try {
+                const res = await axiosInstance.get('/chat/unread-count');
+                if (!cancelled) setUnread(res.data?.count || 0);
+            } catch (e) {
+                // тихо
+            }
+        };
+        loadUnread();
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') loadUnread();
+        }, POLL_MS);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, [open]);
 
     return (
         <>
-            {/* FAB кнопка чата — с подписью и pulse */}
             <Fab
                 variant="extended"
                 onClick={() => setOpen(true)}
@@ -47,22 +65,24 @@ export default function ChatDrawer() {
             >
                 <ChatIcon sx={{ mr: 1, fontSize: 20 }} />
                 Написать
-                <Box
-                    sx={{
-                        ml: 1.25,
-                        bgcolor: '#FFF',
-                        color: PURPLE,
-                        borderRadius: '50%',
-                        minWidth: 22, height: 22,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.7rem', fontWeight: 800,
-                    }}
-                >
-                    0
-                </Box>
+                {unread > 0 && (
+                    <Box
+                        sx={{
+                            ml: 1.25,
+                            bgcolor: '#EF4444',
+                            color: '#FFF',
+                            borderRadius: '50%',
+                            minWidth: 22, height: 22,
+                            px: 0.5,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.7rem', fontWeight: 800,
+                        }}
+                    >
+                        {unread > 9 ? '9+' : unread}
+                    </Box>
+                )}
             </Fab>
 
-            {/* Drawer с чатом */}
             <Drawer
                 anchor="right"
                 open={open}

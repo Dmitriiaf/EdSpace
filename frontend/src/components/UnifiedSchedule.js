@@ -7,7 +7,7 @@ import {
     Tooltip, Drawer, Grid, Stack, Divider, Autocomplete
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { 
+import {
     Edit, Edit as EditIcon, Delete, Work as WorkIcon, Add as AddIcon,
     Refresh as RefreshIcon, FilterList as FilterIcon,
     Today as TodayIcon, ChevronLeft, ChevronRight,
@@ -22,9 +22,8 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format, addMinutes, parse, startOfWeek, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import axiosInstance from '../api/axiosConfig';
-import { replaceCancelledWithResurrect } from '../services/api';
 import LessonRoom from './LessonRoom';
-import { getAllLessons } from '../services/api';
+import { getAllLessons, replaceCancelledWithResurrect, getCompletedLessons } from '../services/api';
 
 // ========== КОНСТАНТЫ ==========
 const HOUR_HEIGHT = 48;
@@ -114,8 +113,63 @@ const StyledButton = styled(Button)({
     borderRadius: '10px', textTransform: 'none', fontSize: '14px', fontWeight: 500, padding: '8px 16px',
 });
 
-function UnifiedSchedule({ 
-    weekDates, lessons, students, courses, debtors, user, 
+// ========== БЛОК ЗАМЕТОК ==========
+function LessonNotesBlock({ selectedLesson, previousLesson }) {
+    return (
+        <>
+            {/* Собственные заметки урока (для завершённых / начатых) */}
+            {selectedLesson?.notes && (
+                <Box sx={{ bgcolor: '#F9FAFB', borderRadius: 2, p: 2, mb: 2 }}>
+                    <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', mb: 0.5 }}>
+                        📝 Что делали на уроке
+                    </Typography>
+                    <Typography sx={{ fontSize: '14px', color: '#374151', whiteSpace: 'pre-wrap' }}>
+                        {selectedLesson.notes}
+                    </Typography>
+                </Box>
+            )}
+            {selectedLesson?.nextLessonPlan && (
+                <Box sx={{ bgcolor: '#EEF2FF', borderRadius: 2, p: 2, mb: 2 }}>
+                    <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#4F46E5', textTransform: 'uppercase', mb: 0.5 }}>
+                        🎯 Задано к этому уроку
+                    </Typography>
+                    <Typography sx={{ fontSize: '14px', color: '#1E293B', whiteSpace: 'pre-wrap' }}>
+                        {selectedLesson.nextLessonPlan}
+                    </Typography>
+                </Box>
+            )}
+
+            {/* Предпросмотр из прошлого завершённого урока */}
+            {previousLesson && (previousLesson.notes || previousLesson.nextLessonPlan) && (
+                <>
+                    {previousLesson.notes && (
+                        <Box sx={{ bgcolor: '#EFF6FF', borderRadius: 2, p: 2, mb: 2, borderLeft: '3px solid #3B82F6' }}>
+                            <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF', textTransform: 'uppercase', mb: 0.5 }}>
+                                ⏪ Что было на прошлом уроке ({new Date(previousLesson.lessonDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })})
+                            </Typography>
+                            <Typography sx={{ fontSize: '14px', color: '#1E293B', whiteSpace: 'pre-wrap' }}>
+                                {previousLesson.notes}
+                            </Typography>
+                        </Box>
+                    )}
+                    {previousLesson.nextLessonPlan && (
+                        <Box sx={{ bgcolor: '#FFF3D6', borderRadius: 2, p: 2, mb: 2, borderLeft: '3px solid #F59E0B' }}>
+                            <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#92400E', textTransform: 'uppercase', mb: 0.5 }}>
+                                🎯 Задано к этому уроку
+                            </Typography>
+                            <Typography sx={{ fontSize: '14px', color: '#1E293B', whiteSpace: 'pre-wrap' }}>
+                                {previousLesson.nextLessonPlan}
+                            </Typography>
+                        </Box>
+                    )}
+                </>
+            )}
+        </>
+    );
+}
+
+function UnifiedSchedule({
+    weekDates, lessons, students, courses, debtors, user,
     onRefresh, onShowSnackbar, onOpenResurrect,
     getStudentRateForTutor, templates, onAddClick,
     onEditTemplate, onDeleteTemplate, onDeleteLesson,
@@ -123,8 +177,9 @@ function UnifiedSchedule({
     const [groups, setGroups] = useState([]);
     const [density, setDensity] = useState('comfortable');
     const [selectedLessons, setSelectedLessons] = useState([]);
+    const [previousLesson, setPreviousLesson] = useState(null);
     const [bulkMode, setBulkMode] = useState(false);
-    
+
     useEffect(() => {
         if (user?.id) {
             axiosInstance.get(`/groups/tutor/${user.id}`)
@@ -157,8 +212,8 @@ function UnifiedSchedule({
     const [homeworkTask, setHomeworkTask] = useState('');
     const [homeworkDueDate, setHomeworkDueDate] = useState('');
     const [openMobileDay, setOpenMobileDay] = useState(null);
-    const [createForm, setCreateForm] = useState({ 
-        date: '', startTime: '', duration: 60, studentId: '', courseId: '', 
+    const [createForm, setCreateForm] = useState({
+        date: '', startTime: '', duration: 60, studentId: '', courseId: '',
         isTrial: false, trialName: '', trialEmail: '', trialPrice: 0,
         isTemplate: false, groupId: ''
     });
@@ -267,7 +322,27 @@ function UnifiedSchedule({
         setOpenCreateDialog(true);
     };
 
-    const handleLessonClick = (e, lesson) => { e.stopPropagation(); setSelectedLesson(lesson); setOpenLessonDetails(true); };
+    const handleLessonClick = async (e, lesson) => {
+        e.stopPropagation();
+        setSelectedLesson(lesson);
+        setPreviousLesson(null);
+        setOpenLessonDetails(true);
+
+        if (lesson.student?.id && lesson.tutor?.id) {
+            try {
+                const prev = await getCompletedLessons(
+                    lesson.student.id,
+                    lesson.tutor.id,
+                    lesson.course?.id || null,
+                    1
+                );
+                const arr = prev.data !== undefined ? prev.data : prev;
+                setPreviousLesson(Array.isArray(arr) ? (arr[0] || null) : null);
+            } catch (err) {
+                setPreviousLesson(null);
+            }
+        }
+    };
 
     const handleEditLesson = () => {
         if (selectedLesson) {
@@ -281,33 +356,33 @@ function UnifiedSchedule({
 
     const handleDeleteLesson = async () => {
         if (!selectedLesson) return;
-        
+
         if (selectedLesson.weeklyTemplateId) {
             if (!window.confirm('Этот урок создан по шаблону.\n\nНажмите «ОК» чтобы удалить шаблон и все будущие уроки.\nНажмите «Отмена» чтобы удалить только этот урок.')) {
-                try { 
-                    await axiosInstance.delete(`/lessons/${selectedLesson.id}`); 
-                    onShowSnackbar?.('✅ Занятие удалено', 'success'); 
-                    onRefresh?.(); 
+                try {
+                    await axiosInstance.delete(`/lessons/${selectedLesson.id}`);
+                    onShowSnackbar?.('✅ Занятие удалено', 'success');
+                    onRefresh?.();
                 }
                 catch (err) { onShowSnackbar?.('Ошибка при удалении', 'error'); }
                 setAnchorEl(null);
                 return;
             }
-            try { 
-                await axiosInstance.delete(`/weekly-template/${selectedLesson.weeklyTemplateId}`); 
-                onShowSnackbar?.('✅ Шаблон и все будущие уроки удалены', 'success'); 
-                onRefresh?.(); 
+            try {
+                await axiosInstance.delete(`/weekly-template/${selectedLesson.weeklyTemplateId}`);
+                onShowSnackbar?.('✅ Шаблон и все будущие уроки удалены', 'success');
+                onRefresh?.();
             }
             catch (err) { onShowSnackbar?.('Ошибка при удалении шаблона', 'error'); }
             setAnchorEl(null);
             return;
         }
-        
+
         if (!window.confirm('Удалить занятие?')) return;
-        try { 
-            await axiosInstance.delete(`/lessons/${selectedLesson.id}`); 
-            onShowSnackbar?.('✅ Занятие удалено', 'success'); 
-            onRefresh?.(); 
+        try {
+            await axiosInstance.delete(`/lessons/${selectedLesson.id}`);
+            onShowSnackbar?.('✅ Занятие удалено', 'success');
+            onRefresh?.();
         }
         catch (err) { onShowSnackbar?.('Ошибка при удалении', 'error'); }
         setAnchorEl(null);
@@ -320,7 +395,7 @@ function UnifiedSchedule({
                 const dayOfWeek = new Date(createForm.date + 'T00:00:00').getDay();
                 const dayMapping = [7, 1, 2, 3, 4, 5, 6];
                 const mappedDay = dayMapping[dayOfWeek];
-                
+
                 if (createForm.groupId) {
                     const baseDate = new Date(createForm.date + 'T00:00:00');
                     for (let week = 0; week < 4; week++) {
@@ -408,7 +483,7 @@ function UnifiedSchedule({
     const handleSaveEdit = async () => {
         if (!selectedLesson) return;
         const lessonDate = parse(selectedLesson.lessonDate, 'yyyy-MM-dd', new Date());
-        
+
         if (checkTimeConflict(lessonDate, editForm.startTime, editForm.duration, selectedLesson.id)) {
             onShowSnackbar?.('❌ Новое время занято другим уроком', 'error'); return;
         }
@@ -420,13 +495,13 @@ function UnifiedSchedule({
                 }
             }
         }
-        
+
         try {
             if (selectedLesson.groupId) {
                 const [hours, minutes] = editForm.startTime.split(':').map(Number);
                 const endTime = addMinutes(parse(editForm.startTime, 'HH:mm', new Date()), editForm.duration);
                 const endTimeStr = format(endTime, 'HH:mm:ss');
-                
+
                 const baseDate = new Date(selectedLesson.lessonDate + 'T00:00:00');
                 let updatedCount = 0;
                 for (let week = 0; week < 4; week++) {
@@ -499,16 +574,16 @@ function UnifiedSchedule({
                     const top = timeToPosition(lesson); const height = ((lesson.duration || 60) / DENSITY[density].step) * slotHeight; const isCompact = density === 'compact';
                     const isCancelled = lesson.status === 'CANCELLED';
                     const isSelected = selectedLessons.includes(lesson.id);
-                    return (<LessonBlock key={lesson.id} statusStyle={statusStyle} isCompact={isCompact} 
-                        sx={{ 
+                    return (<LessonBlock key={lesson.id} statusStyle={statusStyle} isCompact={isCompact}
+                        sx={{
                             top, height: Math.max(height, slotHeight),
                             opacity: isCancelled ? 0.5 : 1,
                             pointerEvents: isCancelled ? 'none' : 'auto',
                             zIndex: isCancelled ? 1 : isSelected ? 15 : 5,
                             outline: isSelected ? '3px solid #4F46E5' : 'none',
                             boxShadow: isSelected ? '0 0 0 4px rgba(79,70,229,0.3)' : '0 1px 3px rgba(0,0,0,0.06)',
-                        }} 
-                        onClick={(e) => { 
+                        }}
+                        onClick={(e) => {
                             if (isCancelled) return;
                             if (bulkMode) {
                                 e.stopPropagation();
@@ -516,7 +591,7 @@ function UnifiedSchedule({
                                 else setSelectedLessons([...selectedLessons, lesson.id]);
                                 return;
                             }
-                            handleLessonClick(e, lesson); 
+                            handleLessonClick(e, lesson);
                         }}
                     >
                         <Typography sx={{ fontWeight: 600, fontSize: isCompact ? '10px' : '12px', color: statusStyle.text, lineHeight: 1.2 }}>
@@ -578,8 +653,8 @@ function UnifiedSchedule({
                     </>)}
                 </Box>
             </Drawer>
-            
-            {/* Карточка урока */}
+
+            {/* Карточка урока (мобильная) */}
             <StyledDialog open={openLessonDetails} onClose={() => setOpenLessonDetails(false)} maxWidth="sm" fullWidth>
                 {selectedLesson && (() => {
                     const statusStyle = STATUS_COLORS[selectedLesson.status] || STATUS_COLORS.SCHEDULED;
@@ -590,13 +665,13 @@ function UnifiedSchedule({
 
                     return (
                         <>
-                            <Box sx={{ 
+                            <Box sx={{
                                 background: 'linear-gradient(135deg, #4F46E5, #7C3AED)',
                                 p: 3, color: '#fff',
                             }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                    <Avatar sx={{ 
-                                        width: 50, height: 50, 
+                                    <Avatar sx={{
+                                        width: 50, height: 50,
                                         bgcolor: 'rgba(255,255,255,0.25)',
                                         fontSize: 20, fontWeight: 700,
                                     }}>
@@ -610,7 +685,7 @@ function UnifiedSchedule({
                                             {selectedLesson.course?.name || 'Занятие'} • {formatLessonTime(selectedLesson.lessonDate, selectedLesson.startTime)} – {formatLessonTime(selectedLesson.lessonDate, selectedLesson.endTime)}
                                         </Typography>
                                     </Box>
-                                    <Chip 
+                                    <Chip
                                         label={statusStyle.label}
                                         size="small"
                                         sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}
@@ -648,31 +723,11 @@ function UnifiedSchedule({
                                     </Box>
                                 )}
 
-                                {selectedLesson.notes && (
-                                    <Box sx={{ bgcolor: '#F9FAFB', borderRadius: 2, p: 2, mb: 2 }}>
-                                        <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', mb: 0.5 }}>
-                                            📝 Что делали на прошлом уроке
-                                        </Typography>
-                                        <Typography sx={{ fontSize: '14px', color: '#374151' }}>
-                                            {selectedLesson.notes}
-                                        </Typography>
-                                    </Box>
-                                )}
-
-                                {selectedLesson.nextLessonPlan && (
-                                    <Box sx={{ bgcolor: '#EEF2FF', borderRadius: 2, p: 2, mb: 2 }}>
-                                        <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#4F46E5', textTransform: 'uppercase', mb: 0.5 }}>
-                                            🎯 Задано к этому уроку
-                                        </Typography>
-                                        <Typography sx={{ fontSize: '14px', color: '#1E293B' }}>
-                                            {selectedLesson.nextLessonPlan}
-                                        </Typography>
-                                    </Box>
-                                )}
+                                <LessonNotesBlock selectedLesson={selectedLesson} previousLesson={previousLesson} />
 
                                 {(selectedLesson.status === 'COMPLETED' || selectedLesson.status === 'PAID') && (
-                                    <Button 
-                                        fullWidth 
+                                    <Button
+                                        fullWidth
                                         variant="outlined"
                                         startIcon={<EditIcon />}
                                         onClick={() => {
@@ -682,7 +737,7 @@ function UnifiedSchedule({
                                             setHomeworkDueDate('');
                                             setOpenCompleteDialog(true);
                                         }}
-                                        sx={{ 
+                                        sx={{
                                             py: 1.5,
                                             borderRadius: 3,
                                             textTransform: 'none',
@@ -698,16 +753,16 @@ function UnifiedSchedule({
 
                                 {(isScheduled || isInProgress) && (
                                     <Stack spacing={1.5}>
-                                        <Button 
-                                            fullWidth 
-                                            variant="contained" 
+                                        <Button
+                                            fullWidth
+                                            variant="contained"
                                             startIcon={<VideocamIcon />}
                                             onClick={() => {
                                                 setOpenLessonDetails(false);
                                                 setOpenLessonRoom(true);
                                             }}
-                                            sx={{ 
-                                                bgcolor: '#4F46E5', 
+                                            sx={{
+                                                bgcolor: '#4F46E5',
                                                 py: 1.5,
                                                 borderRadius: 3,
                                                 textTransform: 'none',
@@ -719,9 +774,9 @@ function UnifiedSchedule({
                                             🎥 Начать урок
                                         </Button>
                                         {isInProgress && (
-                                            <Button 
-                                                fullWidth 
-                                                variant="contained" 
+                                            <Button
+                                                fullWidth
+                                                variant="contained"
                                                 startIcon={<CheckIcon />}
                                                 onClick={() => {
                                                     setLessonNotes(selectedLesson.notes || '');
@@ -730,8 +785,8 @@ function UnifiedSchedule({
                                                     setHomeworkDueDate('');
                                                     setOpenCompleteDialog(true);
                                                 }}
-                                                sx={{ 
-                                                    bgcolor: '#10B981', 
+                                                sx={{
+                                                    bgcolor: '#10B981',
                                                     py: 1.5,
                                                     borderRadius: 3,
                                                     textTransform: 'none',
@@ -744,8 +799,8 @@ function UnifiedSchedule({
                                             </Button>
                                         )}
                                         <Box sx={{ display: 'flex', gap: 1 }}>
-                                            <Button 
-                                                fullWidth 
+                                            <Button
+                                                fullWidth
                                                 variant="outlined"
                                                 startIcon={<EventIcon />}
                                                 onClick={async () => {
@@ -761,8 +816,8 @@ function UnifiedSchedule({
                                             >
                                                 📩 Перенос
                                             </Button>
-                                            <Button 
-                                                fullWidth 
+                                            <Button
+                                                fullWidth
                                                 variant="outlined"
                                                 color="error"
                                                 startIcon={<CancelIcon />}
@@ -782,7 +837,7 @@ function UnifiedSchedule({
                     );
                 })()}
             </StyledDialog>
-            <LessonRoom 
+            <LessonRoom
                 open={openLessonRoom}
                 onClose={() => setOpenLessonRoom(false)}
                 lessonId={selectedLesson?.id}
@@ -793,123 +848,31 @@ function UnifiedSchedule({
                 } : null}
             />
 
-            {/* ДИАЛОГ ЗАПРОСА ПЕРЕНОСА */}
-            <StyledDialog open={openRescheduleRequestDialog} onClose={() => setOpenRescheduleRequestDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontWeight: 700 }}>Запрос на перенос</DialogTitle>
-                <DialogContent>
-                    <Typography sx={{ mb: 2, color: '#64748B' }}>
-                        {selectedLesson?.student?.fullName} • {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)}
-                    </Typography>
-                    <DatePicker 
-                        label="Желаемая дата" 
-                        value={rescheduleRequestDate} 
-                        onChange={(d) => setRescheduleRequestDate(d)}
-                        minDate={new Date()}
-                        slotProps={{ textField: { fullWidth: true, sx: { mb: 2 } } }}
-                    />
-                    <TextField 
-                        fullWidth 
-                        label="Желаемое время" 
-                        type="time" 
-                        value={rescheduleRequestTime}
-                        onChange={(e) => setRescheduleRequestTime(e.target.value)}
-                        InputLabelProps={{ shrink: true }}
-                    />
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setOpenRescheduleRequestDialog(false)}>Назад</Button>
-                    <Button 
-                        variant="contained" 
-                        onClick={async () => {
-                            try {
-                                await axiosInstance.post(`/lessons/${selectedLesson.id}/request-reschedule`, {
-                                    desiredDate: rescheduleRequestDate ? format(rescheduleRequestDate, 'yyyy-MM-dd') : null,
-                                    desiredTime: rescheduleRequestTime || null,
-                                });
-                                onShowSnackbar?.('📩 Запрос на перенос отправлен', 'success');
-                                setOpenRescheduleRequestDialog(false);
-                                setRescheduleRequestDate(null);
-                                setRescheduleRequestTime('');
-                                setOpenLessonDetails(false);
-                            } catch (err) {
-                                onShowSnackbar?.('Ошибка', 'error');
-                            }
-                        }}
-                        sx={{ bgcolor: '#4F46E5' }}
-                    >
-                        Отправить
-                    </Button>
-                </DialogActions>
-            </StyledDialog>
-
-            
-            {/* ДИАЛОГ ЗАПРОСА ОТМЕНЫ */}
-            <StyledDialog open={openCancelRequestDialog} onClose={() => setOpenCancelRequestDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontWeight: 700 }}>Запрос на отмену урока</DialogTitle>
-                <DialogContent>
-                    <Typography sx={{ mb: 2, color: '#64748B' }}>
-                        {selectedLesson?.student?.fullName} • {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)}
-                    </Typography>
-                    <TextField 
-                        fullWidth 
-                        label="Причина отмены" 
-                        multiline 
-                        rows={3} 
-                        value={cancelRequestReason}
-                        onChange={(e) => setCancelRequestReason(e.target.value)}
-                        placeholder="Например: ученик заболел"
-                    />
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setOpenCancelRequestDialog(false)}>Назад</Button>
-                    <Button 
-                        variant="contained" 
-                        color="error"
-                        onClick={async () => {
-                            try {
-                                await axiosInstance.post(`/lessons/${selectedLesson.id}/request-cancel`, {
-                                    reason: cancelRequestReason,
-                                });
-                                onShowSnackbar?.('📩 Запрос на отмену отправлен', 'success');
-                                setOpenCancelRequestDialog(false);
-                                setCancelRequestReason('');
-                                setOpenLessonDetails(false);
-                            } catch (err) {
-                                onShowSnackbar?.('Ошибка: ' + (err.response?.data?.error || err.message), 'error');
-                            }
-                        }}
-                        sx={{ borderRadius: 2 }}
-                    >
-                        Отправить запрос
-                    </Button>
-                </DialogActions>
-            </StyledDialog>
-
-            {/* ДИАЛОГ ЗАВЕРШЕНИЯ УРОКА */}
+            {/* ДИАЛОГ ЗАВЕРШЕНИЯ УРОКА (мобильный) */}
             <StyledDialog open={openCompleteDialog} onClose={() => setOpenCompleteDialog(false)} maxWidth="sm" fullWidth>
                 <DialogTitle sx={{ fontWeight: 700 }}>
-                    {selectedLesson?.status === 'COMPLETED' || selectedLesson?.status === 'PAID' 
-                        ? 'Редактирование заметок' 
+                    {selectedLesson?.status === 'COMPLETED' || selectedLesson?.status === 'PAID'
+                        ? 'Редактирование заметок'
                         : 'Завершение урока'}
                 </DialogTitle>
                 <DialogContent>
                     <Typography sx={{ mb: 2, color: '#64748B' }}>
                         {selectedLesson?.student?.fullName} • {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)}
                     </Typography>
-                    <TextField 
-                        fullWidth 
-                        label="📝 Что делали на уроке" 
-                        multiline 
-                        rows={3} 
+                    <TextField
+                        fullWidth
+                        label="📝 Что делали на уроке"
+                        multiline
+                        rows={3}
                         value={lessonNotes}
                         onChange={(e) => setLessonNotes(e.target.value)}
                         sx={{ mb: 2 }}
                     />
-                    <TextField 
-                        fullWidth 
-                        label="🎯 Что задано к следующему уроку" 
-                        multiline 
-                        rows={2} 
+                    <TextField
+                        fullWidth
+                        label="🎯 Что задано к следующему уроку"
+                        multiline
+                        rows={2}
                         value={nextLessonPlan}
                         onChange={(e) => setNextLessonPlan(e.target.value)}
                         sx={{ mb: 3 }}
@@ -918,19 +881,19 @@ function UnifiedSchedule({
                     <Typography sx={{ fontWeight: 700, mb: 2, fontSize: '14px' }}>
                         📋 Домашнее задание (опционально)
                     </Typography>
-                    <TextField 
-                        fullWidth 
-                        label="Текст задания" 
-                        multiline 
-                        rows={2} 
+                    <TextField
+                        fullWidth
+                        label="Текст задания"
+                        multiline
+                        rows={2}
                         value={homeworkTask}
                         onChange={(e) => setHomeworkTask(e.target.value)}
                         sx={{ mb: 2 }}
                     />
-                    <TextField 
-                        fullWidth 
-                        label="Срок сдачи" 
-                        type="date" 
+                    <TextField
+                        fullWidth
+                        label="Срок сдачи"
+                        type="date"
                         value={homeworkDueDate}
                         onChange={(e) => setHomeworkDueDate(e.target.value)}
                         InputLabelProps={{ shrink: true }}
@@ -938,22 +901,20 @@ function UnifiedSchedule({
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Button onClick={() => setOpenCompleteDialog(false)}>Отмена</Button>
-                    <Button 
-                        variant="contained" 
+                    <Button
+                        variant="contained"
                         startIcon={<CheckIcon />}
                         onClick={async () => {
                             try {
                                 const isCompleted = selectedLesson?.status === 'COMPLETED' || selectedLesson?.status === 'PAID';
-                                
+
                                 if (isCompleted) {
-                                    // Редактирование заметок — используем PATCH /notes
                                     await axiosInstance.patch(`/lessons/${selectedLesson.id}/notes`, {
                                         notes: lessonNotes,
                                         nextLessonPlan: nextLessonPlan,
                                     });
                                     onShowSnackbar?.('✅ Заметки сохранены!', 'success');
                                 } else {
-                                    // Завершение урока — используем POST /complete
                                     await axiosInstance.post(`/lessons/${selectedLesson.id}/complete`, {
                                         notes: lessonNotes,
                                         nextLessonPlan: nextLessonPlan,
@@ -1015,7 +976,7 @@ function UnifiedSchedule({
             </Box>
         </SchedulePaper>
 
-        {/* Карточка урока */}
+        {/* Карточка урока (десктопная) */}
         <StyledDialog open={openLessonDetails} onClose={() => setOpenLessonDetails(false)} maxWidth="sm" fullWidth>
             {selectedLesson && (() => {
                 const statusStyle = STATUS_COLORS[selectedLesson.status] || STATUS_COLORS.SCHEDULED;
@@ -1026,13 +987,13 @@ function UnifiedSchedule({
 
                 return (
                     <>
-                        <Box sx={{ 
+                        <Box sx={{
                             background: 'linear-gradient(135deg, #4F46E5, #7C3AED)',
                             p: 3, color: '#fff',
                         }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Avatar sx={{ 
-                                    width: 50, height: 50, 
+                                <Avatar sx={{
+                                    width: 50, height: 50,
                                     bgcolor: 'rgba(255,255,255,0.25)',
                                     fontSize: 20, fontWeight: 700,
                                 }}>
@@ -1046,7 +1007,7 @@ function UnifiedSchedule({
                                         {selectedLesson.course?.name || 'Занятие'} • {formatLessonTime(selectedLesson.lessonDate, selectedLesson.startTime)} – {formatLessonTime(selectedLesson.lessonDate, selectedLesson.endTime)}
                                     </Typography>
                                 </Box>
-                                <Chip 
+                                <Chip
                                     label={statusStyle.label}
                                     size="small"
                                     sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}
@@ -1084,31 +1045,11 @@ function UnifiedSchedule({
                                 </Box>
                             )}
 
-                            {selectedLesson.notes && (
-                                <Box sx={{ bgcolor: '#F9FAFB', borderRadius: 2, p: 2, mb: 2 }}>
-                                    <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', mb: 0.5 }}>
-                                        📝 Что делали на прошлом уроке
-                                    </Typography>
-                                    <Typography sx={{ fontSize: '14px', color: '#374151' }}>
-                                        {selectedLesson.notes}
-                                    </Typography>
-                                </Box>
-                            )}
-
-                            {selectedLesson.nextLessonPlan && (
-                                <Box sx={{ bgcolor: '#EEF2FF', borderRadius: 2, p: 2, mb: 2 }}>
-                                    <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#4F46E5', textTransform: 'uppercase', mb: 0.5 }}>
-                                        🎯 Задано к этому уроку
-                                    </Typography>
-                                    <Typography sx={{ fontSize: '14px', color: '#1E293B' }}>
-                                        {selectedLesson.nextLessonPlan}
-                                    </Typography>
-                                </Box>
-                            )}
+                            <LessonNotesBlock selectedLesson={selectedLesson} previousLesson={previousLesson} />
 
                             {(selectedLesson.status === 'COMPLETED' || selectedLesson.status === 'PAID') && (
-                                <Button 
-                                    fullWidth 
+                                <Button
+                                    fullWidth
                                     variant="outlined"
                                     startIcon={<EditIcon />}
                                     onClick={() => {
@@ -1118,7 +1059,7 @@ function UnifiedSchedule({
                                         setHomeworkDueDate('');
                                         setOpenCompleteDialog(true);
                                     }}
-                                    sx={{ 
+                                    sx={{
                                         py: 1.5,
                                         borderRadius: 3,
                                         textTransform: 'none',
@@ -1134,16 +1075,16 @@ function UnifiedSchedule({
 
                             {(isScheduled || isInProgress) && (
                                 <Stack spacing={1.5}>
-                                    <Button 
-                                        fullWidth 
-                                        variant="contained" 
+                                    <Button
+                                        fullWidth
+                                        variant="contained"
                                         startIcon={<VideocamIcon />}
                                         onClick={() => {
                                             setOpenLessonDetails(false);
                                             setOpenLessonRoom(true);
                                         }}
-                                        sx={{ 
-                                            bgcolor: '#4F46E5', 
+                                        sx={{
+                                            bgcolor: '#4F46E5',
                                             py: 1.5,
                                             borderRadius: 3,
                                             textTransform: 'none',
@@ -1155,9 +1096,9 @@ function UnifiedSchedule({
                                         🎥 Начать урок
                                     </Button>
                                     {isInProgress && (
-                                        <Button 
-                                            fullWidth 
-                                            variant="contained" 
+                                        <Button
+                                            fullWidth
+                                            variant="contained"
                                             startIcon={<CheckIcon />}
                                             onClick={() => {
                                                 setLessonNotes(selectedLesson.notes || '');
@@ -1166,8 +1107,8 @@ function UnifiedSchedule({
                                                 setHomeworkDueDate('');
                                                 setOpenCompleteDialog(true);
                                             }}
-                                            sx={{ 
-                                                bgcolor: '#10B981', 
+                                            sx={{
+                                                bgcolor: '#10B981',
                                                 py: 1.5,
                                                 borderRadius: 3,
                                                 textTransform: 'none',
@@ -1180,8 +1121,8 @@ function UnifiedSchedule({
                                         </Button>
                                     )}
                                     <Box sx={{ display: 'flex', gap: 1 }}>
-                                        <Button 
-                                            fullWidth 
+                                        <Button
+                                            fullWidth
                                             variant="outlined"
                                             startIcon={<EventIcon />}
                                             onClick={() => {
@@ -1192,8 +1133,8 @@ function UnifiedSchedule({
                                         >
                                             📩 Перенос
                                         </Button>
-                                        <Button 
-                                            fullWidth 
+                                        <Button
+                                            fullWidth
                                             variant="outlined"
                                             color="error"
                                             startIcon={<CancelIcon />}
@@ -1213,7 +1154,7 @@ function UnifiedSchedule({
                 );
             })()}
         </StyledDialog>
-        <LessonRoom 
+        <LessonRoom
             open={openLessonRoom}
             onClose={() => setOpenLessonRoom(false)}
             lessonId={selectedLesson?.id}
@@ -1224,31 +1165,31 @@ function UnifiedSchedule({
             } : null}
         />
 
-        {/* ДИАЛОГ ЗАВЕРШЕНИЯ УРОКА */}
+        {/* ДИАЛОГ ЗАВЕРШЕНИЯ УРОКА (десктопный) */}
         <StyledDialog open={openCompleteDialog} onClose={() => setOpenCompleteDialog(false)} maxWidth="sm" fullWidth>
             <DialogTitle sx={{ fontWeight: 700 }}>
-                {selectedLesson?.status === 'COMPLETED' || selectedLesson?.status === 'PAID' 
-                    ? 'Редактирование заметок' 
+                {selectedLesson?.status === 'COMPLETED' || selectedLesson?.status === 'PAID'
+                    ? 'Редактирование заметок'
                     : 'Завершение урока'}
             </DialogTitle>
             <DialogContent>
                 <Typography sx={{ mb: 2, color: '#64748B' }}>
                     {selectedLesson?.student?.fullName} • {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)}
                 </Typography>
-                <TextField 
-                    fullWidth 
-                    label="📝 Что делали на уроке" 
-                    multiline 
-                    rows={3} 
+                <TextField
+                    fullWidth
+                    label="📝 Что делали на уроке"
+                    multiline
+                    rows={3}
                     value={lessonNotes}
                     onChange={(e) => setLessonNotes(e.target.value)}
                     sx={{ mb: 2 }}
                 />
-                <TextField 
-                    fullWidth 
-                    label="🎯 Что задано к следующему уроку" 
-                    multiline 
-                    rows={2} 
+                <TextField
+                    fullWidth
+                    label="🎯 Что задано к следующему уроку"
+                    multiline
+                    rows={2}
                     value={nextLessonPlan}
                     onChange={(e) => setNextLessonPlan(e.target.value)}
                     sx={{ mb: 3 }}
@@ -1257,19 +1198,19 @@ function UnifiedSchedule({
                 <Typography sx={{ fontWeight: 700, mb: 2, fontSize: '14px' }}>
                     📋 Домашнее задание (опционально)
                 </Typography>
-                <TextField 
-                    fullWidth 
-                    label="Текст задания" 
-                    multiline 
-                    rows={2} 
+                <TextField
+                    fullWidth
+                    label="Текст задания"
+                    multiline
+                    rows={2}
                     value={homeworkTask}
                     onChange={(e) => setHomeworkTask(e.target.value)}
                     sx={{ mb: 2 }}
                 />
-                <TextField 
-                    fullWidth 
-                    label="Срок сдачи" 
-                    type="date" 
+                <TextField
+                    fullWidth
+                    label="Срок сдачи"
+                    type="date"
                     value={homeworkDueDate}
                     onChange={(e) => setHomeworkDueDate(e.target.value)}
                     InputLabelProps={{ shrink: true }}
@@ -1277,22 +1218,20 @@ function UnifiedSchedule({
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Button onClick={() => setOpenCompleteDialog(false)}>Отмена</Button>
-                <Button 
-                    variant="contained" 
+                <Button
+                    variant="contained"
                     startIcon={<CheckIcon />}
                     onClick={async () => {
                         try {
                             const isCompleted = selectedLesson?.status === 'COMPLETED' || selectedLesson?.status === 'PAID';
-                            
+
                             if (isCompleted) {
-                                // Редактирование заметок — используем PATCH /notes
                                 await axiosInstance.patch(`/lessons/${selectedLesson.id}/notes`, {
                                     notes: lessonNotes,
                                     nextLessonPlan: nextLessonPlan,
                                 });
                                 onShowSnackbar?.('✅ Заметки сохранены!', 'success');
                             } else {
-                                // Завершение урока — используем POST /complete
                                 await axiosInstance.post(`/lessons/${selectedLesson.id}/complete`, {
                                     notes: lessonNotes,
                                     nextLessonPlan: nextLessonPlan,
@@ -1322,7 +1261,7 @@ function UnifiedSchedule({
                     {selectedLesson?.status === 'COMPLETED' || selectedLesson?.status === 'PAID' ? 'Сохранить' : 'Завершить'}
                 </Button>
             </DialogActions>
-                </StyledDialog>
+        </StyledDialog>
 
         {/* ДИАЛОГ ЗАПРОСА ПЕРЕНОСА */}
         <StyledDialog open={openRescheduleRequestDialog} onClose={() => setOpenRescheduleRequestDialog(false)} maxWidth="sm" fullWidth>
@@ -1331,17 +1270,17 @@ function UnifiedSchedule({
                 <Typography sx={{ mb: 2, color: '#64748B' }}>
                     {selectedLesson?.student?.fullName} • {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)}
                 </Typography>
-                <DatePicker 
-                    label="Желаемая дата" 
-                    value={rescheduleRequestDate} 
+                <DatePicker
+                    label="Желаемая дата"
+                    value={rescheduleRequestDate}
                     onChange={(d) => setRescheduleRequestDate(d)}
                     minDate={new Date()}
                     slotProps={{ textField: { fullWidth: true, sx: { mb: 2 } } }}
                 />
-                <TextField 
-                    fullWidth 
-                    label="Желаемое время" 
-                    type="time" 
+                <TextField
+                    fullWidth
+                    label="Желаемое время"
+                    type="time"
                     value={rescheduleRequestTime}
                     onChange={(e) => setRescheduleRequestTime(e.target.value)}
                     InputLabelProps={{ shrink: true }}
@@ -1349,8 +1288,8 @@ function UnifiedSchedule({
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Button onClick={() => setOpenRescheduleRequestDialog(false)}>Назад</Button>
-                <Button 
-                    variant="contained" 
+                <Button
+                    variant="contained"
                     onClick={async () => {
                         try {
                             await axiosInstance.post(`/lessons/${selectedLesson.id}/request-reschedule`, {
@@ -1380,11 +1319,11 @@ function UnifiedSchedule({
                 <Typography sx={{ mb: 2, color: '#64748B' }}>
                     {selectedLesson?.student?.fullName} • {formatLessonTime(selectedLesson?.lessonDate, selectedLesson?.startTime)}
                 </Typography>
-                <TextField 
-                    fullWidth 
-                    label="Причина отмены" 
-                    multiline 
-                    rows={3} 
+                <TextField
+                    fullWidth
+                    label="Причина отмены"
+                    multiline
+                    rows={3}
                     value={cancelRequestReason}
                     onChange={(e) => setCancelRequestReason(e.target.value)}
                     placeholder="Например: ученик заболел"
@@ -1392,8 +1331,8 @@ function UnifiedSchedule({
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Button onClick={() => setOpenCancelRequestDialog(false)}>Назад</Button>
-                <Button 
-                    variant="contained" 
+                <Button
+                    variant="contained"
                     color="error"
                     onClick={async () => {
                         try {

@@ -46,6 +46,14 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
 
     @Query("SELECT l FROM Lesson l WHERE l.student.id = :studentId AND l.tutor.id = :tutorId " +
+            "AND l.status IN ('COMPLETED', 'PAID') " +
+            "ORDER BY l.lessonDate DESC, l.startTime DESC")
+    List<Lesson> findCompletedLessonsByStudentAndTutor(
+            @Param("studentId") Long studentId,
+            @Param("tutorId") Long tutorId
+    );
+
+    @Query("SELECT l FROM Lesson l WHERE l.student.id = :studentId AND l.tutor.id = :tutorId " +
             "AND l.course.id = :courseId AND l.status IN ('COMPLETED', 'PAID') " +
             "ORDER BY l.lessonDate DESC, l.startTime DESC")
     List<Lesson> findCompletedLessonsByStudentAndCourse(

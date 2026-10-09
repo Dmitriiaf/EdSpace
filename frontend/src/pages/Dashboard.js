@@ -1,8 +1,8 @@
-// ========== frontend/src/pages/Dashboard.js (ФИНАЛЬНАЯ ВЕРСИЯ с чатом) ==========
+// ========== frontend/src/pages/Dashboard.js ==========
 import React, { useState, useEffect } from 'react';
 import {
     Box, Grid, Card, CardContent, Typography,
-    Paper, Button, Chip, Snackbar, Avatar
+    Paper, Button, Chip, Avatar
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { formatLessonTime } from '../utils/timezone';
@@ -10,7 +10,6 @@ import {
     Refresh as RefreshIcon,
     Assignment as AssignmentIcon
 } from '@mui/icons-material';
-import ChatPanel from '../components/ChatPanel';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import ruLocale from 'date-fns/locale/ru';
@@ -314,11 +313,6 @@ function Dashboard() {
                         ))}
                     </Box>
                 )}
-
-                {/* ЧАТ */}
-                <ChatPanel />
-
-                <Snackbar open={false} autoHideDuration={4000} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
             </PageContainer>
         </LocalizationProvider>
     );

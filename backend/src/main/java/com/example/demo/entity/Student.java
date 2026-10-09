@@ -30,6 +30,12 @@ public class Student {
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<StudentRate> rates = new ArrayList<>();
 
+    @Column(name = "ege_rating_enabled")
+    private Boolean egeRatingEnabled = false;
+
+    @Column(name = "ege_student")
+    private Boolean egeStudent = false;
+
     @ManyToOne
     @JoinColumn(name = "parent_id")
     private Parent parent;
@@ -166,6 +172,8 @@ public class Student {
     public LocalDateTime getLockedUntil() { return lockedUntil; }
 
     // Сеттеры
+    public Boolean getEgeRatingEnabled() { return egeRatingEnabled; }
+    public Boolean getEgeStudent() { return egeStudent; }
     public void setDiscount(Integer discount) { this.discount = discount; }
     public void setResetToken(String resetToken) { this.resetToken = resetToken; }
     public void setMissedLessons(Integer missedLessons) { this.missedLessons = missedLessons; }
@@ -197,6 +205,8 @@ public class Student {
     public void setArchived(Boolean archived) { this.archived = archived; }
     public void setFailedLoginAttempts(Integer failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
     public void setLockedUntil(LocalDateTime lockedUntil) { this.lockedUntil = lockedUntil; }
+    public void setEgeRatingEnabled(Boolean egeRatingEnabled) { this.egeRatingEnabled = egeRatingEnabled; }
+    public void setEgeStudent(Boolean egeStudent) { this.egeStudent = egeStudent; }
 
     // ✅ Вспомогательные методы
     public boolean isLocked() {

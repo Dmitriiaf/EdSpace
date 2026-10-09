@@ -15,6 +15,8 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\BoardWebSocketController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ChatController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\CourseController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\EgeChecklistController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\EgeSolutionController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ExcalidrawController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\ExportController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\GameController.java
@@ -41,6 +43,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\SubscriptionController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\SubscriptionInitController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\SubscriptionRenewalController.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\TournamentController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\TutorController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\VariantController.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\controller\VideoRoomController.java
@@ -58,6 +61,10 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\dto\Subscr
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\BoardSession.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\ChatMessage.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Course.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\EgeChecklist.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\EgeChecklistItem.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\EgeSolution.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\EgeSolutionImage.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\GameScore.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Group.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Homework.java
@@ -79,6 +86,8 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Stu
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Subject.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Subscription.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\TaskBank.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Tournament.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\TournamentParticipant.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Tutor.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\Variant.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\entity\VideoRoom.java
@@ -91,6 +100,10 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\exception\
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\BoardSessionRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\ChatMessageRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\CourseRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\EgeChecklistItemRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\EgeChecklistRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\EgeSolutionImageRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\EgeSolutionRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\GameScoreRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\GroupRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\HomeworkRepository.java
@@ -111,6 +124,8 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\SubjectRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\SubscriptionRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\TaskBankRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\TournamentParticipantRepository.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\TournamentRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\TutorRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\VariantRepository.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\repository\VideoRoomRepository.java
@@ -119,6 +134,8 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\scheduler\
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\AIGenerationService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\BoardSessionService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\CourseService.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\EgeChecklistService.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\EgeSolutionService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\EmailService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\ExcalidrawService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\ExportService.java
@@ -140,6 +157,7 @@ C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\St
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\SubjectService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\SubscriptionCalculator.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\SubscriptionService.java
+C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\TournamentService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\TutorService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\VariantService.java
 C:\Users\datro\tutor-workspace\backend\src\main\java\com\example\demo\service\WeeklyTemplateService.java

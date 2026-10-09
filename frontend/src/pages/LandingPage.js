@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
     Box, Button, Typography, Container, Grid, AppBar, Toolbar,
-    IconButton, Drawer, Stack, TextField, Dialog, DialogContent,
-    DialogTitle, Select, MenuItem, FormControl, InputLabel, Snackbar,
-    Alert, Divider, Fade
+    IconButton, Drawer, Stack, Dialog, DialogContent,
+    DialogTitle, Snackbar, Alert, Divider, Fade
 } from '@mui/material';
 import { styled, keyframes } from '@mui/material/styles';
 import {
     Menu as MenuIcon, Close, Telegram, ArrowForward,
-    Add as Plus, Remove as Minus
+    Add as Plus, Remove as Minus,
+    Phone as PhoneIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 
 // ========== ПАЛИТРА SECREP ==========
 const BG = '#FAFAFA';
@@ -130,6 +129,31 @@ const NavLink = styled(Button)({
     '&:hover': { background: 'transparent', color: INK },
 });
 
+// ========== КОНТАКТЫ ==========
+const ContactRow = styled('a')({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: '14px 18px',
+    borderRadius: 16,
+    background: '#F8F8F8',
+    textDecoration: 'none',
+    color: INK,
+    transition: 'all 0.2s ease',
+    border: '1px solid transparent',
+    '&:hover': {
+        background: PURPLE_SOFT,
+        borderColor: PURPLE,
+        transform: 'translateX(4px)',
+    },
+});
+
+const ContactIconBox = styled(Box)({
+    width: 42, height: 42, borderRadius: 12,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+});
+
 // ========== ДАННЫЕ ==========
 const REVIEWS = Array.from({ length: 11 }, (_, i) => ({
     id: i + 1, image: `/reviews/${i + 1}.jpg`, alt: `Отзыв ${i + 1}`,
@@ -167,10 +191,10 @@ const parentPoints = [
 ];
 
 const directions = [
-    { title: 'ЕГЭ по информатике', desc: 'С 10 класса, спокойно и без паники', tone: LIME_SOFT },
-    { title: 'ОГЭ по информатике', desc: 'С 8–9 класса', tone: PINK_SOFT },
-    { title: 'Python с нуля', desc: 'От основ до небольших проектов', tone: PURPLE_SOFT },
-    { title: 'Школьная программа', desc: 'Домашка, контрольные, зачёты', tone: BLUE_SOFT },
+    { title: 'ЕГЭ по информатике', desc: 'С 10 класса, спокойно и без паники', tone: LIME_SOFT, link: '/repetitor-informatika-ege' },
+    { title: 'ОГЭ по информатике', desc: 'С 8–9 класса', tone: PINK_SOFT, link: '/repetitor-informatika-oge' },
+    { title: 'Python с нуля', desc: 'От основ до небольших проектов', tone: PURPLE_SOFT, link: '/repetitor-informatika' },
+    { title: 'Репетитор по математике', desc: 'ЕГЭ/ОГЭ, 1–11 классы', tone: BLUE_SOFT, link: '/repetitor-matematika-ege' },
 ];
 
 const faqItems = [
@@ -185,14 +209,12 @@ const faqItems = [
 const LandingPage = () => {
     const navigate = useNavigate();
     const [mobileMenu, setMobileMenu] = useState(false);
-    const [studentDialog, setStudentDialog] = useState(false);
-    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+    const [contactsOpen, setContactsOpen] = useState(false);
     const [selectedReview, setSelectedReview] = useState(null);
     const [reviewIndex, setReviewIndex] = useState(0);
     const [showReviews, setShowReviews] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const [openFaq, setOpenFaq] = useState(null);
-    const [studentForm, setStudentForm] = useState({ name: '', phone: '', goal: 'Подготовка к ЕГЭ' });
 
     useEffect(() => {
         const onScroll = () => setScrolled(window.scrollY > 400);
@@ -200,20 +222,7 @@ const LandingPage = () => {
         return () => window.removeEventListener('scroll', onScroll);
     }, []);
 
-    const handleStudentSubmit = async () => {
-        if (!studentForm.name || !studentForm.phone) {
-            setSnackbar({ open: true, message: 'Заполните имя и телефон', severity: 'warning' });
-            return;
-        }
-        try {
-            await axios.post('/api/leads/student', { ...studentForm, subject: 'Информатика', tariff: 'Индивидуально' });
-            setStudentDialog(false);
-            setSnackbar({ open: true, message: 'Заявка отправлена. Отвечу в течение дня.', severity: 'success' });
-            setStudentForm({ name: '', phone: '', goal: 'Подготовка к ЕГЭ' });
-        } catch {
-            setSnackbar({ open: true, message: 'Ошибка. Позвоните: +7 950 432-18-06', severity: 'error' });
-        }
-    };
+    const openContacts = () => setContactsOpen(true);
 
     const nextReview = () => setReviewIndex((p) => (p + 1) % REVIEWS.length);
     const prevReview = () => setReviewIndex((p) => (p - 1 + REVIEWS.length) % REVIEWS.length);
@@ -254,9 +263,11 @@ const LandingPage = () => {
                         <Stack direction="row" spacing={4} alignItems="center" sx={{ display: { xs: 'none', md: 'flex' } }}>
                             <NavLink onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })}>Обо мне</NavLink>
                             <NavLink onClick={() => document.getElementById('platform')?.scrollIntoView({ behavior: 'smooth' })}>Платформа</NavLink>
+                            <NavLink onClick={() => document.getElementById('directions')?.scrollIntoView({ behavior: 'smooth' })}>Направления</NavLink>
+                            <NavLink onClick={() => document.getElementById('tournaments')?.scrollIntoView({ behavior: 'smooth' })}>Турниры</NavLink>
                             <NavLink onClick={() => document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' })}>Вопросы</NavLink>
                             <NavLink onClick={() => navigate('/login')}>Войти</NavLink>
-                            <PillButton $variant="dark" onClick={() => setStudentDialog(true)} sx={{ py: 1.2, px: 3, fontSize: '0.9rem' }}>
+                            <PillButton $variant="dark" onClick={openContacts} sx={{ py: 1.2, px: 3, fontSize: '0.9rem' }}>
                                 Записаться
                             </PillButton>
                         </Stack>
@@ -281,6 +292,8 @@ const LandingPage = () => {
                         {[
                             { label: 'Обо мне', id: 'about' },
                             { label: 'Платформа', id: 'platform' },
+                            { label: 'Направления', id: 'directions' },
+                            { label: 'Турниры', id: 'tournaments' },
                             { label: 'Вопросы', id: 'faq' },
                         ].map((item, i) => (
                             <Typography
@@ -333,33 +346,36 @@ const LandingPage = () => {
                                 borderRadius: 5,
                                 p: 3.5,
                                 height: '100%',
-                                position: 'relative',
-                                minHeight: 260,
-                                overflow: 'hidden',
+                                minHeight: 280,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
                             }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
-                                    <Typography sx={{ fontSize: '0.9rem', fontWeight: 500, color: INK }}>
-                                        Мне доверяет
+                                <Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
+                                        <Typography sx={{ fontSize: '0.9rem', fontWeight: 500, color: INK }}>
+                                            Мне доверяет
+                                        </Typography>
+                                        <Stack direction="row" spacing={1}>
+                                            <Sparkle size={20} color={PURPLE} />
+                                            <Sparkle size={14} color={PURPLE} style={{ marginTop: 8 }} />
+                                        </Stack>
+                                    </Box>
+                                    <Typography sx={{
+                                        fontFamily: '"Playfair Display", serif',
+                                        fontSize: { xs: '2rem', md: '2.4rem' },
+                                        fontWeight: 500,
+                                        lineHeight: 1,
+                                        color: INK,
+                                        mb: 1,
+                                    }}>
+                                        153 <Box component="span" sx={{ color: PURPLE }}>ученика</Box>
                                     </Typography>
-                                    <Stack direction="row" spacing={1}>
-                                        <Sparkle size={20} color={PURPLE} />
-                                        <Sparkle size={14} color={PURPLE} style={{ marginTop: 8 }} />
-                                    </Stack>
+                                    <Typography sx={{ fontSize: '0.88rem', color: INK_SOFT }}>
+                                        за 5 лет преподавания
+                                    </Typography>
                                 </Box>
-                                <Typography sx={{
-                                    fontFamily: '"Playfair Display", serif',
-                                    fontSize: { xs: '2rem', md: '2.4rem' },
-                                    fontWeight: 500,
-                                    lineHeight: 1,
-                                    color: INK,
-                                    mb: 1,
-                                }}>
-                                    153 <Box component="span" sx={{ color: PURPLE }}>ученика</Box>
-                                </Typography>
-                                <Typography sx={{ fontSize: '0.88rem', color: INK_SOFT, mb: 3.5 }}>
-                                    за 5 лет преподавания
-                                </Typography>
-                                <Stack direction="row" spacing={-1}>
+                                <Stack direction="row" spacing={-1} sx={{ mt: 3 }}>
                                     {[1, 2, 3, 4].map((i) => (
                                         <Box key={i} sx={{
                                             width: 40, height: 40, borderRadius: '50%',
@@ -387,18 +403,18 @@ const LandingPage = () => {
                             <Box sx={{
                                 textAlign: 'center',
                                 height: '100%',
+                                minHeight: 280,
                                 display: 'flex',
                                 flexDirection: 'column',
                                 alignItems: 'center',
-                                justifyContent: 'flex-end',
-                                pt: 1,
+                                justifyContent: 'center',
+                                gap: 3,
                             }}>
                                 <Box sx={{
                                     position: 'relative',
-                                    width: 170,
-                                    height: 170,
+                                    width: 150,
+                                    height: 150,
                                     animation: `${float} 4s ease-in-out infinite`,
-                                    mb: 3.5,
                                 }}>
                                     <Box sx={{
                                         position: 'absolute', inset: -40,
@@ -421,7 +437,7 @@ const LandingPage = () => {
 
                                 <PillButton
                                     $variant="dark"
-                                    onClick={() => setStudentDialog(true)}
+                                    onClick={openContacts}
                                     sx={{ px: 4.5, py: 1.8 }}
                                 >
                                     Начать бесплатно
@@ -438,12 +454,14 @@ const LandingPage = () => {
                                 borderRadius: 5,
                                 p: 3.5,
                                 height: '100%',
-                                minHeight: 260,
+                                minHeight: 280,
+                                display: 'flex',
+                                flexDirection: 'column',
                             }}>
                                 <Typography sx={{ fontSize: '0.9rem', fontWeight: 500, color: INK, mb: 2.5 }}>
                                     Что вас ждёт:
                                 </Typography>
-                                <Stack spacing={1.25}>
+                                <Stack spacing={1.25} sx={{ flexGrow: 1 }}>
                                     {[
                                         'Готовлю к ЕГЭ на 85+ баллов',
                                         'Своя платформа для занятий',
@@ -559,9 +577,12 @@ const LandingPage = () => {
                                         borderRadius: 4,
                                         p: 3,
                                         height: '100%',
+                                        minHeight: 180,
                                         transition: 'all 0.3s ease',
                                         position: 'relative',
                                         overflow: 'hidden',
+                                        display: 'flex',
+                                        flexDirection: 'column',
                                         '&:hover': {
                                             transform: 'translateY(-4px)',
                                             bgcolor: '#252525',
@@ -645,6 +666,10 @@ const LandingPage = () => {
                                     color: '#FFF',
                                     position: 'relative',
                                     overflow: 'hidden',
+                                    height: '100%',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'center',
                                 }}>
                                     <Box sx={{
                                         position: 'absolute',
@@ -677,33 +702,216 @@ const LandingPage = () => {
                             </Reveal>
                         </Grid>
                     </Grid>
+                </Container>
+            </Box>
 
-                    <Reveal delay={0.3}>
-                        <Box sx={{ mt: 8 }}>
-                            <Typography sx={{ ...T.h2, fontSize: { xs: '1.5rem', md: '2rem' }, mb: 3.5 }}>
-                                Направления <SerifAccent>подготовки</SerifAccent>
+            {/* НАПРАВЛЕНИЯ ПОДГОТОВКИ */}
+            <Box id="directions" sx={{ bgcolor: DARK, color: '#FFF', py: { xs: 8, md: 11 }, position: 'relative', zIndex: 1 }}>
+                <Container maxWidth="lg">
+                    <Reveal>
+                        <Box sx={{ textAlign: 'center', mb: 5 }}>
+                            <Typography sx={{
+                                fontWeight: 800,
+                                fontSize: { xs: '2rem', md: '3rem' },
+                                lineHeight: 1.1,
+                                letterSpacing: '-0.03em',
+                                color: '#FFF',
+                            }}>
+                                Направления <SerifAccent sx={{ color: LIME, fontSize: '1.15em' }}>подготовки</SerifAccent>
                             </Typography>
-                            <Grid container spacing={2}>
-                                {directions.map((item, i) => (
-                                    <Grid item xs={12} sm={6} key={i}>
-                                        <Box sx={{
+                            <Typography sx={{ color: 'rgba(255,255,255,0.65)', mt: 1.5, maxWidth: 520, mx: 'auto', fontSize: '1rem' }}>
+                                Подробнее о каждом направлении — на отдельной странице
+                            </Typography>
+                        </Box>
+                    </Reveal>
+
+                    <Grid container spacing={2.5}>
+                        {directions.map((d, i) => (
+                            <Grid item xs={12} sm={6} md={3} key={i}>
+                                <Reveal delay={0.06 * i}>
+                                    <Box
+                                        onClick={() => navigate(d.link)}
+                                        sx={{
+                                            bgcolor: DARK_ALT,
+                                            borderRadius: 4,
                                             p: 3,
                                             height: '100%',
-                                            background: item.tone,
-                                            borderRadius: 4,
-                                            transition: 'transform 0.25s ease',
-                                            '&:hover': { transform: 'translateY(-3px)' },
+                                            minHeight: 210,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            '&:hover': {
+                                                transform: 'translateY(-4px)',
+                                                bgcolor: '#252525',
+                                            },
+                                        }}
+                                    >
+                                        <Box sx={{
+                                            width: 44, height: 44, borderRadius: 2.5,
+                                            bgcolor: d.tone,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: '1.3rem',
+                                            mb: 2.5,
                                         }}>
-                                            <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', mb: 0.75, color: INK }}>
-                                                {item.title}
-                                            </Typography>
-                                            <Typography sx={{ color: INK_SOFT, fontSize: '0.9rem', lineHeight: 1.55 }}>
-                                                {item.desc}
-                                            </Typography>
+                                            {d.tone === LIME_SOFT ? '💻' : d.tone === PINK_SOFT ? '📘' : d.tone === PURPLE_SOFT ? '🐍' : '📐'}
                                         </Box>
-                                    </Grid>
-                                ))}
+                                        <Typography sx={{ fontSize: '1.05rem', fontWeight: 700, mb: 0.75, color: '#FFF' }}>
+                                            {d.title}
+                                        </Typography>
+                                        <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.88rem', lineHeight: 1.55, mb: 2, flexGrow: 1 }}>
+                                            {d.desc}
+                                        </Typography>
+                                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: LIME }}>
+                                            Подробнее →
+                                        </Typography>
+                                    </Box>
+                                </Reveal>
                             </Grid>
+                        ))}
+                    </Grid>
+                </Container>
+            </Box>
+
+            {/* ТУРНИРЫ */}
+            <Box id="tournaments" sx={{ py: { xs: 8, md: 11 }, position: 'relative', zIndex: 1 }}>
+                <Container maxWidth="lg">
+                    <Reveal>
+                        <Box sx={{ textAlign: 'center', mb: 5 }}>
+                            <Typography sx={{ ...T.h2 }}>
+                                🏆 Турниры <SerifAccent>для учеников</SerifAccent>
+                            </Typography>
+                            <Typography sx={{ ...T.body, mt: 1.5, maxWidth: 620, mx: 'auto' }}>
+                                Раз в месяц проводим марафон по пробникам. Соревнование идёт не по абсолютному баллу,
+                                а по <Box component="span" sx={{ color: INK, fontWeight: 600 }}>прогрессу относительно себя</Box> —
+                                побеждает не тот, кто изначально сильнее, а тот, кто больше вырос.
+                            </Typography>
+                        </Box>
+                    </Reveal>
+
+                    {/* 3 шага */}
+                    <Grid container spacing={2.5} sx={{ mb: 4 }}>
+                        {[
+                            { emoji: '📅', title: 'Марафон на месяц', desc: 'Месяц соревнований — 4 пробника за это время.' },
+                            { emoji: '📈', title: 'Прогресс важнее балла', desc: 'Считаем рост относительно личного уровня — шанс есть у каждого.' },
+                            { emoji: '🎁', title: 'Призы для всех', desc: 'Сертификаты на покупки и книги по информатике.' },
+                        ].map((item, i) => (
+                            <Grid item xs={12} md={4} key={i}>
+                                <Reveal delay={0.06 * i}>
+                                    <Box sx={{
+                                        bgcolor: CARD,
+                                        borderRadius: 4,
+                                        border: `1px solid ${LINE}`,
+                                        p: 3,
+                                        height: '100%',
+                                        minHeight: 180,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        transition: 'all 0.3s ease',
+                                        '&:hover': { transform: 'translateY(-4px)', borderColor: PURPLE },
+                                    }}>
+                                        <Box sx={{
+                                            width: 52, height: 52, borderRadius: 3,
+                                            bgcolor: PURPLE_SOFT,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: '1.6rem', mb: 2.5,
+                                        }}>
+                                            {item.emoji}
+                                        </Box>
+                                        <Typography sx={{ fontSize: '1.1rem', fontWeight: 700, color: INK, mb: 1 }}>
+                                            {item.title}
+                                        </Typography>
+                                        <Typography sx={{ ...T.bodySmall, flexGrow: 1 }}>
+                                            {item.desc}
+                                        </Typography>
+                                    </Box>
+                                </Reveal>
+                            </Grid>
+                        ))}
+                    </Grid>
+
+                    {/* Полоса с призами */}
+                    <Reveal delay={0.2}>
+                        <Box sx={{
+                            background: `linear-gradient(135deg, ${DARK} 0%, #2A2A2A 100%)`,
+                            borderRadius: 5,
+                            p: { xs: 3, md: 4 },
+                            position: 'relative',
+                            overflow: 'hidden',
+                        }}>
+                            <Box sx={{ position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: '50%', background: PURPLE, filter: 'blur(80px)', opacity: 0.4 }} />
+                            <Box sx={{ position: 'absolute', bottom: -40, left: -40, width: 200, height: 200, borderRadius: '50%', background: PINK, filter: 'blur(80px)', opacity: 0.3 }} />
+
+                            <Box sx={{ position: 'relative', zIndex: 1 }}>
+                                <Typography sx={{
+                                    textAlign: 'center',
+                                    fontWeight: 800,
+                                    fontSize: { xs: '1.3rem', md: '1.6rem' },
+                                    color: '#FFF',
+                                    letterSpacing: '-0.02em',
+                                    mb: 3,
+                                }}>
+                                    Призы в каждом марафоне
+                                </Typography>
+
+                                <Grid container spacing={2}>
+                                    {[
+                                        { emoji: '🥇', place: '1 место', prize: 'Сертификат 3000 ₽ + книга', color: '#FFD700' },
+                                        { emoji: '🥈', place: '2 место', prize: 'Сертификат 1500 ₽ + книга', color: '#C0C0C0' },
+                                        { emoji: '🥉', place: '3 место', prize: 'Сертификат 500 ₽ + книга', color: '#CD7F32' },
+                                        { emoji: '📚', place: '4 место', prize: 'Книга по выбору', color: LIME },
+                                    ].map((p, i) => (
+                                        <Grid item xs={12} sm={6} md={3} key={i}>
+                                            <Box sx={{
+                                                bgcolor: 'rgba(255,255,255,0.04)',
+                                                border: '1px solid rgba(255,255,255,0.08)',
+                                                borderRadius: 3,
+                                                p: 2.5,
+                                                height: '100%',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                textAlign: 'center',
+                                            }}>
+                                                <Typography sx={{ fontSize: '2rem', mb: 1.5, lineHeight: 1 }}>
+                                                    {p.emoji}
+                                                </Typography>
+                                                <Typography sx={{
+                                                    fontSize: '0.7rem',
+                                                    color: p.color,
+                                                    fontWeight: 800,
+                                                    letterSpacing: '0.08em',
+                                                    textTransform: 'uppercase',
+                                                    mb: 0.75,
+                                                }}>
+                                                    {p.place}
+                                                </Typography>
+                                                <Typography sx={{
+                                                    fontSize: '0.9rem',
+                                                    color: '#FFF',
+                                                    fontWeight: 600,
+                                                    lineHeight: 1.4,
+                                                }}>
+                                                    {p.prize}
+                                                </Typography>
+                                            </Box>
+                                        </Grid>
+                                    ))}
+                                </Grid>
+
+                                <Typography sx={{
+                                    mt: 3,
+                                    textAlign: 'center',
+                                    color: 'rgba(255,255,255,0.55)',
+                                    fontSize: '0.85rem',
+                                    lineHeight: 1.6,
+                                    maxWidth: 560,
+                                    mx: 'auto',
+                                }}>
+                                    Участвовать могут все ученики. Допуск подтверждает репетитор —
+                                    нужно, чтобы ученик решал пробники до старта марафона.
+                                </Typography>
+                            </Box>
                         </Box>
                     </Reveal>
                 </Container>
@@ -712,7 +920,7 @@ const LandingPage = () => {
             {/* УЧЕНИКУ / РОДИТЕЛЮ */}
             <Box sx={{ bgcolor: BG_ALT, py: { xs: 8, md: 11 }, position: 'relative', zIndex: 1 }}>
                 <Container maxWidth="lg">
-                    <Grid container spacing={{ xs: 3, md: 4 }}>
+                    <Grid container spacing={{ xs: 3, md: 4 }} alignItems="stretch">
                         <Grid item xs={12} md={6}>
                             <Reveal>
                                 <Box sx={{
@@ -720,9 +928,12 @@ const LandingPage = () => {
                                     borderRadius: 5,
                                     p: { xs: 3.5, md: 4 },
                                     height: '100%',
+                                    minHeight: 320,
                                     color: '#FFF',
                                     position: 'relative',
                                     overflow: 'hidden',
+                                    display: 'flex',
+                                    flexDirection: 'column',
                                 }}>
                                     <Box sx={{ position: 'absolute', top: 22, right: 22 }}>
                                         <Sparkle size={22} color={LIME} />
@@ -745,7 +956,7 @@ const LandingPage = () => {
                                     }}>
                                         Всё нужное —<br />под рукой
                                     </Typography>
-                                    <Stack spacing={1.5}>
+                                    <Stack spacing={1.5} sx={{ flexGrow: 1 }}>
                                         {studentPoints.map((t, i) => (
                                             <Stack key={i} direction="row" spacing={1.5} alignItems="flex-start">
                                                 <Box sx={{
@@ -772,9 +983,12 @@ const LandingPage = () => {
                                     borderRadius: 5,
                                     p: { xs: 3.5, md: 4 },
                                     height: '100%',
+                                    minHeight: 320,
                                     color: '#FFF',
                                     position: 'relative',
                                     overflow: 'hidden',
+                                    display: 'flex',
+                                    flexDirection: 'column',
                                 }}>
                                     <Box sx={{ position: 'absolute', top: 22, right: 22 }}>
                                         <Sparkle size={22} color={LIME} />
@@ -797,7 +1011,7 @@ const LandingPage = () => {
                                     }}>
                                         Всё видно<br />в личном кабинете
                                     </Typography>
-                                    <Stack spacing={1.5}>
+                                    <Stack spacing={1.5} sx={{ flexGrow: 1 }}>
                                         {parentPoints.map((t, i) => (
                                             <Stack key={i} direction="row" spacing={1.5} alignItems="flex-start">
                                                 <Box sx={{
@@ -834,9 +1048,9 @@ const LandingPage = () => {
                         </Box>
                     </Reveal>
 
-                    <Grid container spacing={2}>
+                    <Grid container spacing={2} justifyContent="center">
                         {examResults.map((r, i) => (
-                            <Grid item xs={6} sm={4} md={2.4} key={i} sx={{ flexGrow: 1 }}>
+                            <Grid item xs={6} sm={4} md={2.4} key={i} sx={{ flexGrow: { xs: 1, md: 0 }, flexBasis: { md: '18%' } }}>
                                 <Reveal delay={0.06 * i}>
                                     <Box sx={{
                                         py: 3.5,
@@ -958,7 +1172,7 @@ const LandingPage = () => {
                         </Reveal>
                     ) : (
                         <Reveal>
-                            <Box sx={{ position: 'relative' }}>
+                            <Box sx={{ position: 'relative', maxWidth: 420, mx: 'auto' }}>
                                 <IconButton
                                     onClick={prevReview}
                                     sx={{
@@ -976,8 +1190,7 @@ const LandingPage = () => {
                                     onClick={() => setSelectedReview(REVIEWS[reviewIndex])}
                                     sx={{
                                         cursor: 'pointer',
-                                        maxWidth: 420,
-                                        mx: 'auto',
+                                        width: '100%',
                                         borderRadius: 5,
                                         overflow: 'hidden',
                                         boxShadow: '0 20px 60px -20px rgba(0,0,0,0.2)',
@@ -1087,12 +1300,12 @@ const LandingPage = () => {
                                 justifyContent="center"
                                 sx={{ position: 'relative', zIndex: 1 }}
                             >
-                                <PillButton $variant="lime" onClick={() => setStudentDialog(true)}>
+                                <PillButton $variant="lime" onClick={openContacts}>
                                     Оставить заявку
                                 </PillButton>
                                 <PillButton
                                     $variant="light"
-                                    onClick={() => window.open('https://t.me/+79504321806', '_blank')}
+                                    onClick={openContacts}
                                     startIcon={<Telegram sx={{ fontSize: 18 }} />}
                                     sx={{ borderColor: 'rgba(255,255,255,0.2)', bgcolor: 'transparent', color: '#FFF',
                                           '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', borderColor: '#FFF' } }}
@@ -1106,16 +1319,57 @@ const LandingPage = () => {
             </Box>
 
             {/* FOOTER */}
-            <Box sx={{ py: 4, borderTop: `1px solid ${LINE}` }}>
+            <Box sx={{ py: 5, borderTop: `1px solid ${LINE}` }}>
                 <Container maxWidth="lg">
-                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2}>
-                        <Typography sx={{ fontWeight: 900, fontSize: '1.1rem', color: INK, letterSpacing: '-0.03em' }}>
-                            EdSpace
-                        </Typography>
-                        <Typography sx={{ color: INK_MUTED, fontSize: '0.82rem' }}>
-                            © 2026 · Дмитрий Атрощенко — репетитор по информатике
-                        </Typography>
-                    </Stack>
+                    <Grid container spacing={4}>
+                        <Grid item xs={12} md={4}>
+                            <Typography sx={{ fontWeight: 900, fontSize: '1.2rem', color: INK, letterSpacing: '-0.03em', mb: 1.5 }}>
+                                EdSpace
+                            </Typography>
+                            <Typography sx={{ color: INK_MUTED, fontSize: '0.85rem', lineHeight: 1.6 }}>
+                                Онлайн-платформа для подготовки к ЕГЭ и ОГЭ по информатике и математике.
+                            </Typography>
+                        </Grid>
+                        <Grid item xs={6} md={4}>
+                            <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', color: INK, textTransform: 'uppercase', letterSpacing: '0.08em', mb: 1.5 }}>
+                                Направления
+                            </Typography>
+                            <Stack spacing={1}>
+                                <Typography onClick={() => navigate('/repetitor-informatika-ege')} sx={{ fontSize: '0.88rem', color: INK_SOFT, cursor: 'pointer', '&:hover': { color: PURPLE } }}>
+                                    ЕГЭ по информатике
+                                </Typography>
+                                <Typography onClick={() => navigate('/repetitor-informatika-oge')} sx={{ fontSize: '0.88rem', color: INK_SOFT, cursor: 'pointer', '&:hover': { color: PURPLE } }}>
+                                    ОГЭ по информатике
+                                </Typography>
+                                <Typography onClick={() => navigate('/repetitor-informatika')} sx={{ fontSize: '0.88rem', color: INK_SOFT, cursor: 'pointer', '&:hover': { color: PURPLE } }}>
+                                    Репетитор по информатике
+                                </Typography>
+                                <Typography onClick={() => navigate('/repetitor-matematika-ege')} sx={{ fontSize: '0.88rem', color: INK_SOFT, cursor: 'pointer', '&:hover': { color: PURPLE } }}>
+                                    Репетитор по математике
+                                </Typography>
+                            </Stack>
+                        </Grid>
+                        <Grid item xs={6} md={4}>
+                            <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', color: INK, textTransform: 'uppercase', letterSpacing: '0.08em', mb: 1.5 }}>
+                                Контакты
+                            </Typography>
+                            <Stack spacing={1}>
+                                <Typography sx={{ fontSize: '0.88rem', color: INK_SOFT }}>
+                                    +7 950 432-18-06
+                                </Typography>
+                                <Typography sx={{ fontSize: '0.88rem', color: INK_SOFT }}>
+                                    d.atrochhenko@mail.ru
+                                </Typography>
+                                <Typography sx={{ fontSize: '0.88rem', color: INK_SOFT }}>
+                                    @edspace_school
+                                </Typography>
+                            </Stack>
+                        </Grid>
+                    </Grid>
+                    <Divider sx={{ borderColor: LINE, my: 3 }} />
+                    <Typography sx={{ color: INK_MUTED, fontSize: '0.82rem', textAlign: 'center' }}>
+                        © 2026 · Дмитрий Атрощенко — репетитор по информатике
+                    </Typography>
                 </Container>
             </Box>
 
@@ -1125,7 +1379,7 @@ const LandingPage = () => {
                         position: 'fixed', bottom: 16, left: 16, right: 16, zIndex: 100,
                         display: { xs: 'flex', md: 'none' }, justifyContent: 'center',
                     }}>
-                        <PillButton $variant="dark" fullWidth onClick={() => setStudentDialog(true)}>
+                        <PillButton $variant="dark" fullWidth onClick={openContacts}>
                             Бесплатный пробный урок
                         </PillButton>
                     </Box>
@@ -1161,103 +1415,97 @@ const LandingPage = () => {
                 </Box>
             </Dialog>
 
-            {/* FORM */}
+            {/* МОДАЛКА КОНТАКТОВ */}
             <Dialog
-                open={studentDialog}
-                onClose={() => setStudentDialog(false)}
-                maxWidth="sm" fullWidth
-                PaperProps={{ sx: { bgcolor: CARD, borderRadius: 5, border: `1px solid ${LINE}` } }}
+                open={contactsOpen}
+                onClose={() => setContactsOpen(false)}
+                maxWidth="xs"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 4, p: 0 } }}
             >
-                <DialogTitle sx={{
-                    fontWeight: 800,
-                    fontSize: '1.8rem',
-                    pt: 5, px: 5,
-                    letterSpacing: '-0.03em',
-                    color: INK,
-                }}>
-                    Запись на <SerifAccent>занятие</SerifAccent>
-                </DialogTitle>
-                <DialogContent sx={{ px: 5, pb: 5, pt: 2 }}>
-                    <Stack spacing={3} sx={{ mt: 1 }}>
-                        <TextField
-                            fullWidth label="Ваше имя"
-                            value={studentForm.name}
-                            onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 3,
-                                    color: INK,
-                                    bgcolor: BG_ALT,
-                                    '& fieldset': { borderColor: 'transparent' },
-                                    '&:hover fieldset': { borderColor: LINE },
-                                    '&.Mui-focused fieldset': { borderColor: INK },
-                                },
-                                '& .MuiInputLabel-root': { color: INK_MUTED },
-                                '& .MuiInputLabel-root.Mui-focused': { color: INK },
-                            }}
-                        />
-                        <TextField
-                            fullWidth label="Телефон"
-                            value={studentForm.phone}
-                            onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 3,
-                                    color: INK,
-                                    bgcolor: BG_ALT,
-                                    '& fieldset': { borderColor: 'transparent' },
-                                    '&:hover fieldset': { borderColor: LINE },
-                                    '&.Mui-focused fieldset': { borderColor: INK },
-                                },
-                                '& .MuiInputLabel-root': { color: INK_MUTED },
-                                '& .MuiInputLabel-root.Mui-focused': { color: INK },
-                            }}
-                        />
-                        <FormControl fullWidth>
-                            <InputLabel sx={{ color: INK_MUTED, '&.Mui-focused': { color: INK } }}>Цель занятий</InputLabel>
-                            <Select
-                                value={studentForm.goal}
-                                label="Цель занятий"
-                                onChange={(e) => setStudentForm({ ...studentForm, goal: e.target.value })}
-                                sx={{
-                                    borderRadius: 3,
-                                    color: INK,
-                                    bgcolor: BG_ALT,
-                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
-                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: LINE },
-                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: INK },
-                                    '& .MuiSvgIcon-root': { color: INK_MUTED },
-                                }}
-                                MenuProps={{
-                                    PaperProps: {
-                                        sx: { bgcolor: CARD, borderRadius: 3, border: `1px solid ${LINE}` }
-                                    }
-                                }}
-                            >
-                                <MenuItem value="Подготовка к ЕГЭ" sx={{ color: INK }}>Подготовка к ЕГЭ (10–11 класс)</MenuItem>
-                                <MenuItem value="Подготовка к ОГЭ" sx={{ color: INK }}>Подготовка к ОГЭ (9 класс)</MenuItem>
-                                <MenuItem value="Python" sx={{ color: INK }}>Программирование на Python</MenuItem>
-                                <MenuItem value="Школьная программа" sx={{ color: INK }}>Повышение успеваемости</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <PillButton $variant="dark" fullWidth onClick={handleStudentSubmit} sx={{ mt: 1, py: 1.8 }}>
-                            Отправить заявку
-                        </PillButton>
-                        <Typography sx={{ fontSize: '0.75rem', color: INK_MUTED, textAlign: 'center' }}>
-                            Нажимая кнопку, вы соглашаетесь с обработкой персональных данных
+                <DialogContent sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography sx={{ fontWeight: 800, fontSize: '1.2rem', color: INK }}>
+                            Связаться со мной
                         </Typography>
+                        <IconButton size="small" onClick={() => setContactsOpen(false)}>
+                            <Close fontSize="small" />
+                        </IconButton>
+                    </Box>
+
+                    <Typography sx={{ color: INK_SOFT, fontSize: '0.9rem', mb: 2.5, lineHeight: 1.5 }}>
+                        Напишите в любой мессенджер или позвоните — отвечу в течение дня. Обсудим цели, уровень и подберём формат занятий.
+                    </Typography>
+
+                    <Stack spacing={1.5}>
+                        <ContactRow href="tel:+79504321806">
+                            <ContactIconBox sx={{ bgcolor: '#E8F5E9', color: '#10B981' }}>
+                                <PhoneIcon />
+                            </ContactIconBox>
+                            <Box sx={{ flex: 1 }}>
+                                <Typography sx={{ fontSize: '0.75rem', color: INK_MUTED, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Телефон
+                                </Typography>
+                                <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: INK }}>
+                                    +7 950 432-18-06
+                                </Typography>
+                            </Box>
+                        </ContactRow>
+
+                        <ContactRow href="tel:+79504321806">
+                            <ContactIconBox sx={{ bgcolor: '#F3E5F5', color: '#9C27B0' }}>
+                                <PhoneIcon />
+                            </ContactIconBox>
+                            <Box sx={{ flex: 1 }}>
+                                <Typography sx={{ fontSize: '0.75rem', color: INK_MUTED, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Макс
+                                </Typography>
+                                <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: INK }}>
+                                    +7 950 432-18-06
+                                </Typography>
+                            </Box>
+                        </ContactRow>
+
+                        <ContactRow
+                            href="https://t.me/pprprprprr"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <ContactIconBox sx={{ bgcolor: '#E3F2FD', color: '#229ED9' }}>
+                                <Telegram sx={{ fontSize: 22 }} />
+                            </ContactIconBox>
+                            <Box sx={{ flex: 1 }}>
+                                <Typography sx={{ fontSize: '0.75rem', color: INK_MUTED, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Telegram
+                                </Typography>
+                                <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: INK }}>
+                                    @pprprprprr
+                                </Typography>
+                            </Box>
+                        </ContactRow>
+
+                        <ContactRow
+                            href="https://vk.ru/prprprprrp"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <ContactIconBox sx={{ bgcolor: '#E8EAF6', color: '#0077FF' }}>
+                                <Box component="svg" viewBox="0 0 24 24" sx={{ width: 24, height: 24, fill: 'currentColor' }}>
+                                    <path d="M12.785 16.241s.288-.032.436-.19c.136-.145.132-.417.132-.417s-.02-1.27.573-1.458c.582-.184 1.329 1.249 2.12 1.812.6.425 1.055.332 1.055.332l2.122-.03s1.11-.068.583-.94c-.043-.072-.306-.642-1.572-1.815-1.324-1.229-1.147-1.03.448-3.157.971-1.295 1.36-2.085 1.238-2.42-.115-.32-.834-.235-.834-.235l-2.387.015s-.177-.024-.308.054c-.128.076-.211.253-.211.253s-.378 1.004-.883 1.86c-1.063 1.808-1.489 1.902-1.661 1.789-.404-.263-.303-1.056-.303-1.619 0-1.763.265-2.499-.517-2.69-.26-.062-.45-.104-1.111-.11-.85-.008-1.567.003-1.972.203-.271.133-.48.431-.353.448.158.022.516.096.705.356.244.334.235 1.084.235 1.084s.14 2.075-.327 2.332c-.32.175-.756-.182-1.698-1.82-.484-.837-.849-1.76-.849-1.76s-.07-.173-.196-.266c-.152-.112-.365-.147-.365-.147l-2.268.015s-.34.01-.466.158c-.112.132-.009.404-.009.404s1.779 4.166 3.798 6.264c1.85 1.923 3.95 1.797 3.95 1.797h.948z" />
+                                </Box>
+                            </ContactIconBox>
+                            <Box sx={{ flex: 1 }}>
+                                <Typography sx={{ fontSize: '0.75rem', color: INK_MUTED, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    ВКонтакте
+                                </Typography>
+                                <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: INK }}>
+                                    vk.ru/prprprprrp
+                                </Typography>
+                            </Box>
+                        </ContactRow>
                     </Stack>
                 </DialogContent>
             </Dialog>
-
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={4000}
-                onClose={() => setSnackbar({ ...snackbar, open: false })}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert severity={snackbar.severity} sx={{ borderRadius: 3 }}>{snackbar.message}</Alert>
-            </Snackbar>
         </Box>
     );
 };

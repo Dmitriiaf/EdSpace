@@ -5,6 +5,7 @@ import {
     Box, Typography, CircularProgress, Alert,
     Button, Chip, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
+import { getCompletedLessons } from '../services/api';
 import {
     Close as CloseIcon,
     Videocam as VideocamIcon,
@@ -19,15 +20,16 @@ const MELETO_BOARD_URL = 'https://meleto.org/board/84dc92e5-6848-4e22-a31c-d1647
 function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
     const { user } = useAuth();
     const isTutor = user?.role === 'tutor' || user?.role === 'ROLE_TUTOR';
-    
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lessonData, setLessonData] = useState(null);
+    const [previousLesson, setPreviousLesson] = useState(null);
     const [videoRooms, setVideoRooms] = useState([]);
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [roomSelected, setRoomSelected] = useState(false);
     const [videoUrl, setVideoUrl] = useState('');
-    
+
     useEffect(() => {
         if (open && lessonId) {
             fetchLessonData();
@@ -44,12 +46,28 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
         try {
             const res = await axiosInstance.get(`/lessons/${lessonId}`);
             setLessonData(res.data);
+
+            if (res.data.student?.id && res.data.tutor?.id) {
+                try {
+                    const prev = await getCompletedLessons(
+                        res.data.student.id,
+                        res.data.tutor.id,
+                        res.data.course?.id || null,
+                        1
+                    );
+                    const arr = prev.data !== undefined ? prev.data : prev;
+                    setPreviousLesson(Array.isArray(arr) ? (arr[0] || null) : null);
+                } catch (e) {
+                    setPreviousLesson(null);
+                }
+            }
+
             setRoomSelected(res.data.roomSelected || false);
-            
+
             if (res.data.videoPlatformLink) {
                 setVideoUrl(res.data.videoPlatformLink);
             }
-            
+
             if (res.data.tutor?.id) {
                 const roomsRes = await axiosInstance.get(`/video-rooms/tutor/${res.data.tutor.id}`);
                 setVideoRooms(roomsRes.data || []);
@@ -91,7 +109,7 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
 
         try {
             await axiosInstance.post(`/lessons/${lessonId}/start`);
-            
+
             await axiosInstance.post(`/lessons/${lessonId}/select-room`, {
                 videoPlatform: room.platform,
                 videoPlatformLink: room.url
@@ -150,6 +168,44 @@ function LessonRoom({ open, onClose, lessonId, lessonInfo }) {
                         {/* Репетитор */}
                         {isTutor && (
                             <Box sx={{ textAlign: 'center', py: 3 }}>
+                                {/* Предпросмотр — показывается ВСЕГДА */}
+                                {previousLesson && (previousLesson.notes || previousLesson.nextLessonPlan) && (
+                                    <Box sx={{ mb: 3, textAlign: 'left' }}>
+                                        {previousLesson.notes && (
+                                            <Box sx={{
+                                                p: 2, mb: 1.5, bgcolor: '#EFF6FF', borderRadius: 2,
+                                                borderLeft: '3px solid #3B82F6',
+                                            }}>
+                                                <Typography sx={{
+                                                    color: '#1E40AF', fontWeight: 700, fontSize: '0.7rem',
+                                                    letterSpacing: '0.05em', textTransform: 'uppercase', mb: 0.75,
+                                                }}>
+                                                    ⏪ Что было на прошлом уроке ({new Date(previousLesson.lessonDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })})
+                                                </Typography>
+                                                <Typography sx={{ color: '#1E293B', fontSize: '0.9rem', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                                                    {previousLesson.notes}
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                        {previousLesson.nextLessonPlan && (
+                                            <Box sx={{
+                                                p: 2, bgcolor: '#FFF3D6', borderRadius: 2,
+                                                borderLeft: '3px solid #F59E0B',
+                                            }}>
+                                                <Typography sx={{
+                                                    color: '#92400E', fontWeight: 700, fontSize: '0.7rem',
+                                                    letterSpacing: '0.05em', textTransform: 'uppercase', mb: 0.75,
+                                                }}>
+                                                    🎯 Что задано к этому уроку
+                                                </Typography>
+                                                <Typography sx={{ color: '#1E293B', fontSize: '0.9rem', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                                                    {previousLesson.nextLessonPlan}
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                    </Box>
+                                )}
+
                                 {!roomSelected ? (
                                     <>
                                         <Typography variant="h6" sx={{ mb: 2 }}>Выберите комнату для урока</Typography>

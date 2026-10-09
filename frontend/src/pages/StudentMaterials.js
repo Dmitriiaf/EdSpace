@@ -1,303 +1,244 @@
-// ========== StudentMaterials.js ==========
+// frontend/src/pages/StudentMaterials.js
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import {
-    Box, Grid, Card, CardContent, Typography,
-    Paper, Chip, CircularProgress, Alert,
-    Avatar, Tooltip, Breadcrumbs, Link as MuiLink,
-    IconButton
+    Box, Typography, Paper, Grid, Chip, CircularProgress,
+    Alert, Avatar, Stack,
 } from '@mui/material';
+import { styled, alpha, keyframes } from '@mui/material/styles';
 import {
-    Folder as FolderIcon,
-    Description as FileIcon,
-    PictureAsPdf as PdfIcon,
-    Image as ImageIcon,
-    VideoLibrary as VideoIcon,
-    Audiotrack as AudioIcon,
-    Download as DownloadIcon,
-    NavigateNext as NavigateNextIcon,
-    School as SchoolIcon
+    School as SchoolIcon,
+    EmojiEvents as TrophyIcon,
+    ArrowForward as ArrowForwardIcon,
+    MenuBook as BookIcon,
 } from '@mui/icons-material';
+import { PageContainer } from '../styles/shared';
 import { useAuth } from '../context/AuthContext';
+import axiosInstance from '../api/axiosConfig';
 
-const FileTypeIcon = ({ fileName }) => {
-    const ext = fileName?.split('.').pop()?.toLowerCase();
-    if (ext === 'pdf') return <PdfIcon sx={{ color: '#EF5350', fontSize: 40 }} />;
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return <ImageIcon sx={{ color: '#4CAF50', fontSize: 40 }} />;
-    if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext)) return <VideoIcon sx={{ color: '#2196F3', fontSize: 40 }} />;
-    if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return <AudioIcon sx={{ color: '#FF9800', fontSize: 40 }} />;
-    return <FileIcon sx={{ color: '#9E9E9E', fontSize: 40 }} />;
-};
+// ========== ПАЛИТРА ==========
+const BG = '#FAFAFA';
+const CARD = '#FFFFFF';
+const INK = '#141414';
+const INK_SOFT = '#555555';
+const INK_MUTED = '#999999';
+const LINE = '#EAEAEA';
+const PURPLE = '#7B5CFA';
+const PURPLE_SOFT = '#EDE7FF';
+const GREEN = '#10B981';
+const AMBER = '#F59E0B';
 
-function StudentMaterials() {
+const fadeUp = keyframes`
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+`;
+
+const Reveal = styled(Box)(({ delay = 0 }) => ({
+    animation: `${fadeUp} 0.5s cubic-bezier(0.25, 0.9, 0.35, 1) ${delay}s both`,
+}));
+
+export default function StudentMaterials() {
     const { user } = useAuth();
-    const [allMaterials, setAllMaterials] = useState([]);
-    const [allFolders, setAllFolders] = useState([]);
-    const [displayMaterials, setDisplayMaterials] = useState([]);
-    const [displayFolders, setDisplayFolders] = useState([]);
+    const navigate = useNavigate();
+    useEffect(() => { document.title = 'EdSpace — Материалы'; }, []);
+
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [currentFolder, setCurrentFolder] = useState(null);
-    const [folderPath, setFolderPath] = useState([]);
-
-    const loadAllData = async () => {
-        try {
-            setLoading(true);
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `/api/materials/student/${user.id}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
-            
-            setAllMaterials(response.data.materials || []);
-            setAllFolders(response.data.folders || []);
-            
-            const rootMaterials = (response.data.materials || []).filter(m => !m.folder);
-            const rootFolders = (response.data.folders || []).filter(f => !f.parentFolder);
-            setDisplayMaterials(rootMaterials);
-            setDisplayFolders(rootFolders);
-            
-            setError(null);
-        } catch (err) {
-            console.error('Ошибка загрузки материалов:', err);
-            setError('Не удалось загрузить материалы');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadFolderContent = async (folderId) => {
-        try {
-            setLoading(true);
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `/materials/student/${user.id}/folder/${folderId}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
-            
-            setDisplayMaterials(response.data.materials || []);
-            setDisplayFolders(response.data.folders || []);
-            setError(null);
-        } catch (err) {
-            console.error('Ошибка загрузки папки:', err);
-            setError('Не удалось загрузить содержимое папки');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleFolderClick = async (folder) => {
-        setCurrentFolder(folder.id);
-        setFolderPath([...folderPath, folder]);
-        await loadFolderContent(folder.id);
-    };
-
-    const handleRootClick = async () => {
-        setCurrentFolder(null);
-        setFolderPath([]);
-        
-        const rootMaterials = allMaterials.filter(m => !m.folder);
-        const rootFolders = allFolders.filter(f => !f.parentFolder);
-        setDisplayMaterials(rootMaterials);
-        setDisplayFolders(rootFolders);
-    };
-
-    const handleBreadcrumbClick = async (folder, index) => {
-        const newPath = folderPath.slice(0, index + 1);
-        setFolderPath(newPath);
-        
-        if (index === -1 || !folder) {
-            setCurrentFolder(null);
-            const rootMaterials = allMaterials.filter(m => !m.folder);
-            const rootFolders = allFolders.filter(f => !f.parentFolder);
-            setDisplayMaterials(rootMaterials);
-            setDisplayFolders(rootFolders);
-        } else {
-            setCurrentFolder(folder.id);
-            await loadFolderContent(folder.id);
-        }
-    };
-
-    const handleDownload = async (material) => {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get(
-                `/materials/download/${material.id}`,
-                {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    responseType: 'blob'
-                }
-            );
-            
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', material.fileName || material.title);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error('Ошибка при скачивании:', err);
-        }
-    };
-
-    const formatFileSize = (bytes) => {
-        if (!bytes) return '-';
-        const mb = bytes / (1024 * 1024);
-        if (mb >= 1) return `${mb.toFixed(1)} MB`;
-        const kb = bytes / 1024;
-        return `${kb.toFixed(0)} KB`;
-    };
+    const [stats, setStats] = useState(null);
 
     useEffect(() => {
-        if (user) {
-            loadAllData();
-        }
-    }, [user]);
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/ege-solutions/stats');
+                setStats(res.data || {});
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, []);
 
-    if (loading) return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-            <CircularProgress />
-        </Box>
-    );
+    const totalSolutions = stats
+        ? Object.values(stats).reduce((s, v) => s + (v || 0), 0)
+        : 0;
+    const coveredTasks = stats
+        ? Object.values(stats).filter(v => v > 0).length
+        : 0;
+
+    if (loading) {
+        return (
+            <PageContainer>
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                    <CircularProgress sx={{ color: PURPLE }} />
+                </Box>
+            </PageContainer>
+        );
+    }
 
     return (
-        <Box sx={{ p: 3 }}>
-            <Box sx={{ mb: 4 }}>
-                <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
-                    Учебные материалы
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                    Здесь вы найдёте все материалы, предоставленные репетитором
-                </Typography>
-            </Box>
-
-            <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 3 }}>
-                <MuiLink 
-                    component="button" 
-                    variant="body2" 
-                    onClick={handleRootClick}
-                    sx={{ cursor: 'pointer' }}
-                >
-                    Корень
-                </MuiLink>
-                {folderPath.map((folder, index) => (
-                    <MuiLink 
-                        key={folder.id} 
-                        component="button" 
-                        variant="body2" 
-                        onClick={() => handleBreadcrumbClick(folder, index)}
-                        sx={{ cursor: 'pointer' }}
-                    >
-                        {folder.name}
-                    </MuiLink>
-                ))}
-            </Breadcrumbs>
-
-            {error ? (
-                <Alert severity="error">{error}</Alert>
-            ) : displayFolders.length === 0 && displayMaterials.length === 0 ? (
-                <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>
-                    <FolderIcon sx={{ fontSize: 60, color: 'text.disabled', mb: 2 }} />
-                    <Typography variant="h6" color="textSecondary" gutterBottom>
-                        Нет доступных материалов
+        <PageContainer sx={{ px: { xs: 2, sm: 3 }, bgcolor: BG, minHeight: '100vh' }}>
+            <Reveal>
+                <Box sx={{ mb: 4 }}>
+                    <Typography sx={{
+                        fontSize: { xs: '24px', sm: '28px' }, fontWeight: 800,
+                        color: INK, letterSpacing: '-0.02em', mb: 0.5,
+                    }}>
+                        📚 Материалы
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                        {currentFolder 
-                            ? 'В этой папке нет материалов'
-                            : 'Репетитор ещё не добавил материалы или они не доступны для вас'}
+                    <Typography sx={{ color: INK_MUTED, fontSize: '0.9rem' }}>
+                        Разборы задач ЕГЭ по информатике от репетитора
                     </Typography>
-                </Paper>
-            ) : (
-                <Grid container spacing={3}>
-                    {displayFolders.map((folder) => (
-                        <Grid item xs={12} sm={6} md={3} key={folder.id}>
-                            <Card 
-                                sx={{ 
-                                    borderRadius: 3,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 20px rgba(0,0,0,0.1)' }
+                </Box>
+            </Reveal>
+
+            <Reveal delay={0.05}>
+                <Grid container spacing={2.5}>
+                    {/* Карточка ЕГЭ */}
+                    <Grid item xs={12} md={6} lg={5}>
+                        <Paper
+                            onClick={() => navigate('/student/materials/ege')}
+                            sx={{
+                                position: 'relative',
+                                borderRadius: 4,
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: `1px solid ${LINE}`,
+                                bgcolor: CARD,
+                                p: 3,
+                                minHeight: 220,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                '&::before': {
+                                    content: '""',
+                                    position: 'absolute',
+                                    top: 0, left: 0, right: 0,
+                                    height: 5,
+                                    background: `linear-gradient(90deg, ${PURPLE}, #9B7FFB)`,
+                                },
+                                '&::after': {
+                                    content: '""',
+                                    position: 'absolute',
+                                    top: -40, right: -40,
+                                    width: 200, height: 200,
+                                    borderRadius: '50%',
+                                    background: `radial-gradient(circle, ${alpha(PURPLE, 0.12)} 0%, transparent 70%)`,
+                                    pointerEvents: 'none',
+                                },
+                                '&:hover': {
+                                    transform: 'translateY(-4px)',
+                                    boxShadow: `0 12px 28px ${alpha(PURPLE, 0.18)}`,
+                                    borderColor: alpha(PURPLE, 0.3),
+                                },
+                            }}
+                        >
+                            <Box sx={{ position: 'absolute', top: 20, right: 20, fontSize: '52px', lineHeight: 1 }}>
+                                💻
+                            </Box>
+
+                            <Chip
+                                label="ЕГЭ ПО ИНФОРМАТИКЕ"
+                                size="small"
+                                sx={{
+                                    alignSelf: 'flex-start',
+                                    bgcolor: alpha(PURPLE, 0.12),
+                                    color: PURPLE,
+                                    fontWeight: 800,
+                                    fontSize: '0.7rem',
+                                    letterSpacing: '0.06em',
+                                    mb: 2,
+                                    borderRadius: 2,
                                 }}
-                                onClick={() => handleFolderClick(folder)}
-                            >
-                                <CardContent>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                                        <Avatar sx={{ bgcolor: '#FFF8E1', width: 56, height: 56 }}>
-                                            <FolderIcon sx={{ color: '#FFC107', fontSize: 32 }} />
-                                        </Avatar>
-                                        <Box sx={{ flex: 1 }}>
-                                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                                {folder.name}
-                                            </Typography>
-                                            {folder.course && (
-                                                <Chip 
-                                                    icon={<SchoolIcon />}
-                                                    label={folder.course.name}
-                                                    size="small"
-                                                    variant="outlined"
-                                                    sx={{ mt: 0.5, fontSize: '0.7rem' }}
-                                                />
-                                            )}
-                                        </Box>
-                                    </Box>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    ))}
+                            />
 
-                    {displayMaterials.map((material) => (
-                        <Grid item xs={12} sm={6} md={4} key={material.id}>
-                            <Card sx={{ borderRadius: 3, transition: 'all 0.2s', '&:hover': { transform: 'translateY(-4px)' } }}>
-                                <CardContent>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                                        <FileTypeIcon fileName={material.fileName} />
-                                        <Box sx={{ flex: 1 }}>
-                                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                                {material.title}
-                                            </Typography>
-                                            <Typography variant="caption" color="textSecondary">
-                                                {formatFileSize(material.fileSize)}
-                                            </Typography>
-                                        </Box>
-                                    </Box>
-                                    
-                                    {material.description && (
-                                        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                            {material.description}
-                                        </Typography>
-                                    )}
-                                    
-                                    {material.course && (
-                                        <Chip 
-                                            icon={<SchoolIcon />}
-                                            label={material.course.name}
-                                            size="small"
-                                            variant="outlined"
-                                            sx={{ mb: 1 }}
-                                        />
-                                    )}
-                                    
-                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                                        <Tooltip title="Скачать">
-                                            <IconButton 
-                                                size="small" 
-                                                onClick={() => handleDownload(material)}
-                                                sx={{ bgcolor: '#f0f2f5' }}
-                                            >
-                                                <DownloadIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </Box>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    ))}
+                            <Typography sx={{
+                                fontSize: '1.5rem', fontWeight: 800,
+                                color: INK, letterSpacing: '-0.02em',
+                                mb: 1, maxWidth: 'calc(100% - 70px)',
+                            }}>
+                                Разборы задач
+                            </Typography>
+
+                            <Typography sx={{
+                                fontSize: '0.9rem', color: INK_SOFT,
+                                lineHeight: 1.5, mb: 2,
+                                maxWidth: 'calc(100% - 20px)',
+                            }}>
+                                Объяснения, код и видео-разборы для всех 27 заданий
+                            </Typography>
+
+                            <Box sx={{
+                                mt: 'auto',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1.5,
+                                flexWrap: 'wrap',
+                            }}>
+                                <Chip
+                                    label={`${totalSolutions} ${totalSolutions === 1 ? 'разбор' : totalSolutions < 5 ? 'разбора' : 'разборов'}`}
+                                    size="small"
+                                    sx={{
+                                        bgcolor: alpha(GREEN, 0.12),
+                                        color: GREEN,
+                                        fontWeight: 700,
+                                        fontSize: '0.75rem',
+                                        borderRadius: 2,
+                                        height: 24,
+                                    }}
+                                />
+                                <Chip
+                                    label={`${coveredTasks} / 27 заданий`}
+                                    size="small"
+                                    sx={{
+                                        bgcolor: '#F3F4F6',
+                                        color: INK_SOFT,
+                                        fontWeight: 700,
+                                        fontSize: '0.75rem',
+                                        borderRadius: 2,
+                                        height: 24,
+                                    }}
+                                />
+                                <Box sx={{
+                                    ml: 'auto',
+                                    color: PURPLE,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                    fontWeight: 700,
+                                    fontSize: '0.85rem',
+                                }}>
+                                    Открыть
+                                    <ArrowForwardIcon sx={{ fontSize: 18 }} />
+                                </Box>
+                            </Box>
+                        </Paper>
+                    </Grid>
+
+                    {/* Место для других материалов (в будущем) */}
+                    <Grid item xs={12} md={6} lg={7}>
+                        <Paper sx={{
+                            p: 3,
+                            borderRadius: 4,
+                            border: `1px dashed ${LINE}`,
+                            bgcolor: CARD,
+                            minHeight: 220,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                        }}>
+                            <BookIcon sx={{ fontSize: 48, color: '#D1D5DB', mb: 2 }} />
+                            <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: INK_SOFT, mb: 1 }}>
+                                Скоро появятся и другие материалы
+                            </Typography>
+                            <Typography sx={{ fontSize: '0.85rem', color: INK_MUTED }}>
+                                Конспекты, задачи и полезные ссылки
+                            </Typography>
+                        </Paper>
+                    </Grid>
                 </Grid>
-            )}
-        </Box>
+            </Reveal>
+        </PageContainer>
     );
 }
-
-export default StudentMaterials;

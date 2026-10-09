@@ -1,6 +1,7 @@
 package com.example.demo.entity;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -52,6 +53,19 @@ public class Homework {
     @Column(nullable = false)
     private String status;
 
+    // ✅ НОВЫЕ ПОЛЯ
+    @Column(length = 20)
+    private String type = "HOMEWORK";  // HOMEWORK | MOCK_EXAM
+
+    @Column(name = "exam_type", length = 10)
+    private String examType;  // EGE | OGE
+
+    @Column(length = 100)
+    private String subject;  // Информатика, Математика
+
+    @Column(name = "exam_date")
+    private LocalDate examDate;  // дата проведения пробника
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -88,6 +102,12 @@ public class Homework {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 
+    // ✅ Геттеры новых полей
+    public String getType() { return type; }
+    public String getExamType() { return examType; }
+    public String getSubject() { return subject; }
+    public LocalDate getExamDate() { return examDate; }
+
     // Сеттеры
     public void setCourse(Course course) { this.course = course; this.updatedAt = LocalDateTime.now(); }
     public void setTutor(Tutor tutor) { this.tutor = tutor; this.updatedAt = LocalDateTime.now(); }
@@ -104,6 +124,12 @@ public class Homework {
     public void setStatus(String status) { this.status = status; this.updatedAt = LocalDateTime.now(); }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    // ✅ Сеттеры новых полей
+    public void setType(String type) { this.type = type; this.updatedAt = LocalDateTime.now(); }
+    public void setExamType(String examType) { this.examType = examType; this.updatedAt = LocalDateTime.now(); }
+    public void setSubject(String subject) { this.subject = subject; this.updatedAt = LocalDateTime.now(); }
+    public void setExamDate(LocalDate examDate) { this.examDate = examDate; this.updatedAt = LocalDateTime.now(); }
 
     private void calculatePercentage() {
         if (score != null && maxScore != null && maxScore > 0) {

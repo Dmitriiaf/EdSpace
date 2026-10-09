@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/StudentDashboard.js (v4 — фикс UTC) ==========
+// ========== frontend/src/pages/StudentDashboard.js (v7 — скролл блоков) ==========
 import React, { useState, useEffect, useMemo } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
 import axiosInstance from '../api/axiosConfig';
@@ -39,6 +39,7 @@ import {
     ArrowBackIosNew as ArrowBackIcon,
     ArrowForwardIos as ArrowForwardSmallIcon,
     Brush as BrushIcon,
+    EmojiEvents as TrophyIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -49,11 +50,12 @@ import {
     getDay, isSameMonth, isToday,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getLessonsByStudent, getStudentProgressStats, getProgressTimeline } from '../services/api';
 import LessonRoom from '../components/LessonRoom';
-import ChatDrawer from '../components/ChatDrawer';
 import StudentProfileCard from '../components/StudentProfileCard';
+import FlappyBird from '../components/FlappyBird';
 
 // ========== ПАЛИТРА ==========
 const BG = '#FAFAFA';
@@ -157,7 +159,7 @@ function MonthCalendar({ month, setMonth, lessonsByDate, selectedDate, setSelect
     const monthStart = startOfMonth(month);
     const monthEnd = endOfMonth(month);
 
-    const startWeekday = (getDay(monthStart) + 6) % 7; // ПН = 0
+    const startWeekday = (getDay(monthStart) + 6) % 7;
     const daysInMonth = monthEnd.getDate();
 
     const cells = [];
@@ -189,35 +191,20 @@ function MonthCalendar({ month, setMonth, lessonsByDate, selectedDate, setSelect
                 </Stack>
             </Box>
 
-            <Box sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                gap: 0.5,
-                mb: 0.5,
-            }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5, mb: 0.5 }}>
                 {WEEKDAYS.map((d, i) => (
                     <Typography key={i} sx={{
-                        textAlign: 'center',
-                        fontSize: '0.65rem',
-                        fontWeight: 600,
-                        color: INK_MUTED,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
+                        textAlign: 'center', fontSize: '0.65rem', fontWeight: 600,
+                        color: INK_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em',
                     }}>
                         {d}
                     </Typography>
                 ))}
             </Box>
 
-            <Box sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                gap: 0.5,
-            }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
                 {cells.map((day, idx) => {
-                    if (!day) {
-                        return <Box key={idx} sx={{ height: 40 }} />;
-                    }
+                    if (!day) return <Box key={idx} sx={{ height: 40 }} />;
 
                     const dateStr = format(day, 'yyyy-MM-dd');
                     const hasLessons = (lessonsByDate[dateStr] || []).length > 0;
@@ -228,18 +215,10 @@ function MonthCalendar({ month, setMonth, lessonsByDate, selectedDate, setSelect
                     return (
                         <Box
                             key={idx}
-                            onClick={() => {
-                                setSelectedDate(day);
-                                if (typeof onDayClick === 'function') onDayClick(day);
-                            }}
+                            onClick={() => { setSelectedDate(day); if (typeof onDayClick === 'function') onDayClick(day); }}
                             sx={{
-                                height: 40,
-                                borderRadius: 2,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
+                                height: 40, borderRadius: 2, cursor: 'pointer',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                                 bgcolor: isSelected ? DARK : 'transparent',
                                 color: isSelected ? '#FFF' : (isCurrentMonth ? INK : INK_MUTED),
                                 border: today && !isSelected ? `1px solid ${PURPLE}` : '1px solid transparent',
@@ -250,19 +229,12 @@ function MonthCalendar({ month, setMonth, lessonsByDate, selectedDate, setSelect
                             <Typography sx={{
                                 fontSize: '0.82rem',
                                 fontWeight: isSelected || today ? 700 : 500,
-                                color: isSelected ? LIME : 'inherit',
-                                lineHeight: 1,
+                                color: isSelected ? LIME : 'inherit', lineHeight: 1,
                             }}>
                                 {format(day, 'd')}
                             </Typography>
                             {hasLessons && (
-                                <Box sx={{
-                                    width: 4,
-                                    height: 4,
-                                    borderRadius: '50%',
-                                    bgcolor: isSelected ? LIME : PURPLE,
-                                    mt: 0.4,
-                                }} />
+                                <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: isSelected ? LIME : PURPLE, mt: 0.4 }} />
                             )}
                         </Box>
                     );
@@ -277,11 +249,13 @@ function StudentDashboard() {
     const { getStudentRateForTutor } = useStudentRate();
     const { user } = useAuth();
     useEffect(() => { document.title = 'EdSpace — Ученик'; }, []);
-
+    const navigate = useNavigate();
     const [studentSelfPaid, setStudentSelfPaid] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
+
+    const [activeType, setActiveType] = useState('HOMEWORK');
 
     const [allLessons, setAllLessons] = useState([]);
     const [homeworkStats, setHomeworkStats] = useState(null);
@@ -305,7 +279,7 @@ function StudentDashboard() {
     const [gameRecord, setGameRecord] = useState({ highScore: 0, place: null });
     const [ratingOpen, setRatingOpen] = useState(false);
     const [leaderboard, setLeaderboard] = useState([]);
-
+    const [gameOpen, setGameOpen] = useState(false);
     const tutors = useMemo(() => {
         const map = new Map();
         allLessons.forEach(l => {
@@ -319,15 +293,20 @@ function StudentDashboard() {
         return allLessons.filter(l => l.tutor?.id === parseInt(selectedTutorId));
     }, [allLessons, selectedTutorId]);
 
-    // ✅ ФИКС: UTC-парсинг + учитываем IN_PROGRESS, пока урок не закончился
+    const homeworkOnly = useMemo(() =>
+        homeworkList.filter(h => (h.homeworkType || h.type || 'HOMEWORK') === 'HOMEWORK'), [homeworkList]);
+
+    const examsOnly = useMemo(() =>
+        homeworkList.filter(h => (h.homeworkType || h.type) === 'MOCK_EXAM'), [homeworkList]);
+
+    const activeList = activeType === 'HOMEWORK' ? homeworkOnly : examsOnly;
+
     const stats = useMemo(() => {
         const now = new Date();
         const nextLesson = filteredLessons
             .filter(l => {
-                const start = new Date(`${l.lessonDate}T${l.startTime}Z`);
                 const end = new Date(`${l.lessonDate}T${l.endTime}Z`);
                 const statusOk = ['SCHEDULED', 'RESCHEDULED', 'IN_PROGRESS'].includes(l.status);
-                // Показываем, если урок ещё не закончился
                 return statusOk && end > now;
             })
             .sort((a, b) =>
@@ -352,7 +331,6 @@ function StudentDashboard() {
         return map;
     }, [filteredLessons]);
 
-    // ✅ ФИКС: Z в сортировке журнала
     const journal = useMemo(() => {
         return filteredLessons
             .filter(l => ['COMPLETED', 'PAID', 'CONFIRMED'].includes(l.status))
@@ -576,7 +554,6 @@ function StudentDashboard() {
         fileInput.click();
     };
 
-    // ✅ ФИКС: Z в парсинге дат предыдущего урока
     const getPreviousLessonFor = (lesson) => {
         if (!lesson) return null;
         const lessonDateTime = new Date(`${lesson.lessonDate}T${lesson.startTime}Z`);
@@ -600,6 +577,19 @@ function StudentDashboard() {
         if (leaderboard.length === 0) await fetchLeaderboard();
     };
 
+    // Общий стиль скролла
+    const scrollBoxSx = {
+        maxHeight: 480,
+        overflowY: 'auto',
+        pr: 1,
+        mr: -1,
+        '&::-webkit-scrollbar': { width: 6 },
+        '&::-webkit-scrollbar-track': { background: 'transparent' },
+        '&::-webkit-scrollbar-thumb': { background: '#D1D5DB', borderRadius: 3, '&:hover': { background: '#9CA3AF' } },
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#D1D5DB transparent',
+    };
+
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
             <EdSpaceLoader text="Загрузка..." />
@@ -615,7 +605,7 @@ function StudentDashboard() {
                 fontFamily: '"Inter", "Segoe UI", sans-serif',
             }}>
                 <Box sx={{
-                    display: 'flex', gap: 2.5, p: { xs: 2, sm: 3 },
+                    display: 'flex', gap: 3, p: { xs: 2, sm: 3 },
                     flexWrap: { xs: 'wrap', lg: 'nowrap' },
                     alignItems: 'flex-start',
                     width: '100%', boxSizing: 'border-box', maxWidth: '100%',
@@ -649,6 +639,19 @@ function StudentDashboard() {
                                                 '&:hover': { bgcolor: LIME },
                                             }}
                                         />
+
+                                        <Chip
+                                            icon={<Box component="span" sx={{ fontSize: '0.85rem' }}>🎮</Box>}
+                                            label="Играть"
+                                            size="small"
+                                            onClick={() => setGameOpen(true)}
+                                            sx={{
+                                                bgcolor: PURPLE_SOFT, color: PURPLE,
+                                                fontWeight: 700, fontSize: '0.8rem',
+                                                borderRadius: 100, cursor: 'pointer',
+                                                '&:hover': { bgcolor: '#DDD3FF' },
+                                            }}
+                                        />
                                     </Box>
                                     <Typography sx={{ color: INK_MUTED, fontSize: '0.95rem', mt: 0.5 }}>
                                         {format(new Date(), 'EEEE, d MMMM', { locale: ru })}
@@ -679,7 +682,7 @@ function StudentDashboard() {
 
                         {/* ВЕРХ: БЛИЖАЙШЕЕ ЗАНЯТИЕ + КАЛЕНДАРЬ */}
                         <Reveal delay={0.05}>
-                            <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                            <Grid container spacing={3} sx={{ mb: 3 }} alignItems="stretch">
                                 <Grid item xs={12} md={7}>
                                     <Paper sx={{
                                         p: { xs: 2.5, md: 3 }, borderRadius: 4,
@@ -734,105 +737,277 @@ function StudentDashboard() {
                             </Grid>
                         </Reveal>
 
-                        {/* ТАБЫ */}
+                        {/* ЗАДАНИЯ / ПРОБНИКИ + ЖУРНАЛ */}
                         <Reveal delay={0.1}>
-                            <Paper sx={{ borderRadius: 4, bgcolor: CARD, border: `1px solid ${LINE}`, p: 3 }}>
-                                <Grid container spacing={2.5}>
+                            <Paper sx={{ borderRadius: 4, bgcolor: CARD, border: `1px solid ${LINE}`, p: 3, mb: 3 }}>
+                                {/* Вкладки ДЗ / Пробники */}
+                                <Tabs
+                                    value={activeType}
+                                    onChange={(e, v) => setActiveType(v)}
+                                    sx={{
+                                        mb: 2.5,
+                                        '& .MuiTab-root': { textTransform: 'none', fontWeight: 700, fontSize: '0.95rem', minHeight: 46 },
+                                        '& .Mui-selected': { color: PURPLE },
+                                        '& .MuiTabs-indicator': { backgroundColor: PURPLE, height: 3, borderRadius: '3px 3px 0 0' },
+                                    }}
+                                >
+                                    <Tab value="HOMEWORK" icon={<AssignmentIcon sx={{ fontSize: 17 }} />} iconPosition="start"
+                                        label={`Домашние задания (${homeworkOnly.length})`} />
+                                    <Tab value="MOCK_EXAM" icon={<TrophyIcon sx={{ fontSize: 17 }} />} iconPosition="start"
+                                        label={`Пробники (${examsOnly.length})`} />
+                                </Tabs>
+
+                                <Grid container spacing={3}>
+                                    {/* ЛЕВАЯ КОЛОНКА — ЗАДАНИЯ */}
                                     <Grid item xs={12} md={6}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                                            <Typography sx={{ fontWeight: 800, color: INK, fontSize: '0.95rem' }}>
-                                                📝 Последние задания
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                            <Typography sx={{ fontWeight: 800, color: INK, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                                {activeType === 'HOMEWORK' ? '📝 Последние задания' : '🏆 Последние пробники'}
                                             </Typography>
-                                            <Button size="small" onClick={() => window.location.href = '/homework'}
-                                                sx={{ textTransform: 'none', fontSize: '0.78rem', fontWeight: 600, color: INK, minWidth: 0 }}>
+                                            <Button size="small" onClick={() => navigate('/student/homework')}
+                                                sx={{ textTransform: 'none', fontSize: '0.78rem', fontWeight: 600, color: PURPLE, minWidth: 0, '&:hover': { background: 'transparent', color: '#6B4BEB' } }}>
                                                 Все →
                                             </Button>
                                         </Box>
-                                        <Stack spacing={1}>
-                                            {homeworkList.length === 0 && (
-                                                <Typography sx={{ color: INK_SOFT, fontSize: '0.85rem' }}>
-                                                    Нет заданий 🎉
-                                                </Typography>
-                                            )}
-                                            {homeworkList.slice(0, 4).map(item => {
-                                                const isVariant = item.type === 'variant' || (item.task && item.task.startsWith('http'));
-                                                const statusLabel = item.status === 'checked' ? 'Проверено' :
-                                                    item.status === 'submitted' ? 'На проверке' : 'Назначено';
-                                                const statusColor = item.status === 'checked' ? GREEN : item.status === 'submitted' ? AMBER : PURPLE;
-                                                return (
-                                                    <Box key={item.id} sx={{
-                                                        p: 1.5, borderRadius: 2, bgcolor: BG_ALT,
-                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1,
+
+                                        {/* ✅ СКРОЛЛ-КОНТЕЙНЕР */}
+                                        <Box sx={scrollBoxSx}>
+                                            <Stack spacing={1.5}>
+                                                {activeList.length === 0 && (
+                                                    <Box sx={{
+                                                        p: 3, borderRadius: 3, bgcolor: BG_ALT, textAlign: 'center',
+                                                        border: `1px dashed ${LINE}`,
                                                     }}>
-                                                        <Box sx={{ minWidth: 0, flex: 1 }}>
-                                                            <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {isVariant ? (item.variantTitle || 'Вариант') : 'Задание'}
-                                                            </Typography>
-                                                            <Typography sx={{ fontSize: '0.72rem', color: INK_MUTED }}>
-                                                                Срок: {item.dueDate ? format(new Date(item.dueDate), 'd MMM', { locale: ru }) : '—'}
-                                                            </Typography>
-                                                        </Box>
-                                                        <Chip label={statusLabel} size="small"
-                                                            sx={{ fontSize: '0.62rem', height: 20, bgcolor: `${statusColor}20`, color: statusColor, fontWeight: 700, borderRadius: 100 }} />
+                                                        <Typography sx={{ fontSize: '0.9rem', color: INK_MUTED }}>
+                                                            {activeType === 'HOMEWORK' ? 'Пока нет заданий' : 'Пока нет пробников'}
+                                                        </Typography>
+                                                        <Typography sx={{ fontSize: '0.75rem', color: INK_MUTED, mt: 0.5 }}>
+                                                            Как только репетитор назначит — появятся здесь
+                                                        </Typography>
                                                     </Box>
-                                                );
-                                            })}
-                                        </Stack>
+                                                )}
+
+                                                {activeList.slice(0, 20).map(item => {
+                                                    const isVariant = item.type === 'variant' || (item.task && item.task.startsWith('http'));
+                                                    const isExam = item.homeworkType === 'MOCK_EXAM' || item.type === 'MOCK_EXAM';
+                                                    const status = (item.status || 'ASSIGNED').toUpperCase();
+                                                    const isChecked = status === 'CHECKED';
+                                                    const isSubmitted = status === 'SUBMITTED';
+                                                    const isReturned = status === 'RETURNED';
+                                                    const canSubmit = !isChecked && !isSubmitted;
+
+                                                    const statusLabel = isChecked ? 'Проверено' : isSubmitted ? 'На проверке' : isReturned ? 'Доработка' : 'Назначено';
+                                                    const statusColor = isChecked ? GREEN : isSubmitted ? AMBER : isReturned ? RED : PURPLE;
+
+                                                    const scoreDisplay = isChecked && (item.score != null || item.grade != null)
+                                                        ? (item.gradeType === 'GRADE_100' ? `${item.score ?? item.grade}/100`
+                                                            : item.gradeType === 'GRADE_10' ? `${item.score ?? item.grade}/10`
+                                                            : `${item.grade}/5`)
+                                                        : null;
+
+                                                    let title;
+                                                    if (isExam) {
+                                                        title = `🏆 ${item.examType === 'EGE' ? 'ЕГЭ' : item.examType === 'OGE' ? 'ОГЭ' : 'Пробник'}${item.subject ? ' · ' + item.subject : ''}`;
+                                                    } else if (isVariant) {
+                                                        title = item.variantTitle || 'Вариант';
+                                                    } else {
+                                                        title = item.task && item.task.length > 60
+                                                            ? item.task.substring(0, 60) + '…'
+                                                            : (item.task || 'Задание');
+                                                    }
+
+                                                    const dateLabel = isExam && item.examDate
+                                                        ? `Дата: ${format(new Date(item.examDate), 'd MMM', { locale: ru })}`
+                                                        : item.dueDate
+                                                            ? `Срок: ${format(new Date(item.dueDate), 'd MMM', { locale: ru })}`
+                                                            : null;
+
+                                                    const filesCount = item.attachments
+                                                        ? item.attachments.split('\n').filter(l => l.startsWith('/uploads/')).length
+                                                        : 0;
+
+                                                    return (
+                                                        <Box key={item.id} sx={{
+                                                            p: 1.75, borderRadius: 3, bgcolor: BG_ALT,
+                                                            display: 'flex', flexDirection: 'column', gap: 1,
+                                                            borderLeft: `3px solid ${isExam ? PURPLE : (isChecked ? GREEN : statusColor)}`,
+                                                            transition: 'all 0.2s ease',
+                                                            '&:hover': { transform: 'translateX(2px)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
+                                                        }}>
+                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                                                                <Typography sx={{
+                                                                    fontWeight: 700, fontSize: '0.88rem', color: INK,
+                                                                    flex: 1, minWidth: 0, lineHeight: 1.3,
+                                                                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                                                                }}>
+                                                                    {title}
+                                                                </Typography>
+                                                                {scoreDisplay ? (
+                                                                    <Chip label={scoreDisplay} size="small"
+                                                                        sx={{ fontSize: '0.7rem', height: 22, bgcolor: GREEN, color: '#FFF', fontWeight: 800, borderRadius: 100, flexShrink: 0 }} />
+                                                                ) : (
+                                                                    <Chip label={statusLabel} size="small"
+                                                                        sx={{ fontSize: '0.65rem', height: 22, bgcolor: `${statusColor}25`, color: statusColor, fontWeight: 700, borderRadius: 100, flexShrink: 0 }} />
+                                                                )}
+                                                            </Box>
+
+                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                                                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                                                                    {dateLabel && (
+                                                                        <Typography sx={{ fontSize: '0.72rem', color: INK_MUTED, display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                                                                            <CalendarIcon sx={{ fontSize: 12 }} />
+                                                                            {dateLabel}
+                                                                        </Typography>
+                                                                    )}
+                                                                    {filesCount > 0 && (
+                                                                        <Typography sx={{ fontSize: '0.72rem', color: INK_MUTED, display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                                                                            📎 {filesCount}
+                                                                        </Typography>
+                                                                    )}
+                                                                </Box>
+
+                                                                {canSubmit && (
+                                                                    <Button
+                                                                        size="small"
+                                                                        onClick={() => navigate('/student/homework')}
+                                                                        sx={{
+                                                                            textTransform: 'none', fontSize: '0.72rem', fontWeight: 700,
+                                                                            color: PURPLE, minWidth: 0, p: '2px 8px',
+                                                                            borderRadius: 100, bgcolor: PURPLE_SOFT,
+                                                                            '&:hover': { bgcolor: '#DDD3FF' },
+                                                                        }}
+                                                                    >
+                                                                        {isReturned ? 'Доработать →' : 'Сдать →'}
+                                                                    </Button>
+                                                                )}
+                                                            </Box>
+
+                                                            {isChecked && item.feedback && (
+                                                                <Box sx={{
+                                                                    mt: 0.25, pt: 1, borderTop: `1px dashed ${LINE}`,
+                                                                    display: 'flex', gap: 0.5, alignItems: 'flex-start',
+                                                                }}>
+                                                                    <Typography sx={{ fontSize: '0.7rem', color: INK_MUTED, flexShrink: 0 }}>
+                                                                        💬
+                                                                    </Typography>
+                                                                    <Typography sx={{
+                                                                        fontSize: '0.75rem', color: INK_SOFT, fontStyle: 'italic',
+                                                                        lineHeight: 1.4,
+                                                                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                                                                    }}>
+                                                                        {item.feedback}
+                                                                    </Typography>
+                                                                </Box>
+                                                            )}
+                                                        </Box>
+                                                    );
+                                                })}
+                                            </Stack>
+                                        </Box>
                                     </Grid>
 
+                                    {/* ПРАВАЯ КОЛОНКА — ЖУРНАЛ */}
                                     <Grid item xs={12} md={6}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                                            <Typography sx={{ fontWeight: 800, color: INK, fontSize: '0.95rem' }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                            <Typography sx={{ fontWeight: 800, color: INK, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 0.75 }}>
                                                 📖 Журнал пройденных тем
                                             </Typography>
-                                            <Button size="small" onClick={() => window.location.href = '/progress'}
-                                                sx={{ textTransform: 'none', fontSize: '0.78rem', fontWeight: 600, color: INK, minWidth: 0 }}>
+                                            <Button size="small" onClick={() => navigate('/student/progress')}
+                                                sx={{ textTransform: 'none', fontSize: '0.78rem', fontWeight: 600, color: PURPLE, minWidth: 0, '&:hover': { background: 'transparent', color: '#6B4BEB' } }}>
                                                 Все →
                                             </Button>
                                         </Box>
-                                        {journal.length === 0 ? (
-                                            <Typography sx={{ color: INK_MUTED, fontSize: '0.85rem' }}>
-                                                Пока нет проведённых уроков
-                                            </Typography>
-                                        ) : (
-                                            <Stack spacing={1}>
-                                                {journal.slice(0, 4).map(lesson => (
-                                                    <Box key={lesson.id} sx={{
-                                                        display: 'flex', gap: 1.5, alignItems: 'flex-start',
-                                                        p: 1.5, borderRadius: 2, bgcolor: BG_ALT,
+
+                                        {/* ✅ СКРОЛЛ-КОНТЕЙНЕР */}
+                                        <Box sx={scrollBoxSx}>
+                                            <Stack spacing={1.5}>
+                                                {journal.length === 0 && (
+                                                    <Box sx={{
+                                                        p: 3, borderRadius: 3, bgcolor: BG_ALT, textAlign: 'center',
+                                                        border: `1px dashed ${LINE}`,
                                                     }}>
-                                                        <Box sx={{
-                                                            width: 20, height: 20, borderRadius: '50%',
-                                                            bgcolor: GREEN, color: '#FFF',
-                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                            fontSize: '0.7rem', fontWeight: 900, flexShrink: 0, mt: 0.25,
-                                                        }}>✓</Box>
-                                                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                            <Typography sx={{ fontWeight: 700, fontSize: '0.82rem', color: INK }}>
-                                                                {lesson.course?.name || 'Занятие'} · {format(new Date(lesson.lessonDate), 'd MMM', { locale: ru })}
-                                                            </Typography>
-                                                            <Typography sx={{ color: INK_SOFT, fontSize: '0.8rem', mt: 0.5, lineHeight: 1.5 }}>
-                                                                {lesson.notes?.length > 130 ? lesson.notes.substring(0, 130) + '…' : lesson.notes}
-                                                            </Typography>
+                                                        <Typography sx={{ fontSize: '0.9rem', color: INK_MUTED }}>
+                                                            Пока нет проведённых уроков
+                                                        </Typography>
+                                                        <Typography sx={{ fontSize: '0.75rem', color: INK_MUTED, mt: 0.5 }}>
+                                                            После первого урока тема появится здесь
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+
+                                                {journal.slice(0, 20).map(lesson => (
+                                                    <Box key={lesson.id} sx={{
+                                                        p: 1.75, borderRadius: 3, bgcolor: BG_ALT,
+                                                        display: 'flex', flexDirection: 'column', gap: 1,
+                                                        borderLeft: `3px solid ${GREEN}`,
+                                                        transition: 'all 0.2s ease',
+                                                        '&:hover': { transform: 'translateX(2px)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
+                                                    }}>
+                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <Box sx={{
+                                                                    width: 22, height: 22, borderRadius: '50%',
+                                                                    bgcolor: GREEN, color: '#FFF',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                    fontSize: '0.72rem', fontWeight: 900, flexShrink: 0,
+                                                                }}>✓</Box>
+                                                                <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: INK }}>
+                                                                    {format(new Date(lesson.lessonDate), 'd MMM', { locale: ru })}
+                                                                </Typography>
+                                                                <Typography sx={{ fontSize: '0.78rem', color: INK_MUTED }}>
+                                                                    · {lesson.course?.name || 'Занятие'}
+                                                                </Typography>
+                                                            </Box>
                                                         </Box>
+
+                                                        {lesson.notes && (
+                                                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                                                                <Typography sx={{ fontSize: '0.7rem', fontWeight: 800, color: GREEN, flexShrink: 0, mt: 0.2, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                                    Прошли
+                                                                </Typography>
+                                                                <Typography sx={{
+                                                                    fontSize: '0.82rem', color: INK_SOFT, lineHeight: 1.5,
+                                                                    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                                                                    flex: 1,
+                                                                }}>
+                                                                    {lesson.notes}
+                                                                </Typography>
+                                                            </Box>
+                                                        )}
+
+                                                        {lesson.nextLessonPlan && (
+                                                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', pt: 1, borderTop: `1px dashed ${LINE}` }}>
+                                                                <Typography sx={{ fontSize: '0.7rem', fontWeight: 800, color: AMBER, flexShrink: 0, mt: 0.2, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                                    Задано
+                                                                </Typography>
+                                                                <Typography sx={{
+                                                                    fontSize: '0.82rem', color: INK_SOFT, lineHeight: 1.5,
+                                                                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                                                                    flex: 1,
+                                                                }}>
+                                                                    {lesson.nextLessonPlan}
+                                                                </Typography>
+                                                            </Box>
+                                                        )}
                                                     </Box>
                                                 ))}
                                             </Stack>
-                                        )}
+                                        </Box>
                                     </Grid>
                                 </Grid>
                             </Paper>
                         </Reveal>
+
                     </Box>
 
                     {/* ===== ПРАВАЯ КОЛОНКА: ПРОФИЛЬ ===== */}
                     <Box sx={{
-                        flex: { lg: '0 0 320px', xs: '1 1 100%' },
-                        width: { lg: 320, xs: '100%' },
+                        flex: { lg: '0 0 340px', xs: '1 1 100%' },
+                        width: { lg: 340, xs: '100%' },
                         maxWidth: '100%',
                         minWidth: 0,
                     }}>
-                        <Reveal delay={0.15}>
+                        <Reveal delay={0.2}>
                             <StudentProfileCard
                                 userId={user?.allIds?.[0] || user?.id}
                                 fallbackName={user?.fullName || 'Ученик'}
@@ -840,8 +1015,6 @@ function StudentDashboard() {
                         </Reveal>
                     </Box>
                 </Box>
-
-                <ChatDrawer />
 
                 {/* ===== МОДАЛКА ДНЯ ===== */}
                 <Dialog
@@ -945,10 +1118,16 @@ function StudentDashboard() {
                                                     <Stack spacing={1}>
                                                         {lessonHomework.map(hw => {
                                                             const isVariant = hw.type === 'variant' || (hw.task && hw.task.startsWith('http'));
+                                                            const isExam = hw.homeworkType === 'MOCK_EXAM' || hw.type === 'MOCK_EXAM';
                                                             const statusLabel = hw.status === 'checked' ? 'Проверено' :
                                                                 hw.status === 'submitted' ? 'На проверке' : 'Назначено';
                                                             const statusColor = hw.status === 'checked' ? GREEN :
                                                                 hw.status === 'submitted' ? AMBER : PURPLE;
+                                                            const scoreDisplay = (hw.score != null || hw.grade != null)
+                                                                ? (hw.gradeType === 'GRADE_100' ? `${hw.score ?? hw.grade}/100`
+                                                                    : hw.gradeType === 'GRADE_10' ? `${hw.score ?? hw.grade}/10`
+                                                                    : `${hw.grade}/5`)
+                                                                : null;
                                                             return (
                                                                 <Box key={hw.id} sx={{
                                                                     p: 1.5, borderRadius: 2, bgcolor: CARD,
@@ -957,7 +1136,9 @@ function StudentDashboard() {
                                                                 }}>
                                                                     <Box sx={{ minWidth: 0, flex: 1 }}>
                                                                         <Typography sx={{ fontWeight: 600, fontSize: '0.88rem', color: INK }}>
-                                                                            {isVariant ? (hw.variantTitle || 'Вариант') : (hw.task || 'Задание')}
+                                                                            {isExam && hw.examType ? `🏆 ${hw.examType === 'EGE' ? 'ЕГЭ' : 'ОГЭ'} · ${hw.subject || 'Пробник'}`
+                                                                                : isVariant ? (hw.variantTitle || 'Вариант')
+                                                                                : (hw.task || 'Задание')}
                                                                         </Typography>
                                                                         {hw.dueDate && (
                                                                             <Typography sx={{ fontSize: '0.72rem', color: INK_MUTED, mt: 0.25 }}>
@@ -965,11 +1146,13 @@ function StudentDashboard() {
                                                                             </Typography>
                                                                         )}
                                                                     </Box>
-                                                                    <Chip
-                                                                        label={statusLabel}
-                                                                        size="small"
-                                                                        sx={{ fontSize: '0.65rem', height: 22, bgcolor: `${statusColor}20`, color: statusColor, fontWeight: 700, borderRadius: 100 }}
-                                                                    />
+                                                                    {scoreDisplay && hw.status === 'checked' ? (
+                                                                        <Chip label={scoreDisplay} size="small"
+                                                                            sx={{ fontSize: '0.65rem', height: 22, bgcolor: GREEN_SOFT, color: GREEN, fontWeight: 800, borderRadius: 100 }} />
+                                                                    ) : (
+                                                                        <Chip label={statusLabel} size="small"
+                                                                            sx={{ fontSize: '0.65rem', height: 22, bgcolor: `${statusColor}20`, color: statusColor, fontWeight: 700, borderRadius: 100 }} />
+                                                                    )}
                                                                     {isVariant && (
                                                                         <IconButton
                                                                             size="small"
@@ -1078,6 +1261,44 @@ function StudentDashboard() {
                             </DialogActions>
                         </>
                     )}
+                </Dialog>
+
+                {/* ===== МОДАЛКА ИГРЫ ===== */}
+                <Dialog
+                    open={gameOpen}
+                    onClose={() => { setGameOpen(false); fetchGameRecord(); }}
+                    maxWidth="sm"
+                    fullWidth
+                    PaperProps={{ sx: { borderRadius: 4, p: 0, overflow: 'hidden' } }}
+                >
+                    <DialogTitle sx={{ p: 3, pb: 2, borderBottom: `1px solid ${LINE}` }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <Box sx={{
+                                    width: 36, height: 36, borderRadius: 2,
+                                    bgcolor: PURPLE_SOFT,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '1.2rem',
+                                }}>
+                                    🎮
+                                </Box>
+                                <Box>
+                                    <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: INK, letterSpacing: '-0.01em' }}>
+                                        Flappy EdSpace
+                                    </Typography>
+                                    <Typography sx={{ fontSize: '0.75rem', color: INK_MUTED }}>
+                                        Клик или пробел — прыжок
+                                    </Typography>
+                                </Box>
+                            </Box>
+                            <IconButton onClick={() => setGameOpen(false)} size="small">
+                                <CloseIcon />
+                            </IconButton>
+                        </Box>
+                    </DialogTitle>
+                    <DialogContent sx={{ p: 3, bgcolor: BG_ALT }}>
+                        <FlappyBird />
+                    </DialogContent>
                 </Dialog>
 
                 {/* ===== МОДАЛКА РЕЙТИНГА ===== */}

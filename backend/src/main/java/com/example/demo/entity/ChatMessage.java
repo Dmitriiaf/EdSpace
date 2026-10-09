@@ -28,6 +28,9 @@ public class ChatMessage {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String text;
 
+    @Column(name = "attachment_url", length = 500)
+    private String attachmentUrl;
+
     @Column(name = "is_read", nullable = false)
     private Boolean isRead = false;
 
@@ -52,6 +55,8 @@ public class ChatMessage {
     public Long getRecipientId() { return recipientId; }
     public String getRecipientRole() { return recipientRole; }
     public String getText() { return text; }
+    public String getAttachmentUrl() { return attachmentUrl; }
+    public void setAttachmentUrl(String attachmentUrl) { this.attachmentUrl = attachmentUrl; }
     public Boolean getIsRead() { return isRead; }
     public void setIsRead(Boolean isRead) { this.isRead = isRead; }
     public LocalDateTime getCreatedAt() { return createdAt; }

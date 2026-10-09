@@ -12,6 +12,7 @@ import {
     Menu, // Добавлено для меню действий
     Checkbox, FormControlLabel
 } from '@mui/material';
+import { School as SchoolIcon } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { 
     Add, Edit, Delete, PersonAdd, Search, 
@@ -129,6 +130,12 @@ function getAvatarColor(name) {
     return colors[Math.abs(hash) % colors.length];
 }
 
+function parseInterests(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try { return JSON.parse(raw); } catch { return raw.split(',').map(s => s.trim()).filter(Boolean); }
+}
+
 function getInitials(name) {
     if (!name) return '?';
     const parts = name.trim().split(' ');
@@ -180,7 +187,8 @@ function Students() {
 
     const [formData, setFormData] = useState({
         fullName: '', email: '', ratePerLesson: '', discount: 0,
-        paymentType: 'single', parentEmail: '', selfPaid: false, tutorId: user?.id
+        paymentType: 'single', parentEmail: '', selfPaid: false,
+        egeStudent: false, egeRatingEnabled: false, tutorId: user?.id
     });
     const [stats, setStats] = useState({ total: 0, subscription: 0, single: 0, withParent: 0 });
 
@@ -263,7 +271,7 @@ function Students() {
     const handleOpenDialog = (student) => {
         if (!student) {
             setEditingStudent(null);
-            setFormData({ fullName: '', email: '', ratePerLesson: '', discount: 0, paymentType: 'single', parentEmail: '', selfPaid: false, tutorId: user.id });
+            setFormData({ fullName: '', email: '', ratePerLesson: '', discount: 0, paymentType: 'single', parentEmail: '', selfPaid: false, egeStudent: false, egeRatingEnabled: false, tutorId: user.id });
         } else {
             setEditingStudent(student);
             setFormData({ 
@@ -274,6 +282,8 @@ function Students() {
                 paymentType: student.paymentType || 'single', 
                 parentEmail: student.parent?.email || '', 
                 selfPaid: student.selfPaid || false, 
+                egeStudent: student.egeStudent || false,
+                egeRatingEnabled: student.egeRatingEnabled || false,
                 tutorId: user.id 
             });
         }
@@ -299,9 +309,22 @@ function Students() {
             };
             if (editingStudent) { 
                 await axiosInstance.put(`/students/${editingStudent.id}`, d); 
+                // Флаги ЕГЭ — отдельным запросом
+                await axiosInstance.patch(`/students/${editingStudent.id}/ege-flags`, {
+                    egeStudent: formData.egeStudent || false,
+                    egeRatingEnabled: formData.egeRatingEnabled || false,
+                });
                 showSnackbar('Ученик обновлён', 'success'); 
             } else { 
-                await axiosInstance.post('/students', d); 
+                const created = await axiosInstance.post('/students', d);
+                // Для нового ученика — тоже ставим флаги
+                const newId = created.data?.id;
+                if (newId) {
+                    await axiosInstance.patch(`/students/${newId}/ege-flags`, {
+                        egeStudent: formData.egeStudent || false,
+                        egeRatingEnabled: formData.egeRatingEnabled || false,
+                    });
+                }
                 showSnackbar('✅ Ученик успешно добавлен', 'success'); 
             }
             handleCloseDialog();
@@ -559,6 +582,7 @@ function Students() {
                                         {/* Аватар и Имя */}
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5 }}>
                                             <Avatar 
+                                                src={student.avatar || undefined}
                                                 sx={{ 
                                                     width: 56, height: 56, 
                                                     bgcolor: avatarColor, 
@@ -670,6 +694,42 @@ function Students() {
                                                 </Box>
                                             )}
 
+                                            {/* ЕГЭ-флаги */}
+                                            <Box sx={{ 
+                                                display: 'flex', 
+                                                gap: 1,
+                                                flexWrap: 'wrap',
+                                            }}>
+                                                {student.egeStudent && (
+                                                    <Chip 
+                                                        label="🎓 ЕГЭ"
+                                                        size="small"
+                                                        sx={{ 
+                                                            bgcolor: '#EEF2FF', 
+                                                            color: '#4F46E5', 
+                                                            fontWeight: 700, 
+                                                            fontSize: '11px',
+                                                            height: 22,
+                                                            borderRadius: 100,
+                                                        }}
+                                                    />
+                                                )}
+                                                {student.egeRatingEnabled && (
+                                                    <Chip 
+                                                        label="🏆 В рейтинге"
+                                                        size="small"
+                                                        sx={{ 
+                                                            bgcolor: '#F5F3FF', 
+                                                            color: '#7C3AED', 
+                                                            fontWeight: 700, 
+                                                            fontSize: '11px',
+                                                            height: 22,
+                                                            borderRadius: 100,
+                                                        }}
+                                                    />
+                                                )}
+                                            </Box>
+
                                             {/* Родитель */}
                                             <Box sx={{ 
                                                 display: 'flex', 
@@ -693,6 +753,58 @@ function Students() {
                                                 </Typography>
                                             </Box>
                                         </Box>
+                                        {/* О себе */}
+                                        {student.bio && (
+                                            <Box sx={{ p: 1.5, bgcolor: '#F9FAFB', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
+                                                <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.5 }}>
+                                                    О себе
+                                                </Typography>
+                                                <Typography sx={{ fontSize: '13px', color: '#374151', lineHeight: 1.5 }}>
+                                                    {student.bio}
+                                                </Typography>
+                                            </Box>
+                                        )}
+
+                                        {/* Школа */}
+                                        {(student.school || student.grade) && (
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <SchoolIcon sx={{ fontSize: 16, color: '#6B7280' }} />
+                                                <Typography sx={{ fontSize: '12px', color: '#6B7280', fontWeight: 600 }}>
+                                                    {[student.grade && `${student.grade} класс`, student.school].filter(Boolean).join(' · ')}
+                                                </Typography>
+                                            </Box>
+                                        )}
+
+                                        {/* Увлечения */}
+                                        {parseInterests(student.interests).length > 0 && (
+                                            <Box>
+                                                <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.75 }}>
+                                                    Увлечения
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                    {parseInterests(student.interests).map((i, idx) => (
+                                                        <Chip
+                                                            key={idx}
+                                                            label={i}
+                                                            size="small"
+                                                            sx={{ bgcolor: '#F3F4F6', color: '#374151', fontSize: '11px', height: 22, borderRadius: 100 }}
+                                                        />
+                                                    ))}
+                                                </Box>
+                                            </Box>
+                                        )}
+
+                                        {/* Цель */}
+                                        {student.goal && (
+                                            <Box sx={{ p: 1.5, bgcolor: '#FFF3D6', borderRadius: '12px', border: '1px solid #FDE68A' }}>
+                                                <Typography sx={{ fontSize: '11px', color: '#92400E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.3 }}>
+                                                    🎯 Цель
+                                                </Typography>
+                                                <Typography sx={{ fontSize: '13px', color: '#374151', fontWeight: 600 }}>
+                                                    {student.goal}
+                                                </Typography>
+                                            </Box>
+                                        )}
                                     </CardContent>
 
                                     {/* Футер карточки с действиями */}
@@ -840,6 +952,31 @@ function Students() {
                                 />
                             } 
                             label={<Typography sx={{ fontSize: '14px', color: '#374151' }}>Ученик оплачивает занятия самостоятельно</Typography>} 
+                        />
+                        <Divider sx={{ my: 1 }} />
+                        <Typography sx={{ fontSize: '13px', color: '#6B7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 1 }}>
+                            🎓 Подготовка к ЕГЭ
+                        </Typography>
+                        <FormControlLabel 
+                            control={
+                                <Checkbox 
+                                    checked={formData.egeStudent || false} 
+                                    onChange={(e) => setFormData({ ...formData, egeStudent: e.target.checked })} 
+                                    sx={{ '&.Mui-checked': { color: '#4F46E5' } }}
+                                />
+                            } 
+                            label={<Typography sx={{ fontSize: '14px', color: '#374151' }}>Ученик готовится к ЕГЭ</Typography>} 
+                        />
+                        <FormControlLabel 
+                            control={
+                                <Checkbox 
+                                    checked={formData.egeRatingEnabled || false} 
+                                    onChange={(e) => setFormData({ ...formData, egeRatingEnabled: e.target.checked })} 
+                                    disabled={!formData.egeStudent}
+                                    sx={{ '&.Mui-checked': { color: '#7C3AED' } }}
+                                />
+                            } 
+                            label={<Typography sx={{ fontSize: '14px', color: formData.egeStudent ? '#374151' : '#9CA3AF' }}>Показывать в ЕГЭ-рейтинге</Typography>} 
                         />
                     </Box>
                 </DialogContent>

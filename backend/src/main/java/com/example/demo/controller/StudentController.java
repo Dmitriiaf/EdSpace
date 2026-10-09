@@ -112,7 +112,6 @@ public class StudentController {
 
                 studentRepository.save(existingStudent);
 
-                // Уведомление репетитору о привязанном ученике
                 try {
                     notificationService.createTutorNotification(tutorId,
                             "🎓 Ученик " + existingStudent.getFullName() + " привязан к вашему профилю");
@@ -142,13 +141,11 @@ public class StudentController {
                     parentEmail
             );
 
-            // Сохраняем скидку
             if (discount > 0) {
                 student.setDiscount(discount);
                 studentRepository.save(student);
             }
 
-            // Уведомление репетитору о новом ученике
             try {
                 notificationService.createTutorNotification(tutorId,
                         "🎓 Новый ученик " + student.getFullName() + " добавлен");
@@ -348,7 +345,6 @@ public class StudentController {
                 student.setRateForTutor(tutor,
                         currentRate != null ? currentRate : BigDecimal.ZERO,
                         newPaymentType);
-                // ✅ Обновляем paymentType в самом студенте
                 student.setPaymentType(newPaymentType);
             }
 
@@ -450,6 +446,65 @@ public class StudentController {
         }
     }
 
+    // ================== ЕГЭ ФЛАГИ ==================
+
+    /**
+     * Обновить флаги ЕГЭ у ученика (сдаёт ЕГЭ / показывать в рейтинге).
+     * PATCH /api/students/{id}/ege-flags
+     */
+    @PatchMapping("/{id}/ege-flags")
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> updateEgeFlags(@PathVariable Long id,
+                                            @RequestBody Map<String, Object> body,
+                                            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Student student = studentService.getStudentById(id);
+
+            boolean hasTutor = student.getTutors().stream()
+                    .anyMatch(t -> t.getId().equals(currentUserId));
+            if (!hasTutor) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+
+            if (body.containsKey("egeStudent")) {
+                student.setEgeStudent(Boolean.TRUE.equals(body.get("egeStudent")));
+            }
+            if (body.containsKey("egeRatingEnabled")) {
+                student.setEgeRatingEnabled(Boolean.TRUE.equals(body.get("egeRatingEnabled")));
+            }
+
+            Student saved = studentRepository.save(student);
+            return ResponseEntity.ok(Map.of(
+                    "id", saved.getId(),
+                    "egeStudent", saved.getEgeStudent() != null ? saved.getEgeStudent() : false,
+                    "egeRatingEnabled", saved.getEgeRatingEnabled() != null ? saved.getEgeRatingEnabled() : false
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * ЕГЭ-рейтинг учеников репетитора.
+     * Возвращает только тех, у кого egeRatingEnabled = true,
+     * отсортированных по среднему баллу за пробники.
+     * GET /api/students/ege-rating?tutorId={id}
+     */
+    @GetMapping("/ege-rating")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
+    public ResponseEntity<?> getEgeRating(
+            @RequestParam Long tutorId,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId,
+            @RequestAttribute(name = "userRole", required = false) String userRole) {
+        try {
+            List<Map<String, Object>> rating = studentService.getEgeRating(tutorId, currentUserId, userRole);
+            return ResponseEntity.ok(rating);
+        } catch (RuntimeException e) {
+            log.error("Ошибка получения ЕГЭ-рейтинга: ", e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/count")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getStudentsCount(@RequestAttribute(name = "userId", required = false) Long currentUserId) {
@@ -494,6 +549,7 @@ public class StudentController {
         map.put("id", student.getId());
         map.put("selfPaid", student.getSelfPaid() != null ? student.getSelfPaid() : false);
         map.put("fullName", student.getFullName());
+        map.put("avatar", student.getAvatar());
         map.put("email", student.getEmail());
         map.put("phone", student.getPhone());
         if (tutorId != null) {
@@ -504,6 +560,10 @@ public class StudentController {
         map.put("missedLessons", student.getMissedLessons() != null ? student.getMissedLessons() : 0);
         map.put("discount", student.getDiscount() != null ? student.getDiscount() : 0);
         map.put("archived", student.getArchived() != null ? student.getArchived() : false);
+
+        // ✅ ЕГЭ-флаги
+        map.put("egeStudent", student.getEgeStudent() != null ? student.getEgeStudent() : false);
+        map.put("egeRatingEnabled", student.getEgeRatingEnabled() != null ? student.getEgeRatingEnabled() : false);
 
         if (tutorId != null) {
             map.put("ratePerLesson", student.getRateForTutor(tutorId));
@@ -551,6 +611,14 @@ public class StudentController {
                 })
                 .collect(Collectors.toList());
         map.put("tutors", tutors);
+
+        map.put("school", student.getSchool());
+        map.put("grade", student.getGrade());
+        map.put("bio", student.getBio());
+        map.put("interests", student.getInterests());
+        map.put("goal", student.getGoal());
+        map.put("avatar", student.getAvatar());
+        map.put("createdAt", student.getCreatedAt());
 
         return map;
     }
@@ -642,7 +710,6 @@ public class StudentController {
                 if (interests instanceof String) {
                     student.setInterests((String) interests);
                 } else if (interests instanceof List) {
-                    // Сохраняем как JSON-строку
                     student.setInterests(new com.fasterxml.jackson.databind.ObjectMapper()
                             .writeValueAsString(interests));
                 }
@@ -681,12 +748,10 @@ public class StudentController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Только изображения"));
             }
 
-            // Папка загрузки
             String uploadDir = "/opt/EdSpace/uploads/avatars";
             java.io.File dir = new java.io.File(uploadDir);
             if (!dir.exists()) dir.mkdirs();
 
-            // Имя файла: student_{id}_{timestamp}.{ext}
             String ext = "jpg";
             if (contentType.contains("png")) ext = "png";
             else if (contentType.contains("webp")) ext = "webp";
@@ -696,7 +761,6 @@ public class StudentController {
             java.io.File dest = new java.io.File(dir, fileName);
             file.transferTo(dest);
 
-            // URL (фронт через nginx отдаёт /uploads/)
             String avatarUrl = "/uploads/avatars/" + fileName;
             student.setAvatar(avatarUrl);
             studentRepository.save(student);

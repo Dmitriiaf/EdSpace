@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Homework.js (v13 — Таблица + Фильтры: ученик, курс, дата) ==========
+// ========== frontend/src/pages/Homework.js (v14 — ДЗ + Пробники) ==========
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import EdSpaceLoader from '../components/EdSpaceLoader';
 import {
@@ -9,7 +9,7 @@ import {
     Paper, IconButton, Rating, Avatar, LinearProgress,
     FormControlLabel, Checkbox, Tooltip, InputAdornment,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    TablePagination, TableSortLabel
+    TablePagination, TableSortLabel, Radio, RadioGroup
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
@@ -35,7 +35,9 @@ import {
     FilterList as FilterIcon,
     ViewList as ViewListIcon,
     ViewModule as ViewModuleIcon,
-    Clear as ClearIcon
+    Clear as ClearIcon,
+    EmojiEvents as TrophyIcon,
+    School as SchoolIcon,
 } from '@mui/icons-material';
 import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
 import { useAuth } from '../context/AuthContext';
@@ -81,11 +83,6 @@ const FilePreviewCard = styled(Box)({
     borderRadius: '10px',
     border: '1px solid #E5E7EB',
     position: 'relative',
-    animation: 'fadeIn 0.3s ease',
-    '@keyframes fadeIn': {
-        from: { opacity: 0, transform: 'translateY(-10px)' },
-        to: { opacity: 1, transform: 'translateY(0)' },
-    },
 });
 
 const ImagePreview = styled('img')({
@@ -118,6 +115,21 @@ const FilterChip = styled(Chip)(({ active }) => ({
     '&:hover': {
         backgroundColor: '#EEF2FF',
         color: '#4F46E5',
+    },
+}));
+
+const TypeSelectorBox = styled(Box)(({ active, color }) => ({
+    flex: 1,
+    p: 2,
+    border: `2px solid ${active ? color : '#E5E7EB'}`,
+    borderRadius: '12px',
+    cursor: 'pointer',
+    textAlign: 'center',
+    transition: 'all 0.2s ease',
+    backgroundColor: active ? `${color}10` : '#FFFFFF',
+    '&:hover': {
+        borderColor: color,
+        backgroundColor: `${color}08`,
     },
 }));
 
@@ -166,14 +178,16 @@ function Homework() {
     const { user } = useAuth();
     useEffect(() => { document.title = 'EdSpace — Домашние задания'; }, []);
     const isTutor = user?.role === 'tutor' || user?.role === 'ROLE_TUTOR';
-    
+
     // ========== СОСТОЯНИЯ ==========
     const [loading, setLoading] = useState(true);
     const [homeworkList, setHomeworkList] = useState([]);
     const [students, setStudents] = useState([]);
     const [courses, setCourses] = useState([]);
     const [error, setError] = useState(null);
-    
+
+    const [activeType, setActiveType] = useState('HOMEWORK');
+
     // Отображение
     const [viewMode, setViewMode] = useState('table');
     const [searchQuery, setSearchQuery] = useState('');
@@ -185,25 +199,34 @@ function Homework() {
     const [rowsPerPage, setRowsPerPage] = useState(25);
     const [sortField, setSortField] = useState('dueDate');
     const [sortDirection, setSortDirection] = useState('asc');
-    
+
     // Диалоги
     const [openAssign, setOpenAssign] = useState(false);
     const [openSubmit, setOpenSubmit] = useState(false);
     const [openCheck, setOpenCheck] = useState(false);
     const [openBankPicker, setOpenBankPicker] = useState(false);
-    
+
     // Формы
-    const [newHomework, setNewHomework] = useState({ studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5' });
+    const [newHomework, setNewHomework] = useState({
+        studentId: '',
+        task: '',
+        dueDate: '',
+        gradeType: 'GRADE_5',
+        type: 'HOMEWORK',
+        examType: 'EGE',
+        subject: 'Информатика',
+        examDate: ''
+    });
     const [submission, setSubmission] = useState('');
     const [grade, setGrade] = useState({ grade: 0, feedback: '', returnForRevision: false });
     const [selectedHomework, setSelectedHomework] = useState(null);
-    
+
     // Файлы
     const [filesToUpload, setFilesToUpload] = useState([]);
     const [isDragActive, setIsDragActive] = useState(false);
     const [assignFiles, setAssignFiles] = useState([]);
     const [isAssignDragActive, setIsAssignDragActive] = useState(false);
-    
+
     // Банк заданий
     const [bankTab, setBankTab] = useState(0);
     const [bankTasks, setBankTasks] = useState([]);
@@ -212,7 +235,7 @@ function Homework() {
 
     useEffect(() => { if (openBankPicker) loadBankItems(); }, [openBankPicker]);
     useEffect(() => { loadHomework(); if (isTutor) { loadStudents(); loadCourses(); } }, []);
-    
+
     useEffect(() => {
         if (!openSubmit) {
             filesToUpload.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
@@ -244,9 +267,9 @@ function Homework() {
     };
 
     const loadCourses = async () => {
-        try { 
+        try {
             const res = await axiosInstance.get(`/courses/tutor/${user.id}`);
-            setCourses(res.data || []); 
+            setCourses(res.data || []);
         } catch (err) {}
     };
 
@@ -254,74 +277,92 @@ function Homework() {
     const handleAssign = async () => {
         if (!newHomework.studentId || !newHomework.task) return;
         try {
+            const isExam = newHomework.type === 'MOCK_EXAM';
+            const gradeTypeFinal = isExam ? 'GRADE_100' : (newHomework.gradeType || 'GRADE_5');
+
             if (assignFiles.length > 0) {
-                // С файлами — FormData
                 const formData = new FormData();
                 formData.append('tutorId', user.id);
                 formData.append('studentId', newHomework.studentId);
                 formData.append('task', newHomework.task);
                 if (newHomework.dueDate) formData.append('dueDate', newHomework.dueDate + 'T23:59:59');
                 formData.append('status', 'ASSIGNED');
-                formData.append('gradeType', newHomework.gradeType || 'GRADE_5');
+                formData.append('gradeType', gradeTypeFinal);
+                formData.append('type', newHomework.type);
+                if (isExam) {
+                    formData.append('examType', newHomework.examType);
+                    formData.append('subject', newHomework.subject);
+                    if (newHomework.examDate) formData.append('examDate', newHomework.examDate);
+                }
                 assignFiles.forEach(file => formData.append('files', file));
-                await axiosInstance.post('/homework', formData);
+                await axiosInstance.post('/homework', formData, {
+                    headers: { 'Content-Type': undefined }
+                });
             } else {
-                // Без файлов — JSON
-                await axiosInstance.post('/homework', {
+                const body = {
                     tutorId: user.id,
                     studentId: newHomework.studentId,
                     task: newHomework.task,
                     dueDate: newHomework.dueDate ? newHomework.dueDate + 'T23:59:59' : null,
                     status: 'ASSIGNED',
-                    gradeType: newHomework.gradeType || 'GRADE_5'
-                });
+                    gradeType: gradeTypeFinal,
+                    type: newHomework.type,
+                };
+                if (isExam) {
+                    body.examType = newHomework.examType;
+                    body.subject = newHomework.subject;
+                    if (newHomework.examDate) body.examDate = newHomework.examDate;
+                }
+                await axiosInstance.post('/homework', body);
             }
-            setOpenAssign(false); 
-            setNewHomework({ studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5' }); 
+            setOpenAssign(false);
+            setNewHomework({
+                studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5',
+                type: 'HOMEWORK', examType: 'EGE', subject: 'Информатика', examDate: ''
+            });
             setAssignFiles([]);
             loadHomework();
-        } catch (err) { setError('Ошибка назначения задания'); }
+        } catch (err) { setError('Ошибка назначения задания: ' + (err.response?.data?.error || err.message)); }
     };
 
     const handleSubmit = async () => {
         if (!selectedHomework) return;
         try {
-            const formData = new FormData(); 
+            const formData = new FormData();
             formData.append('answer', submission || '');
             filesToUpload.forEach(file => formData.append('files', file));
-            await axiosInstance.patch(`/homework/${selectedHomework.id}/submit`, formData);
-            setOpenSubmit(false); 
-            setSelectedHomework(null); 
-            setSubmission(''); 
-            setFilesToUpload([]); 
+            await axiosInstance.patch(`/homework/${selectedHomework.id}/submit`, formData, {
+                headers: { 'Content-Type': undefined }
+            });
+            setOpenSubmit(false);
+            setSelectedHomework(null);
+            setSubmission('');
+            setFilesToUpload([]);
             loadHomework();
-        } catch (err) { setError('Ошибка отправки задания'); }
+        } catch (err) { setError('Ошибка отправки задания: ' + (err.response?.data?.error || err.message)); }
     };
 
-        const handleCheck = async () => {
-            if (!selectedHomework) return;
-            try {
-                if (grade.returnForRevision) {
-                    await axiosInstance.patch(`/homework/${selectedHomework.id}/revision`, { feedback: grade.feedback });
+    const handleCheck = async () => {
+        if (!selectedHomework) return;
+        try {
+            if (grade.returnForRevision) {
+                await axiosInstance.patch(`/homework/${selectedHomework.id}/revision`, { feedback: grade.feedback });
+            } else {
+                if (selectedHomework.gradeType === 'GRADE_100' || selectedHomework.gradeType === 'GRADE_10') {
+                    const maxScore = selectedHomework.gradeType === 'GRADE_100' ? 100 : 10;
+                    await axiosInstance.patch(`/homework/${selectedHomework.id}/grade-with-score`, {
+                        score: grade.grade, maxScore: maxScore, feedback: grade.feedback
+                    });
                 } else {
-                    // Если ASSIGNED (без ответа) — сразу оцениваем без отправки
-                    // Репетитор не может вызывать /submit (доступ только ученику)
-                    
-                    if (selectedHomework.gradeType === 'GRADE_100' || selectedHomework.gradeType === 'GRADE_10') {
-                        const maxScore = selectedHomework.gradeType === 'GRADE_100' ? 100 : 10;
-                        await axiosInstance.patch(`/homework/${selectedHomework.id}/grade-with-score`, {
-                            score: grade.grade, maxScore: maxScore, feedback: grade.feedback
-                        });
-                    } else {
-                        await axiosInstance.patch(`/homework/${selectedHomework.id}/grade`, {
-                            grade: grade.grade, feedback: grade.feedback
-                        });
-                    }
+                    await axiosInstance.patch(`/homework/${selectedHomework.id}/grade`, {
+                        grade: grade.grade, feedback: grade.feedback
+                    });
                 }
-                setOpenCheck(false); setSelectedHomework(null);
-                setGrade({ grade: 0, feedback: '', returnForRevision: false }); loadHomework();
-            } catch (err) { setError('Ошибка проверки задания'); }
-        };
+            }
+            setOpenCheck(false); setSelectedHomework(null);
+            setGrade({ grade: 0, feedback: '', returnForRevision: false }); loadHomework();
+        } catch (err) { setError('Ошибка проверки задания'); }
+    };
 
     const handleDelete = async (id) => {
         if (!window.confirm('Удалить задание?')) return;
@@ -362,15 +403,9 @@ function Homework() {
     const validateAndAddFiles = (files, existingFiles) => {
         const validFiles = [];
         const maxSize = 10 * 1024 * 1024;
-        const allowedExtensions = /\.(jpg|jpeg|png|gif|webp|pdf|doc|docx|txt|odt|rtf|xlsx|xls|csv)$/i;
-
         for (let file of files) {
             if (file.size > maxSize) {
                 setError(`Файл "${file.name}" слишком большой. Максимум 10MB`);
-                continue;
-            }
-            if (!allowedExtensions.test(file.name)) {
-                setError(`Файл "${file.name}" имеет неподдерживаемый формат`);
                 continue;
             }
             if (existingFiles.some(f => f.name === file.name && f.size === file.size)) {
@@ -406,39 +441,40 @@ function Homework() {
         return isAfter(new Date(), parseISO(hw.dueDate));
     };
 
+    const homeworkOnly = useMemo(() => homeworkList.filter(h => (h.homeworkType || h.type || 'HOMEWORK') === 'HOMEWORK'), [homeworkList]);
+    const examsOnly = useMemo(() => homeworkList.filter(h => (h.homeworkType || h.type) === 'MOCK_EXAM'), [homeworkList]);
+
+    const countHomework = homeworkOnly.length;
+    const countMock = examsOnly.length;
+
     // ========== ФИЛЬТРАЦИЯ И СОРТИРОВКА ==========
     const filteredAndSorted = useMemo(() => {
-        let result = [...homeworkList];
+        let result = activeType === 'HOMEWORK' ? [...homeworkOnly] : [...examsOnly];
 
-        // Поиск
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            result = result.filter(hw => 
+            result = result.filter(hw =>
                 (hw.task && hw.task.toLowerCase().includes(q)) ||
                 (hw.student?.fullName && hw.student.fullName.toLowerCase().includes(q))
             );
         }
 
-        // Фильтр по статусу
         if (statusFilter !== 'ALL') {
             result = result.filter(hw => (hw.status || '').toUpperCase() === statusFilter);
         }
 
-        // Фильтр по ученику
         if (studentFilter !== 'ALL') {
             result = result.filter(hw => hw.student?.id == studentFilter);
         }
 
-        // Фильтр по курсу
         if (courseFilter !== 'ALL') {
             result = result.filter(hw => hw.course?.id == courseFilter);
         }
 
-        // Фильтр по дате
         if (dateFilter !== 'ALL') {
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            
+
             if (dateFilter === 'TODAY') {
                 const tomorrow = new Date(today.getTime() + 86400000);
                 result = result.filter(hw => {
@@ -465,7 +501,6 @@ function Homework() {
             }
         }
 
-        // Сортировка
         result.sort((a, b) => {
             let valA, valB;
             switch (sortField) {
@@ -487,7 +522,7 @@ function Homework() {
         });
 
         return result;
-    }, [homeworkList, searchQuery, statusFilter, studentFilter, courseFilter, dateFilter, sortField, sortDirection]);
+    }, [activeType, homeworkOnly, examsOnly, searchQuery, statusFilter, studentFilter, courseFilter, dateFilter, sortField, sortDirection]);
 
     const paginatedHomework = useMemo(() => {
         const start = page * rowsPerPage;
@@ -514,14 +549,14 @@ function Homework() {
 
     const hasActiveFilters = searchQuery || statusFilter !== 'ALL' || studentFilter !== 'ALL' || courseFilter !== 'ALL' || dateFilter !== 'ALL';
 
-    // ========== СТАТИСТИКА ==========
     const stats = useMemo(() => {
-        const total = homeworkList.length;
-        const submitted = homeworkList.filter(h => (h.status || '').toUpperCase() === 'SUBMITTED').length;
-        const checked = homeworkList.filter(h => (h.status || '').toUpperCase() === 'CHECKED').length;
-        const overdue = homeworkList.filter(h => isOverdue(h)).length;
+        const list = activeType === 'HOMEWORK' ? homeworkOnly : examsOnly;
+        const total = list.length;
+        const submitted = list.filter(h => (h.status || '').toUpperCase() === 'SUBMITTED').length;
+        const checked = list.filter(h => (h.status || '').toUpperCase() === 'CHECKED').length;
+        const overdue = list.filter(h => isOverdue(h)).length;
         return { total, submitted, checked, overdue };
-    }, [homeworkList]);
+    }, [activeType, homeworkOnly, examsOnly]);
 
     if (loading) return (
         <PageContainer>
@@ -533,16 +568,17 @@ function Homework() {
 
     return (
         <PageContainer sx={{ px: { xs: 1, sm: 3 } }}>
-            {/* ========== ЗАГОЛОВОК ========== */}
+            {/* ЗАГОЛОВОК */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
                     <Typography sx={{ fontSize: { xs: '22px', sm: '28px' }, fontWeight: 700, color: '#1F2937', mb: 0.5 }}>
                         {isTutor ? '📋 Домашние задания' : '📝 Мои задания'}
                     </Typography>
                     <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
-                        {isTutor 
-                            ? `${stats.total} заданий • ${stats.submitted} на проверке • ${stats.overdue} просрочено` 
-                            : 'Ваши активные и проверенные задания'}
+                        {activeType === 'HOMEWORK'
+                            ? `${countHomework} заданий`
+                            : `${countMock} пробников`}
+                        {isTutor && ` • ${stats.submitted} на проверке • ${stats.overdue} просрочено`}
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -551,19 +587,42 @@ function Homework() {
                         Обновить
                     </StyledButton>
                     {isTutor && (
-                        <StyledButton variant="contained" startIcon={<AddIcon sx={{ fontSize: 18 }} />} onClick={() => setOpenAssign(true)}
+                        <StyledButton variant="contained" startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+                            onClick={() => {
+                                setNewHomework({
+                                    studentId: '', task: '', dueDate: '', gradeType: 'GRADE_5',
+                                    type: activeType, examType: 'EGE', subject: 'Информатика', examDate: ''
+                                });
+                                setOpenAssign(true);
+                            }}
                             sx={{ bgcolor: '#4F46E5', borderRadius: '10px', '&:hover': { bgcolor: '#4338CA' } }}>
-                            Назначить ДЗ
+                            {activeType === 'HOMEWORK' ? 'Назначить ДЗ' : 'Назначить пробник'}
                         </StyledButton>
                     )}
                 </Box>
             </Box>
 
-            {/* ========== СТАТИСТИКА (репетитор) ========== */}
+            {/* ВКЛАДКИ */}
+            <Paper sx={{ borderRadius: '12px', border: '1px solid #F3F4F6', mb: 3 }}>
+                <Tabs
+                    value={activeType}
+                    onChange={(e, v) => { setActiveType(v); setPage(0); }}
+                    sx={{
+                        '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, fontSize: '14px', minHeight: 52 },
+                        '& .Mui-selected': { color: '#4F46E5' },
+                        '& .MuiTabs-indicator': { backgroundColor: '#4F46E5', height: 3 }
+                    }}
+                >
+                    <Tab value="HOMEWORK" icon={<AssignmentIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Домашние задания (${countHomework})`} />
+                    <Tab value="MOCK_EXAM" icon={<TrophyIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Пробники (${countMock})`} />
+                </Tabs>
+            </Paper>
+
+            {/* СТАТИСТИКА (репетитор) */}
             {isTutor && (
                 <Grid container spacing={1.5} sx={{ mb: 3 }}>
                     {[
-                        { label: 'Всего', value: stats.total, icon: AssignmentIcon, color: '#4F46E5', bg: '#EEF2FF' },
+                        { label: activeType === 'HOMEWORK' ? 'Всего ДЗ' : 'Всего пробников', value: stats.total, icon: activeType === 'HOMEWORK' ? AssignmentIcon : TrophyIcon, color: '#4F46E5', bg: '#EEF2FF' },
                         { label: 'На проверке', value: stats.submitted, icon: ReviewIcon, color: '#F59E0B', bg: '#FFFBEB' },
                         { label: 'Проверено', value: stats.checked, icon: CheckIcon, color: '#10B981', bg: '#ECFDF5' },
                         { label: 'Просрочено', value: stats.overdue, icon: ScheduleIcon, color: '#EF4444', bg: '#FEF2F2' },
@@ -571,8 +630,8 @@ function Homework() {
                         const Icon = stat.icon;
                         return (
                             <Grid item xs={6} md={3} key={i}>
-                                <Paper sx={{ 
-                                    p: { xs: 1.5, sm: 2.5 }, 
+                                <Paper sx={{
+                                    p: { xs: 1.5, sm: 2.5 },
                                     borderRadius: '12px',
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
                                     bgcolor: '#FFFFFF', border: '1px solid #F3F4F6',
@@ -594,9 +653,8 @@ function Homework() {
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }} onClose={() => setError(null)}>{error}</Alert>}
 
-            {/* ========== ПОИСК + ФИЛЬТРЫ + ПЕРЕКЛЮЧЕНИЕ ВИДА ========== */}
+            {/* ПОИСК + ФИЛЬТРЫ */}
             <Paper sx={{ p: 2, mb: 2.5, borderRadius: '12px', border: '1px solid #F3F4F6' }}>
-                {/* Первая строка: поиск + статус + переключатель */}
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', mb: isTutor ? 1.5 : 0 }}>
                     <TextField
                         placeholder="Поиск по заданию или ученику..."
@@ -641,7 +699,6 @@ function Homework() {
                     </Box>
                 </Box>
 
-                {/* Вторая строка: фильтры репетитора */}
                 {isTutor && (
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', pt: 0.5 }}>
                         <FormControl size="small" sx={{ minWidth: 180 }}>
@@ -688,7 +745,7 @@ function Homework() {
                 )}
             </Paper>
 
-            {/* ========== ТАБЛИЦА ========== */}
+            {/* ТАБЛИЦА */}
             {viewMode === 'table' && (
                 <Paper sx={{ borderRadius: '12px', border: '1px solid #F3F4F6', overflow: 'hidden' }}>
                     <TableContainer>
@@ -702,29 +759,36 @@ function Homework() {
                                         </StyledTableCell>
                                     )}
                                     <StyledTableCell sx={{ fontWeight: 600, color: '#6B7280', fontSize: '13px' }}>Задание</StyledTableCell>
+                                    {activeType === 'MOCK_EXAM' && (
+                                        <StyledTableCell sx={{ fontWeight: 600, color: '#6B7280', fontSize: '13px' }}>Экзамен</StyledTableCell>
+                                    )}
                                     <StyledTableCell sx={{ fontWeight: 600, color: '#6B7280', fontSize: '13px' }}>
                                         <TableSortLabel active={sortField === 'status'} direction={sortField === 'status' ? sortDirection : 'asc'}
                                             onClick={() => handleSort('status')}>Статус</TableSortLabel>
                                     </StyledTableCell>
                                     <StyledTableCell sx={{ fontWeight: 600, color: '#6B7280', fontSize: '13px' }}>
                                         <TableSortLabel active={sortField === 'dueDate'} direction={sortField === 'dueDate' ? sortDirection : 'asc'}
-                                            onClick={() => handleSort('dueDate')}>Срок</TableSortLabel>
+                                            onClick={() => handleSort('dueDate')}>{activeType === 'MOCK_EXAM' ? 'Дата' : 'Срок'}</TableSortLabel>
                                     </StyledTableCell>
-                                    {isTutor && <StyledTableCell sx={{ fontWeight: 600, color: '#6B7280', fontSize: '13px' }}>Оценка</StyledTableCell>}
+                                    {isTutor && <StyledTableCell sx={{ fontWeight: 600, color: '#6B7280', fontSize: '13px' }}>Баллы</StyledTableCell>}
                                     <StyledTableCell sx={{ fontWeight: 600, color: '#6B7280', fontSize: '13px', width: 180 }}>Действия</StyledTableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {paginatedHomework.length === 0 ? (
                                     <TableRow>
-                                        <StyledTableCell colSpan={isTutor ? 6 : 4} align="center">
+                                        <StyledTableCell colSpan={isTutor ? 7 : 5} align="center">
                                             <Box sx={{ py: 6 }}>
-                                                <AssignmentIcon sx={{ fontSize: 48, color: '#D1D5DB', mb: 2 }} />
+                                                {activeType === 'MOCK_EXAM' ? (
+                                                    <TrophyIcon sx={{ fontSize: 48, color: '#D1D5DB', mb: 2 }} />
+                                                ) : (
+                                                    <AssignmentIcon sx={{ fontSize: 48, color: '#D1D5DB', mb: 2 }} />
+                                                )}
                                                 <Typography sx={{ color: '#9CA3AF', fontSize: '16px', fontWeight: 500 }}>
-                                                    {hasActiveFilters ? 'Ничего не найдено' : 'Нет заданий'}
+                                                    {hasActiveFilters ? 'Ничего не найдено' : activeType === 'MOCK_EXAM' ? 'Нет пробников' : 'Нет заданий'}
                                                 </Typography>
                                                 <Typography sx={{ color: '#9CA3AF', fontSize: '14px' }}>
-                                                    {hasActiveFilters ? 'Попробуйте изменить фильтры' : 'Назначьте первое домашнее задание'}
+                                                    {hasActiveFilters ? 'Попробуйте изменить фильтры' : activeType === 'MOCK_EXAM' ? 'Назначьте первый пробник' : 'Назначьте первое домашнее задание'}
                                                 </Typography>
                                             </Box>
                                         </StyledTableCell>
@@ -752,6 +816,20 @@ function Homework() {
                                                         {hw.task || '—'}
                                                     </Typography>
                                                 </StyledTableCell>
+                                                {activeType === 'MOCK_EXAM' && (
+                                                    <StyledTableCell>
+                                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                                            {hw.examType && (
+                                                                <Chip label={hw.examType === 'EGE' ? 'ЕГЭ' : 'ОГЭ'} size="small"
+                                                                    sx={{ bgcolor: '#EEF2FF', color: '#4F46E5', fontWeight: 700, fontSize: '11px', height: 22, borderRadius: '6px' }} />
+                                                            )}
+                                                            {hw.subject && (
+                                                                <Chip label={hw.subject} size="small"
+                                                                    sx={{ bgcolor: '#F3F4F6', color: '#374151', fontWeight: 600, fontSize: '11px', height: 22, borderRadius: '6px' }} />
+                                                            )}
+                                                        </Box>
+                                                    </StyledTableCell>
+                                                )}
                                                 <StyledTableCell>
                                                     <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
                                                         <Chip label={statusConfig.label} size="small"
@@ -766,14 +844,20 @@ function Homework() {
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                                         <CalendarIcon sx={{ fontSize: 14, color: overdue ? '#EF4444' : '#9CA3AF' }} />
                                                         <Typography sx={{ fontSize: '13px', color: overdue ? '#EF4444' : '#6B7280', fontWeight: overdue ? 600 : 400 }}>
-                                                            {hw.dueDate ? format(new Date(hw.dueDate), 'd MMM', { locale: ru }) : '—'}
+                                                            {activeType === 'MOCK_EXAM' && hw.examDate
+                                                                ? format(new Date(hw.examDate), 'd MMM', { locale: ru })
+                                                                : hw.dueDate ? format(new Date(hw.dueDate), 'd MMM', { locale: ru }) : '—'}
                                                         </Typography>
                                                     </Box>
                                                 </StyledTableCell>
                                                 {isTutor && (
                                                     <StyledTableCell>
-                                                        {hw.grade != null ? (
-                                                            <Chip label={hw.gradeType === 'GRADE_100' ? `💯 ${hw.score || hw.grade}/100` : hw.gradeType === 'GRADE_10' ? `📊 ${hw.score || hw.grade}/10` : `⭐ ${hw.grade}/5`}
+                                                        {hw.score != null || hw.grade != null ? (
+                                                            <Chip label={
+                                                                hw.gradeType === 'GRADE_100' ? `💯 ${hw.score ?? hw.grade}/100`
+                                                                    : hw.gradeType === 'GRADE_10' ? `📊 ${hw.score ?? hw.grade}/10`
+                                                                    : `⭐ ${hw.grade}/5`
+                                                            }
                                                                 size="small" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 700, borderRadius: '6px', fontSize: '12px' }} />
                                                         ) : (
                                                             <Typography sx={{ color: '#9CA3AF', fontSize: '13px' }}>—</Typography>
@@ -793,7 +877,7 @@ function Homework() {
                                                             <StyledButton variant="outlined" size="small"
                                                                 onClick={() => { setSelectedHomework(hw); setGrade({ grade: 0, feedback: '', returnForRevision: false }); setOpenCheck(true); }}
                                                                 sx={{ color: '#6B7280', borderColor: '#D1D5DB', borderRadius: '6px', fontSize: '12px', px: 1.5, py: 0.5, '&:hover': { bgcolor: '#F9FAFB' } }}>
-                                                                <ReviewIcon viewIcon sx={{ fontSize: 14, mr: 0.5 }} /> Проверить без ответа
+                                                                <ReviewIcon sx={{ fontSize: 14, mr: 0.5 }} /> Оценить
                                                             </StyledButton>
                                                         )}
                                                         {isTutor && (hw.status || '').toUpperCase() === 'CHECKED' && (
@@ -841,17 +925,19 @@ function Homework() {
                 </Paper>
             )}
 
-            {/* ========== КАРТОЧКИ ========== */}
+            {/* КАРТОЧКИ */}
             {viewMode === 'cards' && (
                 <>
                     {filteredAndSorted.length === 0 ? (
                         <Paper sx={{ borderRadius: '16px', bgcolor: '#FFFFFF', p: 6, textAlign: 'center' }}>
-                            <EmptyStateIcon sx={{ mb: 2 }}><AssignmentIcon sx={{ fontSize: 40, color: '#9CA3AF' }} /></EmptyStateIcon>
+                            <EmptyStateIcon sx={{ mb: 2 }}>
+                                {activeType === 'MOCK_EXAM' ? <TrophyIcon sx={{ fontSize: 40, color: '#9CA3AF' }} /> : <AssignmentIcon sx={{ fontSize: 40, color: '#9CA3AF' }} />}
+                            </EmptyStateIcon>
                             <Typography sx={{ fontSize: '18px', fontWeight: 600, color: '#1F2937', mb: 1 }}>
-                                {hasActiveFilters ? 'Ничего не найдено' : isTutor ? 'Нет заданий' : 'У вас пока нет заданий'}
+                                {hasActiveFilters ? 'Ничего не найдено' : activeType === 'MOCK_EXAM' ? 'Нет пробников' : 'Нет заданий'}
                             </Typography>
                             <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
-                                {hasActiveFilters ? 'Попробуйте изменить фильтры' : isTutor ? 'Назначьте первое домашнее задание' : 'Здесь появятся задания от репетитора'}
+                                {hasActiveFilters ? 'Попробуйте изменить фильтры' : activeType === 'MOCK_EXAM' ? 'Назначьте первый пробник' : 'Назначьте первое домашнее задание'}
                             </Typography>
                         </Paper>
                     ) : (
@@ -865,6 +951,14 @@ function Homework() {
                                             <CardContent sx={{ p: 2.5, pb: 1.5, '&:last-child': { pb: 1.5 } }}>
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5, gap: 1, flexWrap: 'wrap' }}>
                                                     <Chip label={statusConfig.label} size="small" sx={{ bgcolor: statusConfig.bg, color: statusConfig.color, fontWeight: 600, fontSize: '11px', height: 26, borderRadius: '8px', border: `1px solid ${statusConfig.dot}40` }} />
+                                                    {activeType === 'MOCK_EXAM' && hw.examType && (
+                                                        <Chip
+                                                            icon={<TrophyIcon sx={{ fontSize: 12, color: '#4F46E5 !important' }} />}
+                                                            label={hw.examType === 'EGE' ? 'ЕГЭ' : 'ОГЭ'}
+                                                            size="small"
+                                                            sx={{ bgcolor: '#EEF2FF', color: '#4F46E5', fontWeight: 700, fontSize: '11px', height: 26, borderRadius: '8px' }}
+                                                        />
+                                                    )}
                                                     {overdue && (
                                                         <Chip icon={<ScheduleIcon sx={{ fontSize: 12, color: '#DC2626 !important' }} />} label="Просрочено" size="small" sx={{ bgcolor: '#FEF2F2', color: '#991B1B', fontWeight: 600, fontSize: '11px', height: 26, borderRadius: '8px', border: '1px solid #FECACA' }} />
                                                     )}
@@ -878,17 +972,30 @@ function Homework() {
                                                     </Box>
                                                 )}
                                                 <Typography sx={{ color: '#374151', lineHeight: 1.6, mb: 2, fontSize: '14px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', bgcolor: '#F9FAFB', p: 1.5, borderRadius: '10px' }}>{hw.task}</Typography>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                                         <CalendarIcon sx={{ fontSize: 14, color: overdue ? '#EF4444' : '#9CA3AF' }} />
                                                         <Typography sx={{ fontSize: '13px', color: overdue ? '#EF4444' : '#6B7280', fontWeight: overdue ? 600 : 400 }}>
-                                                            {hw.dueDate ? format(new Date(hw.dueDate), 'd MMM', { locale: ru }) : '—'}
+                                                            {activeType === 'MOCK_EXAM' && hw.examDate
+                                                                ? format(new Date(hw.examDate), 'd MMM yyyy', { locale: ru })
+                                                                : hw.dueDate ? format(new Date(hw.dueDate), 'd MMM', { locale: ru }) : '—'}
                                                         </Typography>
                                                     </Box>
-                                                    {hw.grade != null && (
-                                                        <Chip label={`⭐ ${hw.grade}/5`} size="small" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 700, borderRadius: '8px', fontSize: '12px' }} />
+                                                    {(hw.score != null || hw.grade != null) && (
+                                                        <Chip
+                                                            label={
+                                                                hw.gradeType === 'GRADE_100' ? `💯 ${hw.score ?? hw.grade}/100`
+                                                                    : hw.gradeType === 'GRADE_10' ? `📊 ${hw.score ?? hw.grade}/10`
+                                                                    : `⭐ ${hw.grade}/5`
+                                                            }
+                                                            size="small" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 700, borderRadius: '8px', fontSize: '12px' }} />
                                                     )}
                                                 </Box>
+                                                {activeType === 'MOCK_EXAM' && hw.subject && (
+                                                    <Box sx={{ mt: 1 }}>
+                                                        <Chip label={hw.subject} size="small" sx={{ bgcolor: '#F3F4F6', color: '#374151', fontWeight: 600, fontSize: '11px', height: 22, borderRadius: '6px' }} />
+                                                    </Box>
+                                                )}
                                             </CardContent>
                                             <CardActions sx={{ px: 2.5, pb: 2, pt: 0, justifyContent: 'space-between' }}>
                                                 <Box sx={{ display: 'flex', gap: 1 }}>
@@ -901,13 +1008,13 @@ function Homework() {
                                                         <StyledButton variant="outlined" startIcon={<ReviewIcon sx={{ fontSize: 16 }} />}
                                                             onClick={() => { setSelectedHomework(hw); setGrade({ grade: 0, feedback: '', returnForRevision: false }); setOpenCheck(true); }}
                                                             sx={{ color: '#6B7280', borderColor: '#D1D5DB', borderRadius: '8px', fontSize: '13px', '&:hover': { bgcolor: '#F9FAFB' } }}>
-                                                            Проверить без ответа
+                                                            Оценить
                                                         </StyledButton>
                                                     )}
                                                     {isTutor && (hw.status || '').toUpperCase() === 'CHECKED' && (
                                                         <StyledButton variant="outlined" startIcon={<ReviewIcon sx={{ fontSize: 16 }} />}
                                                             onClick={() => { setSelectedHomework(hw); setOpenCheck(true); }}
-                                                            sx={{ color: '#374151', borderColor: '#D1D5DB', borderRadius: '8px', fontSize: '13px', '&:hover': { bgcolor: '#F9FAFB' } }}>Посмотреть</StyledButton>
+                                                            sx={{ color: '#374151', borderColor: '#D1D5DB', borderRadius: '8px', fontSize: '13px', '&:hover': { bgcolor: '#F9FAFB' } }}>Смотреть</StyledButton>
                                                     )}
                                                     {!isTutor && ((hw.status || '').toUpperCase() === 'ASSIGNED' || (hw.status || '').toUpperCase() === 'RETURNED') && (
                                                         <StyledButton variant="contained" startIcon={<SendIcon sx={{ fontSize: 16 }} />}
@@ -945,24 +1052,97 @@ function Homework() {
                 </>
             )}
 
-            {/* ========== ДИАЛОГ НАЗНАЧЕНИЯ ДЗ ========== */}
+            {/* ДИАЛОГ НАЗНАЧЕНИЯ */}
             {isTutor && (
                 <StyledDialog open={openAssign} onClose={() => { setOpenAssign(false); setAssignFiles([]); }} maxWidth="sm" fullWidth>
                     <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, px: 3, pt: 3, pb: 1 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Avatar sx={{ bgcolor: '#EEF2FF', width: 36, height: 36 }}><AssignmentIcon sx={{ color: '#4F46E5', fontSize: 18 }} /></Avatar>
-                            ✨ Назначить домашнее задание
+                            <Avatar sx={{ bgcolor: '#EEF2FF', width: 36, height: 36 }}>
+                                {newHomework.type === 'MOCK_EXAM' ? <TrophyIcon sx={{ color: '#4F46E5', fontSize: 18 }} /> : <AssignmentIcon sx={{ color: '#4F46E5', fontSize: 18 }} />}
+                            </Avatar>
+                            {newHomework.type === 'MOCK_EXAM' ? '✨ Назначить пробник' : '✨ Назначить домашнее задание'}
                         </Box>
                     </DialogTitle>
                     <DialogContent sx={{ px: 3 }}>
                         <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+                            <Box>
+                                <Typography sx={{ fontSize: '13px', color: '#6B7280', mb: 1, fontWeight: 500 }}>
+                                    Тип задания
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                                    <TypeSelectorBox
+                                        active={newHomework.type === 'HOMEWORK'}
+                                        color="#4F46E5"
+                                        onClick={() => setNewHomework({ ...newHomework, type: 'HOMEWORK', gradeType: 'GRADE_5' })}
+                                    >
+                                        <AssignmentIcon sx={{ fontSize: 28, color: newHomework.type === 'HOMEWORK' ? '#4F46E5' : '#9CA3AF', mb: 0.5 }} />
+                                        <Typography sx={{ fontWeight: 600, fontSize: '14px', color: newHomework.type === 'HOMEWORK' ? '#4F46E5' : '#374151' }}>
+                                            Домашнее задание
+                                        </Typography>
+                                    </TypeSelectorBox>
+                                    <TypeSelectorBox
+                                        active={newHomework.type === 'MOCK_EXAM'}
+                                        color="#7C3AED"
+                                        onClick={() => setNewHomework({ ...newHomework, type: 'MOCK_EXAM', gradeType: 'GRADE_100' })}
+                                    >
+                                        <TrophyIcon sx={{ fontSize: 28, color: newHomework.type === 'MOCK_EXAM' ? '#7C3AED' : '#9CA3AF', mb: 0.5 }} />
+                                        <Typography sx={{ fontWeight: 600, fontSize: '14px', color: newHomework.type === 'MOCK_EXAM' ? '#7C3AED' : '#374151' }}>
+                                            Пробник
+                                        </Typography>
+                                    </TypeSelectorBox>
+                                </Box>
+                            </Box>
+
                             <FormControl fullWidth><InputLabel>Ученик</InputLabel>
                                 <Select value={newHomework.studentId} onChange={(e) => setNewHomework({ ...newHomework, studentId: e.target.value })} label="Ученик" sx={{ borderRadius: '10px' }}>
                                     {students.map(s => (<MenuItem key={s.id} value={s.id}>{s.fullName}</MenuItem>))}
                                 </Select>
                             </FormControl>
+
+                            {newHomework.type === 'MOCK_EXAM' && (
+                                <>
+                                    <Box>
+                                        <Typography sx={{ fontSize: '13px', color: '#6B7280', mb: 1, fontWeight: 500 }}>
+                                            Тип экзамена
+                                        </Typography>
+                                        <RadioGroup
+                                            row
+                                            value={newHomework.examType}
+                                            onChange={(e) => setNewHomework({ ...newHomework, examType: e.target.value })}
+                                        >
+                                            <FormControlLabel value="EGE" control={<Radio sx={{ color: '#4F46E5', '&.Mui-checked': { color: '#4F46E5' } }} />} label="ЕГЭ" />
+                                            <FormControlLabel value="OGE" control={<Radio sx={{ color: '#4F46E5', '&.Mui-checked': { color: '#4F46E5' } }} />} label="ОГЭ" />
+                                        </RadioGroup>
+                                    </Box>
+
+                                    <FormControl fullWidth>
+                                        <InputLabel>Предмет</InputLabel>
+                                        <Select
+                                            value={newHomework.subject}
+                                            onChange={(e) => setNewHomework({ ...newHomework, subject: e.target.value })}
+                                            label="Предмет"
+                                            sx={{ borderRadius: '10px' }}
+                                        >
+                                            <MenuItem value="Информатика">Информатика</MenuItem>
+                                            <MenuItem value="Математика">Математика</MenuItem>
+                                        </Select>
+                                    </FormControl>
+
+                                    <TextField
+                                        fullWidth
+                                        label="Дата проведения пробника"
+                                        type="date"
+                                        value={newHomework.examDate}
+                                        onChange={(e) => setNewHomework({ ...newHomework, examDate: e.target.value })}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </>
+                            )}
+
                             <TextField fullWidth label="Задание" multiline rows={4} value={newHomework.task} onChange={(e) => setNewHomework({ ...newHomework, task: e.target.value })} placeholder="Текст задания или ссылка на вариант" sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }} />
-                            
+
                             <StyledButton variant="outlined" onClick={() => setOpenBankPicker(true)} sx={{ color: '#6B7280', borderColor: '#D1D5DB', borderRadius: '10px' }}>
                                 📋 Выбрать из банка
                             </StyledButton>
@@ -977,7 +1157,7 @@ function Homework() {
                                     <Typography sx={{ fontSize: '14px', color: '#374151', fontWeight: 500 }}>
                                         {isAssignDragActive ? '✨ Отпустите файлы здесь' : 'Перетащите файлы сюда'}
                                     </Typography>
-                                    <Typography sx={{ fontSize: '12px', color: '#9CA3AF', mt: 0.5 }}>или нажмите для выбора • Максимум 10MB на файл</Typography>
+                                    <Typography sx={{ fontSize: '12px', color: '#9CA3AF', mt: 0.5 }}>или нажмите для выбора • Любой формат • Максимум 10 МБ</Typography>
                                 </DropZone>
                                 {assignFiles.length > 0 && (
                                     <Box sx={{ mt: 2 }}>
@@ -1001,25 +1181,38 @@ function Homework() {
                             </Box>
 
                             <Box sx={{ display: 'flex', gap: 2 }}>
-                                <TextField fullWidth label="Срок сдачи" type="date" value={newHomework.dueDate} onChange={(e) => setNewHomework({ ...newHomework, dueDate: e.target.value })} InputLabelProps={{ shrink: true }} sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }} />
-                                <FormControl fullWidth><InputLabel>Шкала</InputLabel>
-                                    <Select value={newHomework.gradeType || 'GRADE_5'} onChange={(e) => setNewHomework({ ...newHomework, gradeType: e.target.value })} label="Шкала" sx={{ borderRadius: '10px' }}>
-                                        <MenuItem value="GRADE_5">⭐ 5-балльная</MenuItem>
-                                        <MenuItem value="GRADE_10">📊 10-балльная</MenuItem>
-                                        <MenuItem value="GRADE_100">💯 100-балльная</MenuItem>
-                                    </Select>
-                                </FormControl>
+                                <TextField
+                                    fullWidth
+                                    label={newHomework.type === 'MOCK_EXAM' ? 'Дедлайн сдачи' : 'Срок сдачи'}
+                                    type="date"
+                                    value={newHomework.dueDate}
+                                    onChange={(e) => setNewHomework({ ...newHomework, dueDate: e.target.value })}
+                                    InputLabelProps={{ shrink: true }}
+                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                />
+                                {newHomework.type === 'HOMEWORK' && (
+                                    <FormControl fullWidth><InputLabel>Шкала</InputLabel>
+                                        <Select value={newHomework.gradeType || 'GRADE_5'} onChange={(e) => setNewHomework({ ...newHomework, gradeType: e.target.value })} label="Шкала" sx={{ borderRadius: '10px' }}>
+                                            <MenuItem value="GRADE_5">⭐ 5-балльная</MenuItem>
+                                            <MenuItem value="GRADE_10">📊 10-балльная</MenuItem>
+                                            <MenuItem value="GRADE_100">💯 100-балльная</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                )}
                             </Box>
                         </Box>
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 3 }}>
                         <StyledButton onClick={() => { setOpenAssign(false); setAssignFiles([]); }} sx={{ color: '#6B7280' }}>Отмена</StyledButton>
-                        <StyledButton onClick={handleAssign} variant="contained" disabled={!newHomework.studentId || !newHomework.task} sx={{ bgcolor: '#4F46E5', borderRadius: '10px' }}>Назначить</StyledButton>
+                        <StyledButton onClick={handleAssign} variant="contained" disabled={!newHomework.studentId || !newHomework.task}
+                            sx={{ bgcolor: newHomework.type === 'MOCK_EXAM' ? '#7C3AED' : '#4F46E5', borderRadius: '10px', '&:hover': { bgcolor: newHomework.type === 'MOCK_EXAM' ? '#6D28D9' : '#4338CA' } }}>
+                            {newHomework.type === 'MOCK_EXAM' ? 'Назначить пробник' : 'Назначить'}
+                        </StyledButton>
                     </DialogActions>
                 </StyledDialog>
             )}
 
-            {/* ========== БАНК ЗАДАНИЙ ========== */}
+            {/* БАНК ЗАДАНИЙ */}
             <StyledDialog open={openBankPicker} onClose={() => setOpenBankPicker(false)} maxWidth="md" fullWidth>
                 <DialogTitle sx={{ fontWeight: 600, px: 3, pt: 3 }}>📚 Банк заданий</DialogTitle>
                 <DialogContent sx={{ px: 3 }}>
@@ -1040,12 +1233,12 @@ function Homework() {
                 <DialogActions><StyledButton onClick={() => setOpenBankPicker(false)}>Отмена</StyledButton></DialogActions>
             </StyledDialog>
 
-            {/* ========== ДИАЛОГ СДАЧИ ДЗ ========== */}
+            {/* ДИАЛОГ СДАЧИ */}
             <StyledDialog open={openSubmit} onClose={() => { setOpenSubmit(false); setSubmission(''); setFilesToUpload([]); }} maxWidth="sm" fullWidth>
                 <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, px: 3, pt: 3, pb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <Avatar sx={{ bgcolor: '#EEF2FF', width: 36, height: 36 }}><SendIcon sx={{ color: '#4F46E5', fontSize: 18 }} /></Avatar>
-                        Сдать задание
+                        {selectedHomework?.homeworkType === 'MOCK_EXAM' || selectedHomework?.type === 'MOCK_EXAM' ? 'Сдать пробник' : 'Сдать задание'}
                     </Box>
                 </DialogTitle>
                 <DialogContent sx={{ px: 3 }}>
@@ -1057,7 +1250,7 @@ function Homework() {
                             </Paper>
                             <TextField fullWidth label="✏️ Ваш ответ" multiline rows={5} value={submission} onChange={(e) => setSubmission(e.target.value)} placeholder="Введите ответ..." sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }} />
                             <Box>
-                                <Typography sx={{ fontSize: '12px', color: '#6B7280', mb: 1, fontWeight: 500 }}>📎 Прикрепить файлы (фото, PDF, документы)</Typography>
+                                <Typography sx={{ fontSize: '12px', color: '#6B7280', mb: 1, fontWeight: 500 }}>📎 Прикрепить файлы (любой формат)</Typography>
                                 <DropZone isDragActive={isDragActive} onClick={() => document.getElementById('file-input')?.click()}
                                     onDragEnter={(e) => handleDragEnter(e, setIsDragActive)} onDragLeave={(e) => handleDragLeave(e, setIsDragActive)}
                                     onDragOver={(e) => handleDragOver(e, setIsDragActive)} onDrop={(e) => handleDrop(e, setIsDragActive, setFilesToUpload, filesToUpload)}>
@@ -1066,7 +1259,7 @@ function Homework() {
                                         <>
                                             <CloudUploadIcon sx={{ fontSize: 40, color: isDragActive ? '#4F46E5' : '#9CA3AF', mb: 1 }} />
                                             <Typography sx={{ fontSize: '14px', color: '#374151', fontWeight: 500 }}>{isDragActive ? '✨ Отпустите файлы здесь' : 'Перетащите файлы сюда'}</Typography>
-                                            <Typography sx={{ fontSize: '12px', color: '#9CA3AF', mt: 0.5 }}>или нажмите для выбора • Максимум 10MB на файл</Typography>
+                                            <Typography sx={{ fontSize: '12px', color: '#9CA3AF', mt: 0.5 }}>или нажмите для выбора • Любой формат • Максимум 10 МБ</Typography>
                                         </>
                                     ) : (
                                         <>
@@ -1113,7 +1306,7 @@ function Homework() {
                 </DialogActions>
             </StyledDialog>
 
-            {/* ========== ДИАЛОГ ПРОВЕРКИ ========== */}
+            {/* ДИАЛОГ ПРОВЕРКИ */}
             <StyledDialog open={openCheck} onClose={() => setOpenCheck(false)} maxWidth="lg" fullWidth>
                 <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, px: 3, pt: 3, pb: 1 }}>
                     {selectedHomework?.status?.toUpperCase() === 'CHECKED' ? 'Просмотр' : 'Проверить'} — {selectedHomework?.student?.fullName}
@@ -1121,6 +1314,21 @@ function Homework() {
                 <DialogContent sx={{ px: 3 }}>
                     {selectedHomework && (
                         <Box sx={{ pt: 2 }}>
+                            {(selectedHomework.homeworkType === 'MOCK_EXAM' || selectedHomework.type === 'MOCK_EXAM') && (
+                                <Paper sx={{ p: 2, bgcolor: '#F5F3FF', borderRadius: '12px', border: '1px solid #C4B5FD', mb: 2, display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <TrophyIcon sx={{ color: '#7C3AED' }} />
+                                    <Typography sx={{ fontWeight: 700, color: '#5B21B6' }}>
+                                        Пробник {selectedHomework.examType === 'EGE' ? 'ЕГЭ' : selectedHomework.examType === 'OGE' ? 'ОГЭ' : ''}
+                                    </Typography>
+                                    {selectedHomework.subject && (
+                                        <Chip label={selectedHomework.subject} size="small" sx={{ bgcolor: '#DDD6FE', color: '#5B21B6', fontWeight: 700 }} />
+                                    )}
+                                    {selectedHomework.examDate && (
+                                        <Chip label={format(new Date(selectedHomework.examDate), 'd MMM yyyy', { locale: ru })} size="small" sx={{ bgcolor: '#DDD6FE', color: '#5B21B6', fontWeight: 700 }} />
+                                    )}
+                                </Paper>
+                            )}
+
                             <Grid container spacing={2}>
                                 <Grid item xs={12} md={6}>
                                     <Paper sx={{ p: 2.5, bgcolor: '#F9FAFB', borderRadius: '12px', border: '1px solid #E5E7EB', height: '100%' }}>
@@ -1163,10 +1371,14 @@ function Homework() {
                                 </Box>
                             )}
 
-                            {selectedHomework?.status?.toUpperCase() === 'CHECKED' && selectedHomework.grade != null && (
+                            {selectedHomework?.status?.toUpperCase() === 'CHECKED' && (selectedHomework.score != null || selectedHomework.grade != null) && (
                                 <Box sx={{ mt: 3, p: 2.5, bgcolor: '#ECFDF5', borderRadius: '12px', border: '1px solid #A7F3D0' }}>
                                     <Typography sx={{ fontWeight: 600, color: '#065F46', fontSize: '16px' }}>
-                                        ✅ Оценка: {selectedHomework.gradeType === 'GRADE_100' ? `💯 ${selectedHomework.score || selectedHomework.grade}/100` : selectedHomework.gradeType === 'GRADE_10' ? `📊 ${selectedHomework.score || selectedHomework.grade}/10` : `⭐ ${selectedHomework.grade}/5`}
+                                        ✅ Оценка: {
+                                            selectedHomework.gradeType === 'GRADE_100' ? `💯 ${selectedHomework.score ?? selectedHomework.grade}/100`
+                                                : selectedHomework.gradeType === 'GRADE_10' ? `📊 ${selectedHomework.score ?? selectedHomework.grade}/10`
+                                                : `⭐ ${selectedHomework.grade}/5`
+                                        }
                                     </Typography>
                                     {selectedHomework.feedback && <Typography sx={{ color: '#374151', mt: 1.5, fontSize: '14px' }}>💬 {selectedHomework.feedback}</Typography>}
                                 </Box>

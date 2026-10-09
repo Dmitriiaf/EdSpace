@@ -4,7 +4,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box, ListItem, ListItemButton, ListItemIcon, ListItemText,
     IconButton, Tooltip, Typography, Avatar, Badge, Popover,
-    Paper, Stack, Button, Drawer
+    Paper, Stack, Button, Drawer, Chip,
+    Dialog, DialogTitle, DialogContent,
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
 import {
@@ -25,10 +26,16 @@ import {
     Group as GroupIcon,
     Brush as BrushIcon,
     OpenInNew as OpenInNewIcon,
-    AutoAwesome
+    AutoAwesome,
+    Chat as ChatIcon,
+    Close as CloseIcon,
+    Redeem as RedeemIcon,
+    EmojiEvents as EmojiEventsIcon,
+    TrackChanges as TrackChangesIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
+import ChatPanel from './ChatPanel';
 
 const ICON_COLORS = {
     'Главная': '#6366F1',
@@ -45,6 +52,12 @@ const ICON_COLORS = {
     'Задания': '#10B981',
     'Успеваемость': '#F59E0B',
     'Онлайн-доска': '#FF5FA2',
+    'Сообщения': '#7B5CFA',
+    'Бонусы': '#F59E0B',
+    'Турниры': '#7C3AED',
+    'Турнир': '#7C3AED',
+    'Мой ЕГЭ': '#10B981',
+    'ЕГЭ Чек-лист': '#10B981',
 };
 
 const TOUR_TARGETS = {
@@ -114,6 +127,10 @@ const Sidebar = () => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [notifAnchor, setNotifAnchor] = useState(null);
 
+    // ✅ Чат
+    const [chatOpen, setChatOpen] = useState(false);
+    const [chatUnread, setChatUnread] = useState(0);
+
     const isTutor = user?.role === 'tutor';
     const isStudent = user?.role === 'student';
 
@@ -153,6 +170,15 @@ const Sidebar = () => {
         } catch (err) {}
     };
 
+    // ✅ Загрузка непрочитанных сообщений
+    const fetchChatUnread = async () => {
+        if (!user?.id) return;
+        try {
+            const res = await axiosInstance.get('/chat/unread-count');
+            setChatUnread(res.data?.count || 0);
+        } catch (err) {}
+    };
+
     useEffect(() => {
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 30000);
@@ -161,6 +187,16 @@ const Sidebar = () => {
 
     useEffect(() => {
         if (isTutor && user?.id) fetchAvatar();
+    }, [user]);
+
+    // ✅ Polling непрочитанных сообщений каждые 10 сек
+    useEffect(() => {
+        if (!user?.id) return;
+        fetchChatUnread();
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') fetchChatUnread();
+        }, 10000);
+        return () => clearInterval(interval);
     }, [user]);
 
     const handleMarkAsRead = async (n) => {
@@ -197,6 +233,11 @@ const Sidebar = () => {
         if (isMobile) setMobileOpen(false);
     };
 
+    const handleChatOpen = () => {
+        setChatOpen(true);
+        if (isMobile) setMobileOpen(false);
+    };
+
     const getIconColor = (label) => ICON_COLORS[label] || '#9CA3AF';
     const getTourTarget = (label) => TOUR_TARGETS[label] || undefined;
 
@@ -205,6 +246,9 @@ const Sidebar = () => {
             { path: '/dashboard', label: 'Главная' },
             { path: '/weekly-schedule', label: 'Расписание' },
             { path: '/extracurricular', label: 'Домашние задания' },
+            { path: '/tournament', label: 'Турниры' },
+            { path: '/ege-checklist', label: 'ЕГЭ Чек-лист' },
+            { path: '#chat', label: 'Сообщения', badge: chatUnread, action: handleChatOpen },
         ]},
         { title: 'Ученики', items: [
             { path: '/students', label: 'Мои ученики' },
@@ -220,15 +264,19 @@ const Sidebar = () => {
         { title: '', items: [
             { path: '/student', label: 'Главная' },
             { path: '/student/homework', label: 'Задания' },
+            { path: '#chat', label: 'Сообщения', badge: chatUnread, action: handleChatOpen },
             { path: '/student/materials', label: 'Материалы' },
-            { path: '/student/tools', label: 'Инструменты' },
             { path: MELETO_URL, label: 'Онлайн-доска', external: true },
             { path: '/student/progress', label: 'Успеваемость' },
+            { path: '/student/ege-progress', label: 'Мой ЕГЭ' },
+            { path: '/student/bonuses', label: 'Бонусы' },
+            { path: '/student/tournament', label: 'Турнир' },
             { path: '/student/profile', label: 'Профиль' },
         ]},
     ] : [
         { title: '', items: [
             { path: '/parent/dashboard', label: 'Главная' },
+            { path: '#chat', label: 'Сообщения', badge: chatUnread, action: handleChatOpen },
             { path: '/parent/profile', label: 'Профиль' },
         ]},
     ];
@@ -249,9 +297,15 @@ const Sidebar = () => {
         'Задания': <AssignmentIcon />,
         'Успеваемость': <TrendingUpIcon />,
         'Онлайн-доска': <BrushIcon />,
+        'Сообщения': <ChatIcon />,
+        'Бонусы': <RedeemIcon />,
+        'Турниры': <EmojiEventsIcon />,
+        'Турнир': <EmojiEventsIcon />,
+        'Мой ЕГЭ': <TrackChangesIcon />,
+        'ЕГЭ Чек-лист': <TrackChangesIcon />,
     };
 
-    const isActive = (path) => !path.startsWith('http') && location.pathname === path;
+    const isActive = (path) => !path.startsWith('http') && !path.startsWith('#') && location.pathname === path;
 
     const NotificationBell = () => (
         <>
@@ -305,7 +359,10 @@ const Sidebar = () => {
                         return (
                             <ListItem key={item.path} disablePadding>
                                 <NavButton
-                                    onClick={() => handleNavigation(item.path, item.external)}
+                                    onClick={() => {
+                                        if (item.action) item.action();
+                                        else handleNavigation(item.path, item.external);
+                                    }}
                                     active={active}
                                     iconcolor={color}
                                     data-tour={tourTarget}
@@ -314,6 +371,18 @@ const Sidebar = () => {
                                         {iconMap[item.label] || <DashboardIcon />}
                                     </ListItemIcon>
                                     <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 600 : 400 } }} />
+                                    {/* ✅ Бейдж непрочитанных сообщений */}
+                                    {item.badge > 0 && (
+                                        <Chip
+                                            label={item.badge > 99 ? '99+' : item.badge}
+                                            size="small"
+                                            sx={{
+                                                bgcolor: '#EF4444', color: '#FFF',
+                                                fontSize: 11, height: 20, fontWeight: 700,
+                                                borderRadius: 100, ml: 1,
+                                            }}
+                                        />
+                                    )}
                                     {item.external && (
                                         <OpenInNewIcon sx={{ fontSize: 14, color: '#6B7280' }} />
                                     )}
@@ -361,53 +430,78 @@ const Sidebar = () => {
         </Box>
     );
 
-    if (isMobile) {
-        return (
-            <>
-                <IconButton onClick={() => setMobileOpen(true)}
-                    sx={{ position: 'fixed', top: 8, left: 8, zIndex: 1100, bgcolor: 'rgba(17,24,39,0.9)', backdropFilter: 'blur(4px)', color: '#fff', width: 40, height: 40, '&:hover': { bgcolor: '#374151' }, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                    <MenuIcon />
-                </IconButton>
-                <Drawer anchor="left" open={mobileOpen} onClose={() => setMobileOpen(false)}
-                    PaperProps={{ sx: { width: SIDEBAR_WIDTH, bgcolor: '#111827' } }}>
-                    {sidebarContent}
-                </Drawer>
-            </>
-        );
-    }
-
     return (
-        <SidebarContainer>
-            <LogoBox>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Box sx={{ width: 34, height: 34, borderRadius: '12px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <AutoAwesome sx={{ color: '#fff', fontSize: 18 }} />
+        <>
+            {isMobile ? (
+                <>
+                    <IconButton onClick={() => setMobileOpen(true)}
+                        sx={{ position: 'fixed', top: 8, left: 8, zIndex: 1100, bgcolor: 'rgba(17,24,39,0.9)', backdropFilter: 'blur(4px)', color: '#fff', width: 40, height: 40, '&:hover': { bgcolor: '#374151' }, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                        <MenuIcon />
+                    </IconButton>
+                    <Drawer anchor="left" open={mobileOpen} onClose={() => setMobileOpen(false)}
+                        PaperProps={{ sx: { width: SIDEBAR_WIDTH, bgcolor: '#111827' } }}>
+                        {sidebarContent}
+                    </Drawer>
+                </>
+            ) : (
+                <SidebarContainer>
+                    {sidebarContent}
+                </SidebarContainer>
+            )}
+
+            {/* ✅ МОДАЛКА С ЧАТОМ */}
+            <Dialog
+                open={chatOpen}
+                onClose={() => setChatOpen(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        bgcolor: '#FAFAFA',
+                        height: { xs: '90vh', md: 640 },
+                        maxHeight: '90vh',
+                        overflow: 'hidden',
+                        m: 2,
+                    },
+                }}
+            >
+                <DialogTitle sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    px: 3,
+                    py: 2,
+                    borderBottom: '1px solid #EAEAEA',
+                    bgcolor: '#FFF',
+                    fontWeight: 700,
+                    fontSize: '1.05rem',
+                    color: '#141414',
+                }}>
+                    Сообщения
+                    <IconButton onClick={() => setChatOpen(false)} size="small">
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent sx={{
+                    p: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    height: '100%',
+                }}>
+                    <Box sx={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0,
+                        overflow: 'hidden',
+                    }}>
+                        <ChatPanel onRead={() => setChatUnread(0)} />
                     </Box>
-                    <Typography sx={{ color: '#fff', fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px' }}>EdSpace</Typography>
-                </Box>
-            </LogoBox>
-
-            {renderMenu()}
-
-            <UserSection>
-                <NotificationBell />
-                <Avatar src={isTutor ? avatar : null} sx={{ width: 34, height: 34, bgcolor: '#6366F1', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
-                    onClick={() => handleNavigation(isTutor ? '/dashboard' : isStudent ? '/student' : '/parent/dashboard')}>
-                    {(!isTutor || !avatar) && (user?.fullName?.charAt(0) || 'U')}
-                </Avatar>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ color: '#F3F4F6', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {user?.fullName?.split(' ')[0] || 'Пользователь'}
-                    </Typography>
-                    <Typography sx={{ color: '#6B7280', fontSize: 11 }}>
-                        {isTutor ? 'Репетитор' : isStudent ? 'Ученик' : 'Родитель'}
-                    </Typography>
-                </Box>
-                <IconButton onClick={handleLogout} sx={{ color: '#6B7280', '&:hover': { color: '#EF4444' } }}>
-                    <LogoutIcon fontSize="small" />
-                </IconButton>
-            </UserSection>
-        </SidebarContainer>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 };
 

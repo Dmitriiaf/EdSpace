@@ -12,10 +12,7 @@ axiosInstance.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
         }
         
-        // ✅ Убираем charset=UTF-8 из multipart/form-data
-        if (config.headers?.['Content-Type']?.includes('multipart/form-data')) {
-            config.headers['Content-Type'] = 'multipart/form-data';
-        }
+        
         
         return config;
     },

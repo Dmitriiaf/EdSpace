@@ -14,8 +14,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.util.stream.Collectors;
 import com.example.demo.service.StudentService;
+import lombok.extern.slf4j.Slf4j;
 
-
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.nio.file.Files;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/homework")
 @CrossOrigin(origins = {
@@ -44,64 +46,47 @@ public class HomeworkController {
     @Autowired
     private VariantRepository variantRepository;
 
-    @PostMapping(consumes = {"multipart/form-data", "application/json"})
+    // ========== СОЗДАНИЕ ДЗ / ПРОБНИКА (multipart с файлами) ==========
+    @PostMapping(consumes = {"multipart/form-data"})
     @PreAuthorize("hasRole('TUTOR')")
-    public ResponseEntity<?> createHomework(
+    public ResponseEntity<?> createHomeworkMultipart(
             @RequestParam(value = "tutorId", required = false) Long tutorIdParam,
             @RequestParam(value = "studentId", required = false) Long studentIdParam,
             @RequestParam(value = "task", required = false) String taskParam,
             @RequestParam(value = "dueDate", required = false) String dueDateParam,
             @RequestParam(value = "status", defaultValue = "ASSIGNED") String statusParam,
             @RequestParam(value = "gradeType", defaultValue = "GRADE_5") String gradeTypeParam,
-            @RequestParam(value = "courseId", required = false) Long courseIdParam,            @RequestParam(value = "files", required = false) List<MultipartFile> files,
-            @RequestBody(required = false) Map<String, Object> jsonBody,
-            @RequestAttribute(name = "userId", required = false) Long currentUserId) throws Exception {
+            @RequestParam(value = "courseId", required = false) Long courseIdParam,
+            @RequestParam(value = "type", defaultValue = "HOMEWORK") String typeParam,
+            @RequestParam(value = "examType", required = false) String examTypeParam,
+            @RequestParam(value = "subject", required = false) String subjectParam,
+            @RequestParam(value = "examDate", required = false) String examDateParam,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
         try {
-            Long tutorId;
-            Long studentId;
-            String task;
-            String dueDate = null;
-            String status = "ASSIGNED";
-            String gradeType = "GRADE_5";
-            Long courseId = null;
-            // Определяем источник данных: multipart или JSON
-            if (tutorIdParam != null) {
-                // Пришли как multipart/form-data
-                tutorId = tutorIdParam;
-                studentId = studentIdParam;
-                task = taskParam;
-                dueDate = dueDateParam;
-                status = statusParam;
-                gradeType = gradeTypeParam;
-                courseId = courseIdParam;            } else if (jsonBody != null) {
-                // Пришли как JSON
-                tutorId = Long.parseLong(jsonBody.get("tutorId").toString());
-                studentId = Long.parseLong(jsonBody.get("studentId").toString());
-                task = (String) jsonBody.get("task");
-                if (jsonBody.get("dueDate") != null) {
-                    dueDate = jsonBody.get("dueDate").toString();
-                }
-                status = jsonBody.get("status") != null ? (String) jsonBody.get("status") : "ASSIGNED";
-                gradeType = jsonBody.get("gradeType") != null ? (String) jsonBody.get("gradeType") : "GRADE_5";
-            } else {
-                return ResponseEntity.badRequest().body(Map.of("error", "Нет данных"));
+            if (tutorIdParam == null || studentIdParam == null || taskParam == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Нужны tutorId, studentId, task"));
             }
-
-            if (!tutorId.equals(currentUserId)) {
+            if (!tutorIdParam.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
 
             LocalDateTime dueDateTime = null;
-            if (dueDate != null && !dueDate.isEmpty()) {
-                dueDateTime = LocalDateTime.parse(dueDate);
-            }
-
-            if (jsonBody != null && jsonBody.get("courseId") != null) {
-                courseId = Long.parseLong(jsonBody.get("courseId").toString());
+            if (dueDateParam != null && !dueDateParam.isEmpty()) {
+                dueDateTime = LocalDateTime.parse(dueDateParam);
             }
 
             Homework homework = homeworkService.createHomework(
-                    tutorId, studentId, task, dueDateTime, status, gradeType, null, courseId);
+                    tutorIdParam, studentIdParam, taskParam, dueDateTime,
+                    statusParam, gradeTypeParam, null, courseIdParam);
+
+            homework.setType(typeParam != null ? typeParam : "HOMEWORK");
+            homework.setExamType(examTypeParam);
+            homework.setSubject(subjectParam);
+            if (examDateParam != null && !examDateParam.isEmpty()) {
+                homework.setExamDate(LocalDate.parse(examDateParam));
+            }
+            homework = homeworkService.saveHomework(homework);
 
             if (files != null && !files.isEmpty()) {
                 StringBuilder attachments = new StringBuilder();
@@ -114,7 +99,6 @@ public class HomeworkController {
                     if (file.getSize() > 10 * 1024 * 1024) {
                         return ResponseEntity.badRequest().body(Map.of("error", "Файл слишком большой. Максимум 10MB"));
                     }
-
                     String originalName = file.getOriginalFilename();
                     String extension = "";
                     if (originalName != null && originalName.contains(".")) {
@@ -122,15 +106,61 @@ public class HomeworkController {
                     }
                     String fileName = "hw_" + homework.getId() + "_" + System.currentTimeMillis() + extension;
                     file.transferTo(new java.io.File(uploadDir + fileName));
-
                     if (attachments.length() > 0) attachments.append("\n");
                     attachments.append("/uploads/homework/").append(fileName);
                 }
                 homework.setAttachments(attachments.toString());
+                homework = homeworkService.saveHomework(homework);
             }
 
             return ResponseEntity.ok(homework);
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
+            log.error("❌ Ошибка создания ДЗ (multipart): ", e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ========== СОЗДАНИЕ ДЗ / ПРОБНИКА (JSON без файлов) ==========
+    @PostMapping(consumes = {"application/json"})
+    @PreAuthorize("hasRole('TUTOR')")
+    public ResponseEntity<?> createHomeworkJson(
+            @RequestBody Map<String, Object> body,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId) {
+        try {
+            Long tutorId = Long.parseLong(body.get("tutorId").toString());
+            if (!tutorId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+            Long studentId = Long.parseLong(body.get("studentId").toString());
+            String task = (String) body.get("task");
+            String dueDate = body.get("dueDate") != null ? body.get("dueDate").toString() : null;
+            String status = body.get("status") != null ? (String) body.get("status") : "ASSIGNED";
+            String gradeType = body.get("gradeType") != null ? (String) body.get("gradeType") : "GRADE_5";
+            Long courseId = body.get("courseId") != null ? Long.parseLong(body.get("courseId").toString()) : null;
+            String type = body.get("type") != null ? body.get("type").toString() : "HOMEWORK";
+            String examType = body.get("examType") != null ? body.get("examType").toString() : null;
+            String subject = body.get("subject") != null ? body.get("subject").toString() : null;
+            String examDate = body.get("examDate") != null ? body.get("examDate").toString() : null;
+
+            LocalDateTime dueDateTime = null;
+            if (dueDate != null && !dueDate.isEmpty()) {
+                dueDateTime = LocalDateTime.parse(dueDate);
+            }
+
+            Homework homework = homeworkService.createHomework(
+                    tutorId, studentId, task, dueDateTime, status, gradeType, null, courseId);
+
+            homework.setType(type);
+            homework.setExamType(examType);
+            homework.setSubject(subject);
+            if (examDate != null && !examDate.isEmpty()) {
+                homework.setExamDate(LocalDate.parse(examDate));
+            }
+            homework = homeworkService.saveHomework(homework);
+
+            return ResponseEntity.ok(homework);
+        } catch (Exception e) {
+            log.error("❌ Ошибка создания ДЗ (JSON): ", e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -176,6 +206,11 @@ public class HomeworkController {
                 item.put("feedback", hw.getFeedback());
                 item.put("createdAt", hw.getCreatedAt());
                 item.put("submittedAt", hw.getSubmittedAt());
+                item.put("homeworkType", hw.getType() != null ? hw.getType() : "HOMEWORK");
+                item.put("examType", hw.getExamType());
+                item.put("subject", hw.getSubject());
+                item.put("examDate", hw.getExamDate() != null ? hw.getExamDate().toString() : null);
+                item.put("attachments", hw.getAttachments());
                 if (hw.getTask() != null && hw.getTask().startsWith("http")) {
                     item.put("type", "variant");
                     item.put("url", hw.getTask());
@@ -209,6 +244,24 @@ public class HomeworkController {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
             List<Homework> homework = homeworkService.getHomeworkByStudentAndStatus(studentId, status);
+            return ResponseEntity.ok(homework);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/student/{studentId}/type/{type}")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
+    public ResponseEntity<?> getHomeworkByType(
+            @PathVariable Long studentId,
+            @PathVariable String type,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId,
+            @RequestAttribute(name = "userRole", required = false) String userRole) {
+        try {
+            if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+            List<Homework> homework = homeworkService.getHomeworkByStudentAndType(studentId, type);
             return ResponseEntity.ok(homework);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -371,6 +424,25 @@ public class HomeworkController {
         }
     }
 
+    @GetMapping("/progress/student/{studentId}/type/{type}")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
+    public ResponseEntity<?> getProgressStatsByType(
+            @PathVariable Long studentId,
+            @PathVariable String type,
+            @RequestParam(required = false) Long courseId,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId,
+            @RequestAttribute(name = "userRole", required = false) String userRole) {
+        try {
+            if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+            Map<String, Object> stats = homeworkService.getDetailedProgressStatsByType(studentId, courseId, type);
+            return ResponseEntity.ok(stats);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PatchMapping(path = "/{id}/submit", consumes = {"multipart/form-data"})
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<?> submitHomework(@PathVariable Long id,
@@ -388,22 +460,9 @@ public class HomeworkController {
                 for (MultipartFile file : files) {
                     if (file.isEmpty()) continue;
 
-                    // Проверка размера
+                    // Проверяем только размер, формат не ограничиваем
                     if (file.getSize() > 10 * 1024 * 1024) {
                         return ResponseEntity.badRequest().body(Map.of("error", "Файл '" + file.getOriginalFilename() + "' слишком большой. Максимум 10MB"));
-                    }
-
-                    // Проверка типа
-                    String contentType = file.getContentType();
-                    String fileName_lower = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
-                    if (contentType == null ||
-                            (!contentType.startsWith("image/") &&
-                                    !contentType.equals("application/pdf") &&
-                                    !contentType.equals("application/msword") &&
-                                    !contentType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document") &&
-                                    !contentType.startsWith("text/") &&
-                                    !fileName_lower.matches(".*\\.(jpg|jpeg|png|gif|webp|pdf|doc|docx|txt|odt|rtf|xlsx|xls|csv)$"))) {
-                        return ResponseEntity.badRequest().body(Map.of("error", "Неподдерживаемый формат файла '" + file.getOriginalFilename() + "'"));
                     }
 
                     String uploadDir = "/opt/EdSpace/uploads/homework/";
@@ -424,10 +483,10 @@ public class HomeworkController {
             if (attachments.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Нужен ответ или файл"));
             }
-            // ✅ Вызываем сервис, который создаст уведомление
             Homework submitted = homeworkService.submitHomework(id, attachments);
             return ResponseEntity.ok(Map.of("message", "Задание сдано", "homework", submitted));
         } catch (Exception e) {
+            log.error("❌ Ошибка сдачи ДЗ: ", e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -447,8 +506,6 @@ public class HomeworkController {
             return ResponseEntity.notFound().build();
         }
     }
-
-
 
     @GetMapping("/tutor/{tutorId}")
     @PreAuthorize("hasRole('TUTOR')")
@@ -479,11 +536,9 @@ public class HomeworkController {
                 }
             }
 
-            // Статистика по ДЗ
             Map<String, Long> homeworkStats = homeworkService.getHomeworkStatsByStudent(childId);
             Map<String, Object> detailedStats = homeworkService.getDetailedProgressStats(childId);
 
-            // Последние проверенные ДЗ
             List<Homework> allHomework = homeworkService.getHomeworkByStudent(childId);
             List<Map<String, Object>> recentHomework = allHomework.stream()
                     .filter(h -> "CHECKED".equals(h.getStatus()) || "RETURNED".equals(h.getStatus()))
@@ -504,7 +559,6 @@ public class HomeworkController {
                         return item;
                     }).collect(Collectors.toList());
 
-            // График прогресса
             List<Map<String, Object>> timeline = homeworkService.getStudentProgressTimeline(childId, null);
 
             return ResponseEntity.ok(Map.of(
@@ -550,13 +604,13 @@ public class HomeworkController {
             if (!tutorId.equals(currentUserId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
             }
-
             List<Map<String, Object>> result = homeworkService.getTutorStudentsProgress(tutorId, courseId);
             return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
     @GetMapping("/progress/student/{studentId}/timeline")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
     public ResponseEntity<?> getStudentProgressTimeline(
@@ -575,7 +629,25 @@ public class HomeworkController {
         }
     }
 
-    // ========== НЕПРОВЕРЕННЫЕ ДЗ ==========
+    @GetMapping("/progress/student/{studentId}/timeline/type/{type}")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT', 'PARENT')")
+    public ResponseEntity<?> getTimelineByType(
+            @PathVariable Long studentId,
+            @PathVariable String type,
+            @RequestParam(required = false) Long courseId,
+            @RequestAttribute(name = "userId", required = false) Long currentUserId,
+            @RequestAttribute(name = "userRole", required = false) String userRole) {
+        try {
+            if ("ROLE_STUDENT".equals(userRole) && !studentId.equals(currentUserId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Доступ запрещён"));
+            }
+            List<Map<String, Object>> timeline = homeworkService.getStudentProgressTimelineByType(studentId, courseId, type);
+            return ResponseEntity.ok(Map.of("timeline", timeline));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/tutor/{tutorId}/unreviewed")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> getUnreviewedHomework(

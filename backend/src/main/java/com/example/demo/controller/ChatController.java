@@ -8,15 +8,21 @@ import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.TutorRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -37,6 +43,9 @@ public class ChatController {
 
     @Autowired
     private TutorRepository tutorRepository;
+
+    @Value("${app.upload.dir:/opt/EdSpace/uploads}")
+    private String uploadDir;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -68,6 +77,7 @@ public class ChatController {
             resp.put("senderId", msg.getSenderId());
             resp.put("recipientId", msg.getRecipientId());
             resp.put("text", msg.getText());
+            resp.put("attachmentUrl", msg.getAttachmentUrl());
             resp.put("createdAt", msg.getCreatedAt().toString());
             resp.put("time", msg.getCreatedAt().format(TIME_FMT));
             resp.put("isRead", msg.getIsRead());
@@ -75,6 +85,68 @@ public class ChatController {
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
             log.error("Ошибка отправки сообщения: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ========== ОТПРАВИТЬ СООБЩЕНИЕ С ФОТО ==========
+    @PostMapping("/send-photo")
+    @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
+    public ResponseEntity<?> sendPhoto(@RequestParam("file") MultipartFile file,
+                                       @RequestParam(value = "text", required = false, defaultValue = "") String text,
+                                       @RequestParam("recipientId") Long recipientId,
+                                       @RequestAttribute(name = "userId", required = false) Long currentUserId,
+                                       @RequestAttribute(name = "userRole", required = false) String userRole) {
+        try {
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Файл пуст"));
+            }
+            if (file.getSize() > 5 * 1024 * 1024) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Максимум 5 МБ"));
+            }
+            String ct = file.getContentType();
+            if (ct == null || !ct.startsWith("image/")) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Только изображения"));
+            }
+
+            Path chatDir = Paths.get(uploadDir, "chat");
+            Files.createDirectories(chatDir);
+
+            String ext = "";
+            String original = file.getOriginalFilename();
+            if (original != null && original.contains(".")) {
+                ext = original.substring(original.lastIndexOf("."));
+            }
+            String fileName = "chat_" + UUID.randomUUID().toString().substring(0, 12) + ext;
+            Path target = chatDir.resolve(fileName);
+            file.transferTo(target.toFile());
+
+            String url = "/uploads/chat/" + fileName;
+
+            String senderRole = "ROLE_TUTOR".equals(userRole) ? "TUTOR" : "STUDENT";
+            String recipientRole = "ROLE_TUTOR".equals(userRole) ? "STUDENT" : "TUTOR";
+
+            String safeText = text != null ? text.trim() : "";
+            if (safeText.length() > 2000) safeText = safeText.substring(0, 2000);
+
+            ChatMessage msg = new ChatMessage(currentUserId, senderRole, recipientId, recipientRole, safeText);
+            msg.setAttachmentUrl(url);
+            chatMessageRepository.save(msg);
+
+            log.info("✅ Фото в чат: {} -> {}", currentUserId, url);
+
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("id", msg.getId());
+            resp.put("senderId", msg.getSenderId());
+            resp.put("recipientId", msg.getRecipientId());
+            resp.put("text", msg.getText());
+            resp.put("attachmentUrl", msg.getAttachmentUrl());
+            resp.put("createdAt", msg.getCreatedAt().toString());
+            resp.put("time", msg.getCreatedAt().format(TIME_FMT));
+            resp.put("isRead", msg.getIsRead());
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            log.error("Ошибка отправки фото: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -87,7 +159,6 @@ public class ChatController {
         try {
             List<ChatMessage> messages = chatMessageRepository.findConversation(currentUserId, otherUserId);
 
-            // Помечаем входящие прочитанными
             chatMessageRepository.markAsRead(currentUserId, otherUserId);
 
             List<Map<String, Object>> result = new ArrayList<>();
@@ -97,6 +168,7 @@ public class ChatController {
                 item.put("senderId", m.getSenderId());
                 item.put("recipientId", m.getRecipientId());
                 item.put("text", m.getText());
+                item.put("attachmentUrl", m.getAttachmentUrl());
                 item.put("isRead", m.getIsRead());
                 item.put("createdAt", m.getCreatedAt().toString());
                 item.put("time", m.getCreatedAt().format(TIME_FMT));
@@ -134,7 +206,12 @@ public class ChatController {
                 item.put("studentName", s.getFullName());
                 item.put("avatar", s.getFullName() != null && !s.getFullName().isEmpty()
                         ? s.getFullName().substring(0, 1).toUpperCase() : "?");
-                item.put("lastMessage", last != null ? last.getText() : "");
+                String lastMsg = "";
+                if (last != null) {
+                    if (last.getText() != null && !last.getText().isEmpty()) lastMsg = last.getText();
+                    else if (last.getAttachmentUrl() != null) lastMsg = "📷 Фото";
+                }
+                item.put("lastMessage", lastMsg);
                 item.put("lastTime", last != null ? last.getCreatedAt().format(TIME_FMT) : "");
                 item.put("lastAt", last != null ? last.getCreatedAt().toString() : "");
                 item.put("unread", unread);

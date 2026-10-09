@@ -350,4 +350,119 @@ public class StudentService {
     public long getStudentsCountByTutor(Long tutorId) {
         return studentRepository.countByTutorId(tutorId);
     }
+
+    // ================== ЕГЭ РЕЙТИНГ ==================
+
+    /**
+     * ЕГЭ-рейтинг учеников репетитора.
+     * Возвращает только тех, у кого egeRatingEnabled = true,
+     * с расчётом среднего балла за пробники, количества, последнего и тренда.
+     * Сортировка: по среднему баллу убыв.
+     */
+    public List<java.util.Map<String, Object>> getEgeRating(Long tutorId, Long currentUserId, String userRole) {
+        List<Student> students = studentRepository.findByTutorId(tutorId);
+
+        // Фильтруем: только те, у кого включён рейтинг
+        List<Student> egeStudents = students.stream()
+                .filter(s -> Boolean.TRUE.equals(s.getEgeRatingEnabled()))
+                .filter(s -> s.getArchived() == null || !s.getArchived())
+                .collect(java.util.stream.Collectors.toList());
+
+        // Собираем статистику по каждому
+        List<java.util.Map<String, Object>> rows = new java.util.ArrayList<>();
+
+        for (Student student : egeStudents) {
+            // Все пробники ученика у этого репетитора
+            List<Homework> mockExams = homeworkRepository.findAll().stream()
+                    .filter(h -> h.getStudent() != null && h.getStudent().getId().equals(student.getId()))
+                    .filter(h -> h.getTutor() != null && h.getTutor().getId().equals(tutorId))
+                    .filter(h -> "MOCK_EXAM".equalsIgnoreCase(h.getType()))
+                    .filter(h -> h.getScore() != null)
+                    .sorted((a, b) -> {
+                        // Сортируем по дате: сначала свежие
+                        java.time.LocalDateTime da = a.getExamDate() != null
+                                ? a.getExamDate().atStartOfDay()
+                                : (a.getCreatedAt() != null ? a.getCreatedAt() : java.time.LocalDateTime.MIN);
+                        java.time.LocalDateTime db = b.getExamDate() != null
+                                ? b.getExamDate().atStartOfDay()
+                                : (b.getCreatedAt() != null ? b.getCreatedAt() : java.time.LocalDateTime.MIN);
+                        return db.compareTo(da);
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+
+            java.util.Map<String, Object> row = new java.util.HashMap<>();
+            row.put("studentId", student.getId());
+            row.put("fullName", student.getFullName());
+            row.put("avatar", student.getAvatar());
+            row.put("grade", student.getGrade());
+
+            if (mockExams.isEmpty()) {
+                row.put("averageScore", null);
+                row.put("mockCount", 0);
+                row.put("lastScore", null);
+                row.put("lastDate", null);
+                row.put("trend", null);
+            } else {
+                // Средний балл
+                double avg = mockExams.stream()
+                        .mapToInt(Homework::getScore)
+                        .average()
+                        .orElse(0);
+                row.put("averageScore", Math.round(avg * 10.0) / 10.0);
+
+                row.put("mockCount", mockExams.size());
+
+                // Последний результат
+                Homework last = mockExams.get(0);
+                row.put("lastScore", last.getScore());
+                if (last.getExamDate() != null) {
+                    row.put("lastDate", last.getExamDate().toString());
+                } else if (last.getCreatedAt() != null) {
+                    row.put("lastDate", last.getCreatedAt().toLocalDate().toString());
+                } else {
+                    row.put("lastDate", null);
+                }
+
+                // Тренд: разница между последним и предыдущим
+                if (mockExams.size() >= 2) {
+                    int lastScore = mockExams.get(0).getScore();
+                    int prevScore = mockExams.get(1).getScore();
+                    row.put("trend", lastScore - prevScore);
+                } else {
+                    row.put("trend", null);
+                }
+            }
+
+            rows.add(row);
+        }
+
+        // Сортировка: сначала те, у кого есть средний балл, по убыванию
+        rows.sort((a, b) -> {
+            Double avgA = (Double) a.get("averageScore");
+            Double avgB = (Double) b.get("averageScore");
+            if (avgA == null && avgB == null) return 0;
+            if (avgA == null) return 1;
+            if (avgB == null) return -1;
+            return Double.compare(avgB, avgA);
+        });
+
+        // Расставляем места (только тем, у кого есть средний балл)
+        int place = 1;
+        for (java.util.Map<String, Object> row : rows) {
+            if (row.get("averageScore") != null) {
+                row.put("place", place++);
+            } else {
+                row.put("place", null);
+            }
+        }
+
+        // Помечаем «это я» для текущего ученика
+        if ("ROLE_STUDENT".equals(userRole) && currentUserId != null) {
+            for (java.util.Map<String, Object> row : rows) {
+                row.put("isMe", currentUserId.equals(row.get("studentId")));
+            }
+        }
+
+        return rows;
+    }
 }

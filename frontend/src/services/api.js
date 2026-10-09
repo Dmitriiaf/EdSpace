@@ -17,6 +17,12 @@ export const getArchivedLessons = (tutorId) =>
 export const getLessonsByStudent = (studentId) => 
     axiosInstance.get(`/lessons/student/${studentId}`);
 
+export const getCompletedLessons = (studentId, tutorId, courseId = null, limit = 1) => {
+    const params = new URLSearchParams({ tutorId, limit: String(limit) });
+    if (courseId) params.append('courseId', courseId);
+    return axiosInstance.get(`/lessons/student/${studentId}/completed?${params}`);
+};
+
 export const getLessonById = (id) => 
     axiosInstance.get(`/lessons/${id}`);
 

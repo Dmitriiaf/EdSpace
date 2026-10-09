@@ -6,8 +6,12 @@ import CssBaseline from '@mui/material/CssBaseline';
 import NotFoundPage from './pages/NotFoundPage';
 import OnboardingTour from './components/OnboardingTour';
 import OAuthCallback from './pages/OAuthCallback';
+import RepetitorInformatikaEge from './pages/RepetitorInformatikaEge';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import { Brightness4 as DarkIcon, Brightness7 as LightIcon } from '@mui/icons-material';
+import RepetitorInformatika from './pages/RepetitorInformatika';
+import RepetitorInformatikaOge from './pages/RepetitorInformatikaOge';
+import RepetitorMatematikaEge from './pages/RepetitorMatematikaEge';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import OnboardingQuestions from './pages/OnboardingQuestions';
 import PrivateRoute from './components/PrivateRoute';
@@ -39,10 +43,20 @@ import StudentProfile from './pages/StudentProfile';
 import ParentProfile from './pages/ParentProfile';
 import StudentProgress from './pages/StudentProgress';
 import StudentMaterials from './pages/StudentMaterials';
+import StudentEgeTasks from './pages/StudentEgeTasks';
+import StudentEgeTaskDetail from './pages/StudentEgeTaskDetail';
+import TutorEgeTasks from './pages/TutorEgeTasks';
+import TutorEgeTaskDetail from './pages/TutorEgeTaskDetail';
 import Tools from './pages/Tools';
 import Homework from './pages/Homework';
+import StudentHomework from './pages/StudentHomework';
+import StudentBonuses from './pages/StudentBonuses';
+import StudentTournament from './pages/StudentTournament';
+import TutorTournament from './pages/TutorTournament';
 import Extracurricular from './pages/Extracurricular';
 import Groups from './pages/Groups';
+import StudentEgeProgress from './pages/StudentEgeProgress';
+import TutorEgeChecklist from './pages/TutorEgeChecklist';
 
 const ThemeContext = createContext();
 export const useThemeContext = () => useContext(ThemeContext);
@@ -67,8 +81,20 @@ const BG_IMAGE_DARK = `
     radial-gradient(circle at 85% 75%, rgba(124, 58, 237, 0.04) 0%, transparent 50%)
 `;
 
+// Публичные роуты — доступны всегда, без сайдбара
+const PUBLIC_PATHS = [
+    '/', '/login', '/register', '/privacy',
+    '/forgot-password', '/reset-password',
+    '/complete-registration', '/parent-registration',
+    '/onboarding', '/oauth-callback', '/stepik/callback',
+    '/repetitor-informatika-ege', '/repetitor-informatika',
+    '/repetitor-informatika-oge',
+    '/repetitor-matematika-ege',
+];
+
 const AppContent = () => {
     const { user } = useAuth();
+    const location = useLocation();
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('darkMode');
         return saved ? JSON.parse(saved) : false;
@@ -120,44 +146,49 @@ const AppContent = () => {
     const isParent = user?.role === 'parent';
     const isAdmin = user?.role === 'school_admin' || user?.role === 'ROLE_SCHOOL_ADMIN';
 
-    const publicRoutes = (
-        <Routes>
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/oauth-callback" element={<OAuthCallback />} />
-            <Route path="/stepik/callback" element={<StepikCallback />} />
-            <Route path="/onboarding" element={<OnboardingQuestions />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/complete-registration" element={<CompleteRegistration />} />
-            <Route path="/parent-registration" element={<ParentRegistration />} />
-            <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-    );
+    const isPublic = PUBLIC_PATHS.includes(location.pathname);
 
-    if (!user) {
+    const globalStyles = `
+        .MuiButton-root, .MuiIconButton-root, .MuiChip-root, .MuiCard-root, .MuiPaper-root {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(79, 70, 229, 0); }
+        }
+        .MuiButton-containedPrimary { animation: pulse 2s infinite; }
+        .MuiCard-root:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.08) !important; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeInUp 0.4s ease forwards; }
+        .MuiIconButton-root:hover .MuiSvgIcon-root { transform: scale(1.1); transition: transform 0.2s ease; }
+        .MuiTab-root { transition: all 0.3s ease !important; }
+        .MuiTab-root:hover { background: rgba(79, 70, 229, 0.04); }
+    `;
+
+    // Если не залогинен ИЛИ открыта публичная страница — рендерим без сайдбара
+    if (!user || isPublic) {
         return (
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <style>{`
-                    .MuiButton-root, .MuiIconButton-root, .MuiChip-root, .MuiCard-root, .MuiPaper-root {
-                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                    }
-                    @keyframes pulse {
-                        0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
-                        50% { box-shadow: 0 0 0 8px rgba(79, 70, 229, 0); }
-                    }
-                    .MuiButton-containedPrimary { animation: pulse 2s infinite; }
-                    .MuiCard-root:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.08) !important; }
-                    @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-                    .fade-in { animation: fadeInUp 0.4s ease forwards; }
-                    .MuiIconButton-root:hover .MuiSvgIcon-root { transform: scale(1.1); transition: transform 0.2s ease; }
-                    .MuiTab-root { transition: all 0.3s ease !important; }
-                    .MuiTab-root:hover { background: rgba(79, 70, 229, 0.04); }
-                `}</style>
-                {publicRoutes}
+                <style>{globalStyles}</style>
+                <Routes>
+                    <Route path="/privacy" element={<PrivacyPolicy />} />
+                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/repetitor-informatika-ege" element={<RepetitorInformatikaEge />} />
+                    <Route path="/repetitor-informatika" element={<RepetitorInformatika />} />
+                    <Route path="/repetitor-informatika-oge" element={<RepetitorInformatikaOge />} />
+                    <Route path="/repetitor-matematika-ege" element={<RepetitorMatematikaEge />} />
+                    <Route path="/oauth-callback" element={<OAuthCallback />} />
+                    <Route path="/stepik/callback" element={<StepikCallback />} />
+                    <Route path="/onboarding" element={<OnboardingQuestions />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/complete-registration" element={<CompleteRegistration />} />
+                    <Route path="/parent-registration" element={<ParentRegistration />} />
+                    <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
             </ThemeProvider>
         );
     }
@@ -165,26 +196,10 @@ const AppContent = () => {
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <style>{`
-                .MuiButton-root, .MuiIconButton-root, .MuiChip-root, .MuiCard-root, .MuiPaper-root {
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                }
-                @keyframes pulse {
-                    0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
-                    50% { box-shadow: 0 0 0 8px rgba(79, 70, 229, 0); }
-                }
-                .MuiButton-containedPrimary { animation: pulse 2s infinite; }
-                .MuiCard-root:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.08) !important; }
-                @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-                .fade-in { animation: fadeInUp 0.4s ease forwards; }
-                .MuiIconButton-root:hover .MuiSvgIcon-root { transform: scale(1.1); transition: transform 0.2s ease; }
-                .MuiTab-root { transition: all 0.3s ease !important; }
-                .MuiTab-root:hover { background: rgba(79, 70, 229, 0.04); }
-            `}</style>
+            <style>{globalStyles}</style>
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>
                 <Sidebar />
                 {isTutor && <OnboardingTour />}
-
 
                 <Box
                     component="main"
@@ -207,6 +222,8 @@ const AppContent = () => {
                         <Route path="/weekly-schedule" element={<PrivateRoute requiredRole="tutor"><WeeklySchedule /></PrivateRoute>} />
                         <Route path="/finance" element={<PrivateRoute requiredRole="tutor"><Finance /></PrivateRoute>} />
                         <Route path="/materials" element={<PrivateRoute requiredRole="tutor"><Materials /></PrivateRoute>} />
+                        <Route path="/materials/ege" element={<PrivateRoute requiredRole="tutor"><TutorEgeTasks /></PrivateRoute>} />
+                        <Route path="/materials/ege/:taskNumber" element={<PrivateRoute requiredRole="tutor"><TutorEgeTaskDetail /></PrivateRoute>} />
                         <Route path="/lessons-archive" element={<PrivateRoute requiredRole="tutor"><LessonsArchive /></PrivateRoute>} />
                         <Route path="/task-bank" element={<PrivateRoute requiredRole="tutor"><TaskBank /></PrivateRoute>} />
                         <Route path="/lesson-plans" element={<PrivateRoute requiredRole="tutor"><LessonPlans /></PrivateRoute>} />
@@ -215,16 +232,26 @@ const AppContent = () => {
                         <Route path="/student-progress/:id" element={<PrivateRoute requiredRole="tutor"><StudentProgress /></PrivateRoute>} />
                         <Route path="/tools" element={<PrivateRoute requiredRole="tutor"><Tools /></PrivateRoute>} />
                         <Route path="/extracurricular" element={<PrivateRoute requiredRole="tutor"><Extracurricular /></PrivateRoute>} />
+                        <Route path="/tournament" element={<PrivateRoute requiredRole="tutor"><TutorTournament /></PrivateRoute>} />
+                        <Route path="/ege-checklist" element={<PrivateRoute requiredRole="tutor"><TutorEgeChecklist /></PrivateRoute>} />
+
                         <Route path="/student" element={<PrivateRoute requiredRole="student"><StudentDashboard /></PrivateRoute>} />
                         <Route path="/student/profile" element={<PrivateRoute requiredRole="student"><StudentProfile /></PrivateRoute>} />
                         <Route path="/student/progress" element={<PrivateRoute requiredRole="student"><StudentProgress /></PrivateRoute>} />
                         <Route path="/student/materials" element={<PrivateRoute requiredRole="student"><StudentMaterials /></PrivateRoute>} />
+                        <Route path="/student/materials/ege" element={<PrivateRoute requiredRole="student"><StudentEgeTasks /></PrivateRoute>} />
+                        <Route path="/student/materials/ege/:taskNumber" element={<PrivateRoute requiredRole="student"><StudentEgeTaskDetail /></PrivateRoute>} />
                         <Route path="/student/tools" element={<PrivateRoute requiredRole="student"><Tools /></PrivateRoute>} />
-                        <Route path="/student/homework" element={<PrivateRoute requiredRole="student"><Homework /></PrivateRoute>} />
+                        <Route path="/student/homework" element={<PrivateRoute requiredRole="student"><StudentHomework /></PrivateRoute>} />
+                        <Route path="/student/bonuses" element={<PrivateRoute requiredRole="student"><StudentBonuses /></PrivateRoute>} />
+                        <Route path="/student/tournament" element={<PrivateRoute requiredRole="student"><StudentTournament /></PrivateRoute>} />
+                        <Route path="/student/ege-progress" element={<PrivateRoute requiredRole="student"><StudentEgeProgress /></PrivateRoute>} />
+
                         <Route path="/parent/dashboard" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/children" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/payments" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/profile" element={<PrivateRoute requiredRole="parent"><ParentProfile /></PrivateRoute>} />
+
                         <Route path="/oauth-callback" element={<OAuthCallback />} />
                         <Route path="/onboarding" element={<OnboardingQuestions />} />
                         <Route path="/forgot-password" element={<ForgotPassword />} />
