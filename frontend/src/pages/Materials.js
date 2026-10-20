@@ -1,5 +1,4 @@
 // frontend/src/pages/Materials.js
-// Материалы репетитора — карточка «ЕГЭ по информатике» (переход в разборы)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -26,6 +25,8 @@ const LINE = '#EAEAEA';
 const PURPLE = '#7B5CFA';
 const PURPLE_SOFT = '#EDE7FF';
 const GREEN = '#10B981';
+const AMBER = '#F59E0B';
+const BLUE = '#4F46E5';
 
 const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(16px); }
@@ -94,7 +95,7 @@ export default function Materials() {
             <Reveal delay={0.05}>
                 <Grid container spacing={2.5}>
                     {/* Карточка ЕГЭ */}
-                    <Grid item xs={12} md={6} lg={5}>
+                    <Grid item xs={12} sm={6} lg={4}>
                         <Paper
                             onClick={() => navigate('/materials/ege')}
                             sx={{
@@ -115,15 +116,6 @@ export default function Materials() {
                                     top: 0, left: 0, right: 0,
                                     height: 5,
                                     background: `linear-gradient(90deg, ${PURPLE}, #9B7FFB)`,
-                                },
-                                '&::after': {
-                                    content: '""',
-                                    position: 'absolute',
-                                    top: -40, right: -40,
-                                    width: 200, height: 200,
-                                    borderRadius: '50%',
-                                    background: `radial-gradient(circle, ${alpha(PURPLE, 0.12)} 0%, transparent 70%)`,
-                                    pointerEvents: 'none',
                                 },
                                 '&:hover': {
                                     transform: 'translateY(-4px)',
@@ -152,7 +144,7 @@ export default function Materials() {
                             />
 
                             <Typography sx={{
-                                fontSize: '1.5rem', fontWeight: 800,
+                                fontSize: '1.3rem', fontWeight: 800,
                                 color: INK, letterSpacing: '-0.02em',
                                 mb: 1, maxWidth: 'calc(100% - 70px)',
                             }}>
@@ -160,38 +152,19 @@ export default function Materials() {
                             </Typography>
 
                             <Typography sx={{
-                                fontSize: '0.9rem', color: INK_SOFT,
+                                fontSize: '0.85rem', color: INK_SOFT,
                                 lineHeight: 1.5, mb: 2,
-                                maxWidth: 'calc(100% - 20px)',
                             }}>
-                                Объяснения, код, скриншоты и видео-разборы для всех 27 заданий
+                                Объяснения, код, скриншоты и видео для всех 27 заданий
                             </Typography>
 
-                            <Box sx={{
-                                mt: 'auto',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1.5,
-                                flexWrap: 'wrap',
-                            }}>
+                            <Box sx={{ mt: 'auto', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                 <Chip
-                                    label={`${totalSolutions} ${totalSolutions === 1 ? 'разбор' : totalSolutions < 5 ? 'разбора' : 'разборов'}`}
+                                    label={`${totalSolutions} разборов`}
                                     size="small"
                                     sx={{
                                         bgcolor: alpha(GREEN, 0.12),
                                         color: GREEN,
-                                        fontWeight: 700,
-                                        fontSize: '0.75rem',
-                                        borderRadius: 2,
-                                        height: 24,
-                                    }}
-                                />
-                                <Chip
-                                    label={`${coveredTasks} / 27 заданий`}
-                                    size="small"
-                                    sx={{
-                                        bgcolor: '#F3F4F6',
-                                        color: INK_SOFT,
                                         fontWeight: 700,
                                         fontSize: '0.75rem',
                                         borderRadius: 2,
@@ -214,8 +187,101 @@ export default function Materials() {
                         </Paper>
                     </Grid>
 
+                    {/* НОВОЕ: Карточка Визуализатора */}
+                    <Grid item xs={12} sm={6} lg={4}>
+                        <Paper
+                            onClick={() => navigate('/visualizer')}
+                            sx={{
+                                position: 'relative',
+                                borderRadius: 4,
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: `1px solid ${LINE}`,
+                                bgcolor: CARD,
+                                p: 3,
+                                minHeight: 220,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                '&::before': {
+                                    content: '""',
+                                    position: 'absolute',
+                                    top: 0, left: 0, right: 0,
+                                    height: 5,
+                                    background: `linear-gradient(90deg, ${BLUE}, #818CF8)`,
+                                },
+                                '&:hover': {
+                                    transform: 'translateY(-4px)',
+                                    boxShadow: `0 12px 28px ${alpha(BLUE, 0.18)}`,
+                                    borderColor: alpha(BLUE, 0.3),
+                                },
+                            }}
+                        >
+                            <Box sx={{ position: 'absolute', top: 20, right: 20, fontSize: '52px', lineHeight: 1 }}>
+                                🧠
+                            </Box>
+
+                            <Chip
+                                label="ИНТЕРАКТИВ"
+                                size="small"
+                                sx={{
+                                    alignSelf: 'flex-start',
+                                    bgcolor: alpha(BLUE, 0.12),
+                                    color: BLUE,
+                                    fontWeight: 800,
+                                    fontSize: '0.7rem',
+                                    letterSpacing: '0.06em',
+                                    mb: 2,
+                                    borderRadius: 2,
+                                }}
+                            />
+
+                            <Typography sx={{
+                                fontSize: '1.3rem', fontWeight: 800,
+                                color: INK, letterSpacing: '-0.02em',
+                                mb: 1, maxWidth: 'calc(100% - 70px)',
+                            }}>
+                                Визуализатор
+                            </Typography>
+
+                            <Typography sx={{
+                                fontSize: '0.85rem', color: INK_SOFT,
+                                lineHeight: 1.5, mb: 2,
+                            }}>
+                                Пошаговое объяснение алгоритмов и функций
+                            </Typography>
+
+                            <Box sx={{ mt: 'auto', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                <Chip
+                                    label="В разработке"
+                                    size="small"
+                                    sx={{
+                                        bgcolor: alpha(AMBER, 0.12),
+                                        color: AMBER,
+                                        fontWeight: 700,
+                                        fontSize: '0.75rem',
+                                        borderRadius: 2,
+                                        height: 24,
+                                    }}
+                                />
+                                <Box sx={{
+                                    ml: 'auto',
+                                    color: BLUE,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                    fontWeight: 700,
+                                    fontSize: '0.85rem',
+                                }}>
+                                    Открыть
+                                    <ArrowForwardIcon sx={{ fontSize: 18 }} />
+                                </Box>
+                            </Box>
+                        </Paper>
+                    </Grid>
+
                     {/* Быстрая кнопка «Создать разбор» */}
-                    <Grid item xs={12} md={6} lg={7}>
+                    <Grid item xs={12} sm={12} lg={4}>
                         <Paper sx={{
                             p: 3,
                             borderRadius: 4,
@@ -229,11 +295,11 @@ export default function Materials() {
                             textAlign: 'center',
                         }}>
                             <BookIcon sx={{ fontSize: 48, color: '#D1D5DB', mb: 2 }} />
-                            <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: INK_SOFT, mb: 1 }}>
+                            <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: INK_SOFT, mb: 1 }}>
                                 Как добавить разбор
                             </Typography>
-                            <Typography sx={{ fontSize: '0.85rem', color: INK_MUTED, mb: 2, maxWidth: 400 }}>
-                                Открой карточку «ЕГЭ по информатике» → выбери задание → нажми «Добавить разбор»
+                            <Typography sx={{ fontSize: '0.8rem', color: INK_MUTED, mb: 2, maxWidth: 400 }}>
+                                Открой «ЕГЭ по информатике» → выбери задание → «Добавить разбор»
                             </Typography>
                             <StyledButton
                                 variant="outlined"

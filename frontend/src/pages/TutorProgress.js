@@ -19,9 +19,7 @@ import {
 import { PageContainer, StatCard, StyledButton, StyledDialog, EmptyStateContainer, EmptyStateIcon, ViewToggle, ViewToggleBtn } from '../styles/shared';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
-
-// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
-
+import NickWithCosmetics from '../components/NickWithCosmetics';
 
 const StudentCard = styled(Card)({
     borderRadius: '12px',
@@ -34,8 +32,6 @@ const StudentCard = styled(Card)({
         transform: 'translateY(-2px)',
     },
 });
-
-
 
 const ProgressBar = styled(Box)({
     height: '8px',
@@ -60,8 +56,6 @@ const MiniStatBox = styled(Box)({
     border: '1px solid #F3F4F6',
 });
 
-// ========== УТИЛИТЫ ==========
-
 function getAvatarColor(name) {
     const colors = ['#4F46E5', '#7C3AED', '#EC4899', '#EF4444', '#F59E0B', '#10B981', '#059669', '#3B82F6', '#2563EB', '#6366F1'];
     let hash = 0;
@@ -84,7 +78,6 @@ function getProgressColor(percent) {
     return '#EF4444';
 }
 
-// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function TutorProgress() {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -163,7 +156,6 @@ function TutorProgress() {
 
     return (
         <PageContainer>
-            {/* ========== ЗАГОЛОВОК ========== */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
                     <Typography sx={{ fontSize: '28px', fontWeight: 600, color: '#1F2937', mb: 0.5 }}>
@@ -195,7 +187,6 @@ function TutorProgress() {
                 </FormControl>
             </Box>
 
-            {/* ========== ГЛОБАЛЬНАЯ СТАТИСТИКА ========== */}
             {students.length > 0 && (
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     {[
@@ -231,7 +222,6 @@ function TutorProgress() {
                 </Grid>
             )}
 
-            {/* ========== ПУСТОЕ СОСТОЯНИЕ ========== */}
             {students.length === 0 ? (
                 <StatCard>
                     <EmptyStateContainer>
@@ -254,33 +244,25 @@ function TutorProgress() {
                         const progressPercent = total > 0 ? (completed / total) * 100 : 0;
                         const avgGrade = student.averageGrade || 0;
                         const avgPct = Math.round(student.averagePercentage || 0);
-                        const avatarColor = getAvatarColor(student.studentName);
                         const progressColor = getProgressColor(progressPercent);
                         
                         return (
                             <Grid item xs={12} md={6} key={student.studentId}>
                                 <StudentCard>
                                     <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
-                                        {/* Шапка: аватар + имя + звёзды */}
                                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                <Avatar sx={{ 
-                                                    width: 52, height: 52, 
-                                                    bgcolor: avatarColor,
-                                                    fontSize: 20, fontWeight: 600,
-                                                }}>
-                                                    {getInitials(student.studentName)}
-                                                </Avatar>
-                                                <Box>
-                                                    <Typography sx={{ fontWeight: 600, fontSize: '17px', color: '#1F2937' }}>
-                                                        {student.studentName}
+                                            <Box>
+                                                <NickWithCosmetics
+                                                    studentId={student.studentId}
+                                                    name={student.studentName}
+                                                    avatarSize={52}
+                                                    fontSize="17px"
+                                                />
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, ml: 7.5 }}>
+                                                    {renderStars(avgGrade)}
+                                                    <Typography sx={{ fontSize: '13px', color: '#6B7280', fontWeight: 500 }}>
+                                                        {avgGrade.toFixed(1)}/5
                                                     </Typography>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                                        {renderStars(avgGrade)}
-                                                        <Typography sx={{ fontSize: '13px', color: '#6B7280', fontWeight: 500 }}>
-                                                            {avgGrade.toFixed(1)}/5
-                                                        </Typography>
-                                                    </Box>
                                                 </Box>
                                             </Box>
                                             <Tooltip title="Подробная статистика">
@@ -298,7 +280,6 @@ function TutorProgress() {
                                         
                                         <Divider sx={{ mb: 2, borderColor: '#F3F4F6' }} />
                                         
-                                        {/* Мини-статистика */}
                                         <Grid container spacing={1.5} sx={{ mb: 2 }}>
                                             <Grid item xs={4}>
                                                 <MiniStatBox>
@@ -332,7 +313,6 @@ function TutorProgress() {
                                             </Grid>
                                         </Grid>
                                         
-                                        {/* Прогресс-бар */}
                                         <Box>
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                                                 <Typography sx={{ fontSize: '12px', color: '#6B7280' }}>

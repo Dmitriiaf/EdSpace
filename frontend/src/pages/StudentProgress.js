@@ -24,6 +24,7 @@ import {
     Assignment as AssignmentIcon,
     EmojiEvents as TrophyIcon,
 } from '@mui/icons-material';
+import NickWithCosmetics from '../components/NickWithCosmetics';
 import { PageContainer, StatCard, StyledButton } from '../styles/shared';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -344,9 +345,17 @@ function StudentProgress() {
             {/* ========== ЗАГОЛОВОК ========== */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
-                    <Typography sx={{ fontSize: '28px', fontWeight: 700, color: '#1F2937', mb: 0.5 }}>
-                        📊 Успеваемость: {studentName}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                        <Typography sx={{ fontSize: '28px', fontWeight: 700, color: '#1F2937' }}>
+                            📊 Успеваемость:
+                        </Typography>
+                        <NickWithCosmetics
+                            studentId={studentId}
+                            name={studentName}
+                            showAvatar={false}
+                            fontSize="28px"
+                        />
+                    </Box>
                     <Typography sx={{ fontSize: '14px', color: '#6B7280' }}>
                         {activeType === 'HOMEWORK'
                             ? `${stats?.totalHomework || 0} заданий • Средний балл ${stats?.averageGrade || 0} • ${stats?.averagePercentage || 0}%`

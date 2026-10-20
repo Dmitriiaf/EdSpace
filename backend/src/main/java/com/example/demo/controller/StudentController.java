@@ -8,6 +8,7 @@ import com.example.demo.entity.Tutor;
 import com.example.demo.repository.InvitationTokenRepository;
 import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.SubscriptionRepository;
+import com.example.demo.service.AchievementService;
 import com.example.demo.service.EmailService;
 import com.example.demo.service.StudentService;
 import lombok.extern.slf4j.Slf4j;
@@ -58,6 +59,9 @@ public class StudentController {
 
     @Autowired
     private SubscriptionRepository subscriptionRepository;
+
+    @Autowired
+    private AchievementService achievementService;
 
     @PostMapping
     @PreAuthorize("hasRole('TUTOR')")
@@ -448,10 +452,6 @@ public class StudentController {
 
     // ================== ЕГЭ ФЛАГИ ==================
 
-    /**
-     * Обновить флаги ЕГЭ у ученика (сдаёт ЕГЭ / показывать в рейтинге).
-     * PATCH /api/students/{id}/ege-flags
-     */
     @PatchMapping("/{id}/ege-flags")
     @PreAuthorize("hasRole('TUTOR')")
     public ResponseEntity<?> updateEgeFlags(@PathVariable Long id,
@@ -484,12 +484,6 @@ public class StudentController {
         }
     }
 
-    /**
-     * ЕГЭ-рейтинг учеников репетитора.
-     * Возвращает только тех, у кого egeRatingEnabled = true,
-     * отсортированных по среднему баллу за пробники.
-     * GET /api/students/ege-rating?tutorId={id}
-     */
     @GetMapping("/ege-rating")
     @PreAuthorize("hasAnyRole('TUTOR', 'STUDENT')")
     public ResponseEntity<?> getEgeRating(
@@ -561,7 +555,6 @@ public class StudentController {
         map.put("discount", student.getDiscount() != null ? student.getDiscount() : 0);
         map.put("archived", student.getArchived() != null ? student.getArchived() : false);
 
-        // ✅ ЕГЭ-флаги
         map.put("egeStudent", student.getEgeStudent() != null ? student.getEgeStudent() : false);
         map.put("egeRatingEnabled", student.getEgeRatingEnabled() != null ? student.getEgeRatingEnabled() : false);
 
@@ -681,10 +674,6 @@ public class StudentController {
 
     // ================== ПРОФИЛЬ УЧЕНИКА ==================
 
-    /**
-     * Обновление профиля ученика (bio, interests, school, goal, fullName, grade)
-     * PATCH /api/students/{id}/profile
-     */
     @PatchMapping("/{id}/profile")
     public ResponseEntity<?> updateProfile(
             @PathVariable Long id,
@@ -704,6 +693,15 @@ public class StudentController {
                 String bio = (String) payload.get("bio");
                 if (bio != null && bio.length() > 300) bio = bio.substring(0, 300);
                 student.setBio(bio);
+
+                // 🎯 Ачивка "Полиглот" (300 символов)
+                if (bio != null && bio.length() >= 300) {
+                    try {
+                        achievementService.unlock(id, "BIO_300");
+                    } catch (Exception ex) {
+                        log.warn("Ошибка выдачи ачивки BIO_300: {}", ex.getMessage());
+                    }
+                }
             }
             if (payload.containsKey("interests")) {
                 Object interests = payload.get("interests");
@@ -723,10 +721,6 @@ public class StudentController {
         }
     }
 
-    /**
-     * Загрузка аватара ученика
-     * POST /api/students/{id}/avatar
-     */
     @PostMapping("/{id}/avatar")
     public ResponseEntity<?> uploadAvatar(
             @PathVariable Long id,
@@ -768,6 +762,39 @@ public class StudentController {
             return ResponseEntity.ok(Map.of("avatarUrl", avatarUrl));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/avatar-from-pack")
+    public ResponseEntity<?> setAvatarFromPack(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        try {
+            String packKey = body.get("packKey").toString();
+            Integer index = Integer.valueOf(body.get("index").toString());
+            if (index < 1 || index > 5) {
+                throw new RuntimeException("Индекс должен быть от 1 до 5");
+            }
+            Student student = studentRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Ученик не найден"));
+            String avatarUrl = "/uploads/avatars/packs/" + packKey + "/" + index + ".jpg";
+            student.setAvatar(avatarUrl);
+            studentRepository.save(student);
+
+            // 🐱 Ачивка "Котик" (если выбран набор cats)
+            if ("cats".equalsIgnoreCase(packKey)) {
+                try {
+                    achievementService.unlock(id, "CAT_AVATAR");
+                } catch (Exception ex) {
+                    log.warn("Ошибка выдачи ачивки CAT_AVATAR: {}", ex.getMessage());
+                }
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("avatar", avatarUrl);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(err);
         }
     }
 }

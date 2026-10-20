@@ -26,6 +26,7 @@ import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import NickWithCosmetics from '../components/NickWithCosmetics';
 
 // ========== ПАЛИТРА ==========
 const BG = '#FAFAFA';
@@ -438,22 +439,17 @@ function TutorTournament() {
                                             display: 'flex', justifyContent: 'space-between',
                                             alignItems: 'center', gap: 2, flexWrap: 'wrap',
                                         }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                <Avatar sx={{
-                                                    width: 36, height: 36,
-                                                    bgcolor: '#FFF', color: AMBER,
-                                                    fontWeight: 700, fontSize: '0.85rem',
-                                                }}>
-                                                    {p.student?.fullName?.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()}
-                                                </Avatar>
-                                                <Box>
-                                                    <Typography sx={{ fontWeight: 700, color: INK, fontSize: '0.9rem' }}>
-                                                        {p.student?.fullName}
-                                                    </Typography>
-                                                    <Typography sx={{ fontSize: '0.75rem', color: '#92400E' }}>
-                                                        Заявка от {format(new Date(p.joinedAt), 'd MMM, HH:mm', { locale: ru })}
-                                                    </Typography>
-                                                </Box>
+                                            <Box>
+                                                <NickWithCosmetics
+                                                    studentId={p.student?.id}
+                                                    name={p.student?.fullName}
+                                                    avatar={p.student?.avatar}
+                                                    avatarSize={36}
+                                                    fontSize="0.9rem"
+                                                />
+                                                <Typography sx={{ fontSize: '0.75rem', color: '#92400E', mt: 0.5 }}>
+                                                    Заявка от {format(new Date(p.joinedAt), 'd MMM, HH:mm', { locale: ru })}
+                                                </Typography>
                                             </Box>
                                             <Stack direction="row" spacing={1}>
                                                 <Button
@@ -596,18 +592,13 @@ function TutorTournament() {
                                                             )}
                                                         </TableCell>
                                                         <TableCell>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                <Avatar sx={{
-                                                                    width: 28, height: 28,
-                                                                    bgcolor: PURPLE_SOFT, color: PURPLE,
-                                                                    fontSize: '0.7rem', fontWeight: 700,
-                                                                }}>
-                                                                    {p.student?.fullName?.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()}
-                                                                </Avatar>
-                                                                <Typography sx={{ fontSize: '0.85rem', fontWeight: 500, color: INK }}>
-                                                                    {p.student?.fullName || 'Ученик'}
-                                                                </Typography>
-                                                            </Box>
+                                                            <NickWithCosmetics
+                                                                studentId={p.student?.id}
+                                                                name={p.student?.fullName}
+                                                                avatar={p.student?.avatar}
+                                                                avatarSize={28}
+                                                                fontSize="0.85rem"
+                                                            />
                                                         </TableCell>
                                                         <EditableScoreCell>
                                                             <input
@@ -723,9 +714,13 @@ function TutorTournament() {
                                                 display: 'flex', justifyContent: 'space-between',
                                                 alignItems: 'center',
                                             }}>
-                                                <Typography sx={{ fontSize: '0.85rem', color: INK_SOFT }}>
-                                                    {p.student?.fullName}
-                                                </Typography>
+                                                <NickWithCosmetics
+                                                    studentId={p.student?.id}
+                                                    name={p.student?.fullName}
+                                                    avatar={p.student?.avatar}
+                                                    avatarSize={28}
+                                                    fontSize="0.85rem"
+                                                />
                                                 <Button
                                                     size="small"
                                                     onClick={() => handleApprove(p.id, true)}

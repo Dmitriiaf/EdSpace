@@ -25,6 +25,8 @@ public class EgeChecklistService {
     private final EgeChecklistRepository checklistRepository;
     private final EgeChecklistItemRepository itemRepository;
     private final StudentRepository studentRepository;
+    private final PointsService pointsService;
+    private final AchievementService achievementService;
 
     // ========== КАРТА 27 ЗАДАНИЙ ЕГЭ ПО ИНФОРМАТИКЕ ==========
     // taskNumber, difficulty (EASY/MEDIUM/HARD), solutionType (MANUAL/PROGRAMMING/LIBREOFFICE/BOTH),
@@ -172,14 +174,42 @@ public class EgeChecklistService {
         EgeChecklistItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Задание не найдено"));
 
+        Boolean oldKnows = item.getKnows();
+        boolean knowsChanged = false;
+
         if (body.containsKey("knows")) {
-            item.setKnows(Boolean.TRUE.equals(body.get("knows")));
+            Boolean newKnows = Boolean.TRUE.equals(body.get("knows"));
+            if (!Boolean.valueOf(newKnows).equals(oldKnows)) {
+                knowsChanged = true;
+            }
+            item.setKnows(newKnows);
         }
         if (body.containsKey("note")) {
             Object noteVal = body.get("note");
             item.setNote(noteVal == null ? null : noteVal.toString());
         }
         item = itemRepository.save(item);
+
+        // 🎮 Начисление баллов и ачивки: только при переходе false → true
+        if (knowsChanged && Boolean.TRUE.equals(item.getKnows())) {
+            try {
+                Long studentId = item.getChecklist().getStudent().getId();
+                pointsService.award(
+                        studentId,
+                        5,
+                        "EGE_KNOW_" + item.getTaskNumber(),
+                        item.getId()
+                );
+
+                // Проверка на ачивку «Мастер задач» (все 27 заданий)
+                long knownCount = itemRepository.countByChecklistIdAndKnowsTrue(item.getChecklist().getId());
+                if (knownCount >= 27) {
+                    achievementService.unlock(studentId, "EGE_ALL_KNOWN");
+                }
+            } catch (Exception e) {
+                log.warn("Не удалось начислить баллы или выдать ачивку за ЕГЭ-чеклист (itemId={}): {}", item.getId(), e.getMessage());
+            }
+        }
 
         EgeChecklist checklist = item.getChecklist();
         List<EgeChecklistItem> allItems = itemRepository

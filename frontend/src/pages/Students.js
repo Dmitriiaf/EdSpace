@@ -1,4 +1,4 @@
-// ========== frontend/src/pages/Students.js (РЕДИЗАЙН v5 — SOCIAL MEDIA STYLE) ==========
+// frontend/src/pages/Students.js (РЕДИЗАЙН v5 — SOCIAL MEDIA STYLE)
 import React, { useState, useEffect } from 'react';
 import axiosInstance, { getAllLessons } from '../services/api';
 import EdSpaceLoader from '../components/EdSpaceLoader';
@@ -9,7 +9,7 @@ import {
     FormControl, InputLabel, Select, MenuItem,
     CircularProgress, Avatar, Tooltip, InputAdornment,
     Card, CardContent, Grid, Divider, 
-    Menu, // Добавлено для меню действий
+    Menu,
     Checkbox, FormControlLabel
 } from '@mui/material';
 import { School as SchoolIcon } from '@mui/icons-material';
@@ -29,8 +29,7 @@ import { useStudentRate } from '../hooks/useStudentRate';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-
-// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+import NickWithCosmetics from '../components/NickWithCosmetics';
 
 const StudentCard = styled(Card)(({ theme }) => ({
     borderRadius: '20px',
@@ -120,8 +119,6 @@ const MiniProgressFill = styled(Box)(({ width, color }) => ({
     transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
 }));
 
-// ========== УТИЛИТЫ ==========
-
 function getAvatarColor(name) {
     const colors = ['#4F46E5', '#7C3AED', '#EC4899', '#EF4444', '#F59E0B', '#10B981', '#059669', '#3B82F6', '#2563EB', '#6366F1'];
     let hash = 0;
@@ -156,7 +153,6 @@ function getBirthdayText(date) {
     return null;
 }
 
-// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function Students() {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -181,7 +177,6 @@ function Students() {
     const [subscriptions, setSubscriptions] = useState([]);
     const [submitting, setSubmitting] = useState(false);
     
-    // Меню действий для карточки
     const [anchorEl, setAnchorEl] = useState(null);
     const [activeStudentId, setActiveStudentId] = useState(null);
 
@@ -309,7 +304,6 @@ function Students() {
             };
             if (editingStudent) { 
                 await axiosInstance.put(`/students/${editingStudent.id}`, d); 
-                // Флаги ЕГЭ — отдельным запросом
                 await axiosInstance.patch(`/students/${editingStudent.id}/ege-flags`, {
                     egeStudent: formData.egeStudent || false,
                     egeRatingEnabled: formData.egeRatingEnabled || false,
@@ -317,7 +311,6 @@ function Students() {
                 showSnackbar('Ученик обновлён', 'success'); 
             } else { 
                 const created = await axiosInstance.post('/students', d);
-                // Для нового ученика — тоже ставим флаги
                 const newId = created.data?.id;
                 if (newId) {
                     await axiosInstance.patch(`/students/${newId}/ege-flags`, {
@@ -338,7 +331,6 @@ function Students() {
     const handleUnarchive = async (id, name) => { if (window.confirm(`Восстановить: ${name}?`)) { try { await axiosInstance.put(`/students/${id}`, { archived: false }); showSnackbar('Восстановлен', 'success'); fetchStudents(); fetchArchivedStudents(); } catch (err) { showSnackbar('Ошибка', 'error'); } } };
     const showSnackbar = (m, s) => setSnackbar({ open: true, message: m, severity: s });
 
-    // Управление меню карточки
     const handleMenuOpen = (event, studentId) => {
         setAnchorEl(event.currentTarget);
         setActiveStudentId(studentId);
@@ -370,7 +362,6 @@ function Students() {
 
     return (
         <PageContainer sx={{ px: { xs: 2, sm: 4 }, py: 4 }}>
-            {/* ========== ЗАГОЛОВОК ========== */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4, flexWrap: 'wrap', gap: 3 }}>
                 <Box>
                     <Typography sx={{ fontSize: '32px', fontWeight: 800, color: '#111827', mb: 1, letterSpacing: '-0.5px' }}>
@@ -401,13 +392,11 @@ function Students() {
                 </Box>
             </Box>
 
-            {/* ========== ВКЛАДКИ ========== */}
             <StyledTabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
                 <Tab label={`Активные (${students.length})`} />
                 <Tab label={`Архив (${archivedStudents.length})`} />
             </StyledTabs>
 
-            {/* ========== ДНИ РОЖДЕНИЯ ========== */}
             {upcomingBirthdays.length > 0 && tabValue === 0 && (
                 <BirthdayBanner elevation={0}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
@@ -441,7 +430,6 @@ function Students() {
                 </BirthdayBanner>
             )}
 
-            {/* ========== ПОИСК + ФИЛЬТРЫ ========== */}
             <Box sx={{ 
                 display: 'flex', 
                 justifyContent: 'space-between', 
@@ -502,7 +490,6 @@ function Students() {
                 </Box>
             </Box>
 
-            {/* ========== КОНТЕНТ ========== */}
             {error ? (
                 <Alert severity="error" sx={{ borderRadius: '16px', mb: 3, fontSize: '15px' }}>{error}</Alert>
             ) : filteredStudents.length === 0 ? (
@@ -536,13 +523,11 @@ function Students() {
                         const birthday = getBirthdayText(student.birthday);
                         const sub = getSubscriptionProgress(student.id);
                         const rate = getStudentRate(student);
-                        const avatarColor = getAvatarColor(student.fullName);
                         const isActiveMenu = Boolean(anchorEl && activeStudentId === student.id);
 
                         return (
                             <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={student.id}>
                                 <StudentCard>
-                                    {/* Меню действий (три точки) */}
                                     <IconButton 
                                         size="small" 
                                         onClick={(e) => handleMenuOpen(e, student.id)}
@@ -559,7 +544,6 @@ function Students() {
                                     </IconButton>
 
                                     <CardContent sx={{ p: 3, pb: 2, flexGrow: 1 }}>
-                                        {/* Бейдж дня рождения */}
                                         {birthday && (
                                             <Box sx={{ 
                                                 display: 'inline-flex',
@@ -579,34 +563,15 @@ function Students() {
                                             </Box>
                                         )}
 
-                                        {/* Аватар и Имя */}
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5 }}>
-                                            <Avatar 
-                                                src={student.avatar || undefined}
-                                                sx={{ 
-                                                    width: 56, height: 56, 
-                                                    bgcolor: avatarColor, 
-                                                    fontSize: 20, 
-                                                    fontWeight: 800, 
-                                                    boxShadow: `0 4px 12px ${avatarColor}40`,
-                                                    border: '3px solid #FFFFFF'
-                                                }}
-                                            >
-                                                {getInitials(student.fullName)}
-                                            </Avatar>
-                                            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                                <Typography sx={{ 
-                                                    fontWeight: 700, 
-                                                    color: '#111827', 
-                                                    fontSize: '16px', 
-                                                    lineHeight: 1.3,
-                                                    mb: 0.5,
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap',
-                                                }}>
-                                                    {student.fullName}
-                                                </Typography>
+                                            <NickWithCosmetics
+                                                studentId={student.id}
+                                                name={student.fullName}
+                                                avatar={student.avatar}
+                                                avatarSize={56}
+                                                fontSize="16px"
+                                            />
+                                            <Box sx={{ flexGrow: 1, minWidth: 0, ml: 1 }}>
                                                 <Chip 
                                                     label={student.paymentType === 'subscription' ? 'Абонемент' : 'Поурочно'}
                                                     size="small"
@@ -624,9 +589,7 @@ function Students() {
 
                                         <Divider sx={{ my: 2, borderColor: '#F3F4F6' }} />
 
-                                        {/* Основная информация (Сетка) */}
                                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                            {/* Ставка */}
                                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#6B7280' }}>
                                                     <AttachMoney sx={{ fontSize: 18 }} />
@@ -644,7 +607,6 @@ function Students() {
                                                 </Box>
                                             </Box>
 
-                                            {/* Ближайший урок */}
                                             {next && (
                                                 <Box sx={{ 
                                                     display: 'flex', 
@@ -669,7 +631,6 @@ function Students() {
                                                 </Box>
                                             )}
 
-                                            {/* Прогресс абонемента */}
                                             {sub && (
                                                 <Box sx={{ p: 1.5, bgcolor: '#F9FAFB', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
                                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
@@ -694,7 +655,6 @@ function Students() {
                                                 </Box>
                                             )}
 
-                                            {/* ЕГЭ-флаги */}
                                             <Box sx={{ 
                                                 display: 'flex', 
                                                 gap: 1,
@@ -730,7 +690,6 @@ function Students() {
                                                 )}
                                             </Box>
 
-                                            {/* Родитель */}
                                             <Box sx={{ 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
@@ -753,7 +712,6 @@ function Students() {
                                                 </Typography>
                                             </Box>
                                         </Box>
-                                        {/* О себе */}
                                         {student.bio && (
                                             <Box sx={{ p: 1.5, bgcolor: '#F9FAFB', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
                                                 <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.5 }}>
@@ -765,7 +723,6 @@ function Students() {
                                             </Box>
                                         )}
 
-                                        {/* Школа */}
                                         {(student.school || student.grade) && (
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                 <SchoolIcon sx={{ fontSize: 16, color: '#6B7280' }} />
@@ -775,7 +732,6 @@ function Students() {
                                             </Box>
                                         )}
 
-                                        {/* Увлечения */}
                                         {parseInterests(student.interests).length > 0 && (
                                             <Box>
                                                 <Typography sx={{ fontSize: '11px', color: '#6B7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.75 }}>
@@ -794,7 +750,6 @@ function Students() {
                                             </Box>
                                         )}
 
-                                        {/* Цель */}
                                         {student.goal && (
                                             <Box sx={{ p: 1.5, bgcolor: '#FFF3D6', borderRadius: '12px', border: '1px solid #FDE68A' }}>
                                                 <Typography sx={{ fontSize: '11px', color: '#92400E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.3 }}>
@@ -807,7 +762,6 @@ function Students() {
                                         )}
                                     </CardContent>
 
-                                    {/* Футер карточки с действиями */}
                                     <CardFooter>
                                         <Button 
                                             fullWidth 
@@ -837,7 +791,6 @@ function Students() {
                 </Grid>
             )}
 
-            {/* ========== МЕНЮ ДЕЙСТВИЙ КАРТОЧКИ ========== */}
             <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
@@ -870,7 +823,6 @@ function Students() {
                 </MenuItem>
             </Menu>
 
-            {/* ========== ДИАЛОГ ДОБАВЛЕНИЯ/РЕДАКТИРОВАНИЯ ========== */}
             <StyledDialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
                 <DialogTitle sx={{ fontSize: '22px', fontWeight: 700, color: '#111827', px: 4, pt: 4, pb: 1 }}>
                     {editingStudent ? 'Редактировать ученика' : 'Новый ученик'}
@@ -1004,7 +956,6 @@ function Students() {
                 </DialogActions>
             </StyledDialog>
 
-            {/* ========== ДИАЛОГ СУЩЕСТВУЮЩЕГО УЧЕНИКА ========== */}
             <StyledDialog open={showExistingDialog} onClose={() => setShowExistingDialog(false)}>
                 <DialogTitle sx={{ fontSize: '20px', fontWeight: 700, color: '#111827', px: 4, pt: 4 }}>
                     Ученик уже существует
@@ -1046,7 +997,6 @@ function Students() {
                 </DialogActions>
             </StyledDialog>
 
-            {/* ========== SNACKBAR ========== */}
             <Snackbar 
                 open={snackbar.open} 
                 autoHideDuration={4000} 

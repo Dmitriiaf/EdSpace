@@ -6,6 +6,7 @@ import com.example.demo.entity.Tutor;
 import com.example.demo.repository.ChatMessageRepository;
 import com.example.demo.repository.StudentRepository;
 import com.example.demo.repository.TutorRepository;
+import com.example.demo.service.AchievementService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +45,9 @@ public class ChatController {
     @Autowired
     private TutorRepository tutorRepository;
 
+    @Autowired
+    private AchievementService achievementService; // ✅ НОВОЕ
+
     @Value("${app.upload.dir:/opt/EdSpace/uploads}")
     private String uploadDir;
 
@@ -71,6 +75,16 @@ public class ChatController {
 
             ChatMessage msg = new ChatMessage(currentUserId, senderRole, recipientId, recipientRole, text);
             chatMessageRepository.save(msg);
+
+            // 🎮 Ачивка за 50 сообщений
+            try {
+                long msgCount = chatMessageRepository.countBySenderId(currentUserId);
+                if (msgCount >= 50) {
+                    achievementService.unlock(currentUserId, "CHAT_50");
+                }
+            } catch (Exception e) {
+                log.warn("Ошибка ачивки CHAT_50: {}", e.getMessage());
+            }
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("id", msg.getId());

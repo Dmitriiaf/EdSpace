@@ -14,14 +14,15 @@ import {
     Badge as BadgeIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
-// ✅ Правильный импорт
 import axiosInstance from '../api/axiosConfig';
+import NickWithCosmetics from '../components/NickWithCosmetics';
 
 const StudentProfile = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+    const [bgPreview, setBgPreview] = useState(null);
     
     const [profile, setProfile] = useState({
         fullName: '',
@@ -34,23 +35,35 @@ const StudentProfile = () => {
 
     useEffect(() => {
         fetchStudentProfile();
+        fetchCosmetics();
     }, []);
 
+    const fetchCosmetics = async () => {
+        if (!user?.id) return;
+        try {
+            const res = await axiosInstance.get(`/cosmetics/active/${user.id}`);
+            const bg = (res.data || []).find(c => c.itemType === 'BACKGROUND' && c.active);
+            if (bg) {
+                const BG_MAP = {
+                    pink_grad: 'linear-gradient(135deg,#FBCFE8,#F9A8D4)',
+                    blue_grad: 'linear-gradient(135deg,#BFDBFE,#93C5FD)',
+                    sunset: 'linear-gradient(135deg,#FDBA74,#F472B6)',
+                    space: 'linear-gradient(135deg,#1E1B4B,#312E81)',
+                    custom: '#E5E7EB',
+                };
+                setBgPreview(BG_MAP[bg.itemKey] || null);
+            }
+        } catch (err) {}
+    };
+
     const fetchStudentProfile = async () => {
-        console.log('🚀 fetchStudentProfile вызвана');  // ← ДОБАВЬ ЭТО
-        console.log('👤 user:', user);  // ← ДОБАВЬ ЭТО
-    
         if (!user || !user.id) {
-            console.error('❌ user или user.id отсутствует');
             return;
         }
         setLoading(true);
         try {
-            // ✅ Используем axiosInstance
             const response = await axiosInstance.get(`/students/${user.id}`);
-            
             const student = response.data;
-            console.log('Student data:', student);
             setProfile({
                 fullName: student.fullName || '',
                 email: student.email || '',
@@ -58,12 +71,10 @@ const StudentProfile = () => {
                 paymentType: student.paymentType === 'subscription' ? 'Абонемент' : 'Поурочная оплата'
             });
             
-            // ✅ Получаем список репетиторов
             if (student.tutors && student.tutors.length > 0) {
                 setTutors(student.tutors);
             }
         } catch (err) {
-            console.error('Ошибка загрузки профиля:', err);
             showSnackbar('Ошибка при загрузке профиля', 'error');
         } finally {
             setLoading(false);
@@ -73,7 +84,6 @@ const StudentProfile = () => {
     const handleSaveProfile = async () => {
         setLoading(true);
         try {
-            // ✅ Используем axiosInstance
             await axiosInstance.put(`/students/${user.id}`, {
                 fullName: profile.fullName,
                 phone: profile.phone
@@ -82,7 +92,6 @@ const StudentProfile = () => {
             setEditMode(false);
             showSnackbar('Профиль успешно обновлён', 'success');
         } catch (err) {
-            console.error('Ошибка сохранения:', err);
             showSnackbar(err.response?.data?.error || 'Ошибка при сохранении профиля', 'error');
         } finally {
             setLoading(false);
@@ -107,23 +116,21 @@ const StudentProfile = () => {
             
             <Grid container spacing={3}>
                 <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 3, textAlign: 'center', borderRadius: 3 }}>
-                        <Avatar
-                            sx={{
-                                width: 120,
-                                height: 120,
-                                mx: 'auto',
-                                mb: 2,
-                                bgcolor: '#6366F1',
-                                fontSize: 48
-                            }}
-                        >
-                            {profile.fullName?.charAt(0) || 'У'}
-                        </Avatar>
-                        
-                        <Typography variant="h6" gutterBottom>
-                            {profile.fullName}
-                        </Typography>
+                    <Paper sx={{ 
+                        p: 3, 
+                        textAlign: 'center', 
+                        borderRadius: 3,
+                        background: bgPreview || undefined,
+                        transition: 'background 0.3s ease',
+                    }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                            <NickWithCosmetics
+                                studentId={user?.id}
+                                name={profile.fullName || 'Ученик'}
+                                avatarSize={120}
+                                fontSize="1.25rem"
+                            />
+                        </Box>
                         
                         <Divider sx={{ my: 2 }} />
                         
@@ -131,7 +138,7 @@ const StudentProfile = () => {
                             icon={<BadgeIcon />}
                             label={`ID: ${user?.id}`}
                             variant="outlined"
-                            sx={{ mb: 1 }}
+                            sx={{ mb: 1, bgcolor: 'rgba(255,255,255,0.8)' }}
                         />
                         
                         <Chip
@@ -139,6 +146,7 @@ const StudentProfile = () => {
                             label={profile.paymentType}
                             variant="outlined"
                             color="primary"
+                            sx={{ bgcolor: 'rgba(255,255,255,0.8)' }}
                         />
                     </Paper>
                 </Grid>
@@ -232,7 +240,6 @@ const StudentProfile = () => {
                         </Grid>
                     </Paper>
                     
-                    {/* Информация о репетиторах */}
                     {tutors.length > 0 && (
                         <Paper sx={{ p: 3, mt: 3, borderRadius: 3, bgcolor: '#f5f5f5' }}>
                             <Typography variant="h6" gutterBottom>
@@ -240,7 +247,7 @@ const StudentProfile = () => {
                                 {tutors.length === 1 ? 'Мой репетитор' : 'Мои репетиторы'}
                             </Typography>
                             <Grid container spacing={2}>
-                                {tutors.map((tutor, index) => (
+                                {tutors.map((tutor) => (
                                     <Grid item xs={12} key={tutor.id}>
                                         <Card variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>

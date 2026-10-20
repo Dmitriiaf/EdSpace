@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import { format } from 'date-fns';
+import NickWithCosmetics from './NickWithCosmetics';
 
 const Container = styled(Paper)({
     borderRadius: 0,
@@ -266,17 +267,21 @@ function ChatPanel({ onRead }) {
                                         color="error"
                                         badgeContent={d.unread > 0 ? d.unread : 0}
                                         invisible={d.unread === 0}
+                                        sx={{
+                                            '& .MuiBadge-badge': { fontSize: '10px', height: 18, minWidth: 18 },
+                                        }}
                                     >
-                                        <Avatar src={d.avatar} sx={{ bgcolor: '#4F46E5', width: 40, height: 40, fontSize: 16 }}>
-                                            {d.studentName?.charAt(0) || '?'}
-                                        </Avatar>
+                                        <NickWithCosmetics
+                                            studentId={d.studentId}
+                                            name={d.studentName}
+                                            avatar={d.avatar}
+                                            avatarSize={40}
+                                            fontSize="14px"
+                                        />
                                     </Badge>
-                                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <Typography sx={{ fontWeight: 600, fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {d.studentName}
-                                            </Typography>
-                                            <Typography sx={{ fontSize: '10px', color: '#94A3B8', ml: 1, flexShrink: 0 }}>
+                                    <Box sx={{ flex: 1, minWidth: 0, ml: 1 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                            <Typography sx={{ fontSize: '10px', color: '#94A3B8', flexShrink: 0 }}>
                                                 {d.lastTime}
                                             </Typography>
                                         </Box>
@@ -292,12 +297,13 @@ function ChatPanel({ onRead }) {
 
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
                     <Box sx={{ p: 2, borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
-                        <Avatar src={selected?.avatar} sx={{ bgcolor: '#4F46E5', width: 36, height: 36, fontSize: 15 }}>
-                            {selected?.name?.charAt(0) || '?'}
-                        </Avatar>
-                        <Typography sx={{ fontWeight: 600, fontSize: '15px' }}>
-                            {selected?.name || 'Чат'}
-                        </Typography>
+                        <NickWithCosmetics
+                            studentId={selected?.id}
+                            name={selected?.name}
+                            avatar={selected?.avatar}
+                            avatarSize={36}
+                            fontSize="15px"
+                        />
                     </Box>
 
                     <Box sx={{ flex: 1, p: 2, overflow: 'auto', bgcolor: '#FFFFFF', minHeight: 0 }}>
@@ -468,7 +474,6 @@ function ChatPanel({ onRead }) {
                 </Box>
             </Container>
 
-            {/* Диалог подтверждения фото */}
             <Dialog open={photoDialogOpen} onClose={() => setPhotoDialogOpen(false)} maxWidth="xs" fullWidth>
                 <DialogContent sx={{ p: 2, textAlign: 'center' }}>
                     {photoPreview?.dataUrl && (
@@ -495,7 +500,6 @@ function ChatPanel({ onRead }) {
                 </DialogContent>
             </Dialog>
 
-            {/* Просмотр фото на весь экран */}
             <Dialog open={!!zoomImage} onClose={() => setZoomImage(null)} maxWidth="lg">
                 <Box sx={{ position: 'relative' }}>
                     <MuiIconButton

@@ -6,6 +6,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import NotFoundPage from './pages/NotFoundPage';
 import OnboardingTour from './components/OnboardingTour';
 import OAuthCallback from './pages/OAuthCallback';
+import StudentSpecialties from './pages/StudentSpecialties';
 import RepetitorInformatikaEge from './pages/RepetitorInformatikaEge';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import { Brightness4 as DarkIcon, Brightness7 as LightIcon } from '@mui/icons-material';
@@ -57,6 +58,9 @@ import Extracurricular from './pages/Extracurricular';
 import Groups from './pages/Groups';
 import StudentEgeProgress from './pages/StudentEgeProgress';
 import TutorEgeChecklist from './pages/TutorEgeChecklist';
+import StudentGamification from './pages/StudentGamification';
+import StudentShop from './pages/StudentShop';
+import VisualizerPage from './pages/VisualizerPage'; // ✅ НОВОЕ
 
 const ThemeContext = createContext();
 export const useThemeContext = () => useContext(ThemeContext);
@@ -81,7 +85,6 @@ const BG_IMAGE_DARK = `
     radial-gradient(circle at 85% 75%, rgba(124, 58, 237, 0.04) 0%, transparent 50%)
 `;
 
-// Публичные роуты — доступны всегда, без сайдбара
 const PUBLIC_PATHS = [
     '/', '/login', '/register', '/privacy',
     '/forgot-password', '/reset-password',
@@ -165,7 +168,6 @@ const AppContent = () => {
         .MuiTab-root:hover { background: rgba(79, 70, 229, 0.04); }
     `;
 
-    // Если не залогинен ИЛИ открыта публичная страница — рендерим без сайдбара
     if (!user || isPublic) {
         return (
             <ThemeProvider theme={theme}>
@@ -224,6 +226,7 @@ const AppContent = () => {
                         <Route path="/materials" element={<PrivateRoute requiredRole="tutor"><Materials /></PrivateRoute>} />
                         <Route path="/materials/ege" element={<PrivateRoute requiredRole="tutor"><TutorEgeTasks /></PrivateRoute>} />
                         <Route path="/materials/ege/:taskNumber" element={<PrivateRoute requiredRole="tutor"><TutorEgeTaskDetail /></PrivateRoute>} />
+                        <Route path="/visualizer" element={<PrivateRoute requiredRole="tutor"><VisualizerPage /></PrivateRoute>} /> {/* ✅ НОВОЕ */}
                         <Route path="/lessons-archive" element={<PrivateRoute requiredRole="tutor"><LessonsArchive /></PrivateRoute>} />
                         <Route path="/task-bank" element={<PrivateRoute requiredRole="tutor"><TaskBank /></PrivateRoute>} />
                         <Route path="/lesson-plans" element={<PrivateRoute requiredRole="tutor"><LessonPlans /></PrivateRoute>} />
@@ -240,12 +243,16 @@ const AppContent = () => {
                         <Route path="/student/progress" element={<PrivateRoute requiredRole="student"><StudentProgress /></PrivateRoute>} />
                         <Route path="/student/materials" element={<PrivateRoute requiredRole="student"><StudentMaterials /></PrivateRoute>} />
                         <Route path="/student/materials/ege" element={<PrivateRoute requiredRole="student"><StudentEgeTasks /></PrivateRoute>} />
+                        <Route path="/student/specialties" element={<PrivateRoute requiredRole="student"><StudentSpecialties /></PrivateRoute>} />
                         <Route path="/student/materials/ege/:taskNumber" element={<PrivateRoute requiredRole="student"><StudentEgeTaskDetail /></PrivateRoute>} />
+                        <Route path="/student/visualizer" element={<PrivateRoute requiredRole="student"><VisualizerPage /></PrivateRoute>} /> {/* ✅ НОВОЕ */}
                         <Route path="/student/tools" element={<PrivateRoute requiredRole="student"><Tools /></PrivateRoute>} />
                         <Route path="/student/homework" element={<PrivateRoute requiredRole="student"><StudentHomework /></PrivateRoute>} />
                         <Route path="/student/bonuses" element={<PrivateRoute requiredRole="student"><StudentBonuses /></PrivateRoute>} />
                         <Route path="/student/tournament" element={<PrivateRoute requiredRole="student"><StudentTournament /></PrivateRoute>} />
                         <Route path="/student/ege-progress" element={<PrivateRoute requiredRole="student"><StudentEgeProgress /></PrivateRoute>} />
+                        <Route path="/student/gamification" element={<PrivateRoute requiredRole="student"><StudentGamification /></PrivateRoute>} />
+                        <Route path="/student/shop" element={<PrivateRoute requiredRole="student"><StudentShop /></PrivateRoute>} />
 
                         <Route path="/parent/dashboard" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />
                         <Route path="/parent/children" element={<PrivateRoute requiredRole="parent"><ParentDashboard /></PrivateRoute>} />

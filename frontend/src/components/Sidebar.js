@@ -32,14 +32,19 @@ import {
     Redeem as RedeemIcon,
     EmojiEvents as EmojiEventsIcon,
     TrackChanges as TrackChangesIcon,
+    Stars as StarsIcon,
+    ShoppingBag as ShoppingBagIcon,
+    School, // ✅ ИСПРАВЛЕНО
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import ChatPanel from './ChatPanel';
+import PointsBalance from './PointsBalance';
 
 const ICON_COLORS = {
     'Главная': '#6366F1',
     'Расписание': '#10B981',
+    'Специальности': '#F59E0B',
     'Ученики': '#F59E0B',
     'Финансы': '#3B82F6',
     'Курсы': '#8B5CF6',
@@ -58,6 +63,8 @@ const ICON_COLORS = {
     'Турнир': '#7C3AED',
     'Мой ЕГЭ': '#10B981',
     'ЕГЭ Чек-лист': '#10B981',
+    'Прогресс': '#FBBF24',
+    'Магазин': '#EC4899',
 };
 
 const TOUR_TARGETS = {
@@ -127,12 +134,13 @@ const Sidebar = () => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [notifAnchor, setNotifAnchor] = useState(null);
 
-    // ✅ Чат
     const [chatOpen, setChatOpen] = useState(false);
     const [chatUnread, setChatUnread] = useState(0);
 
     const isTutor = user?.role === 'tutor';
     const isStudent = user?.role === 'student';
+
+    const studentId = user?.allIds?.[0] || user?.id;
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
@@ -159,10 +167,10 @@ const Sidebar = () => {
                 setNotifications(notifRes.data || []);
                 setUnreadCount(countRes.data?.count || 0);
             } else if (isStudent) {
-                const studentId = user.allIds?.[0] || user.id;
+                const sid = user.allIds?.[0] || user.id;
                 const [notifRes, countRes] = await Promise.all([
-                    axiosInstance.get(`/notifications/student/${studentId}`),
-                    axiosInstance.get(`/notifications/student/${studentId}/unread-count`)
+                    axiosInstance.get(`/notifications/student/${sid}`),
+                    axiosInstance.get(`/notifications/student/${sid}/unread-count`)
                 ]);
                 setNotifications(notifRes.data || []);
                 setUnreadCount(countRes.data?.count || 0);
@@ -170,7 +178,6 @@ const Sidebar = () => {
         } catch (err) {}
     };
 
-    // ✅ Загрузка непрочитанных сообщений
     const fetchChatUnread = async () => {
         if (!user?.id) return;
         try {
@@ -189,7 +196,6 @@ const Sidebar = () => {
         if (isTutor && user?.id) fetchAvatar();
     }, [user]);
 
-    // ✅ Polling непрочитанных сообщений каждые 10 сек
     useEffect(() => {
         if (!user?.id) return;
         fetchChatUnread();
@@ -261,23 +267,28 @@ const Sidebar = () => {
             { path: '/profile', label: 'Профиль' },
         ]},
     ] : isStudent ? [
-        { title: '', items: [
+        { title: 'Учёба', items: [
             { path: '/student', label: 'Главная' },
             { path: '/student/homework', label: 'Задания' },
-            { path: '#chat', label: 'Сообщения', badge: chatUnread, action: handleChatOpen },
             { path: '/student/materials', label: 'Материалы' },
             { path: MELETO_URL, label: 'Онлайн-доска', external: true },
             { path: '/student/progress', label: 'Успеваемость' },
             { path: '/student/ege-progress', label: 'Мой ЕГЭ' },
+            { path: '/student/specialties', label: 'Специальности' },
+        ]},
+        { title: 'Геймификация', items: [
+            { path: '/student/gamification', label: 'Прогресс' },
+            { path: '/student/shop', label: 'Магазин' },
             { path: '/student/bonuses', label: 'Бонусы' },
             { path: '/student/tournament', label: 'Турнир' },
-            { path: '/student/profile', label: 'Профиль' },
+        ]},
+        { title: 'Общение', items: [
+            { path: '#chat', label: 'Сообщения', badge: chatUnread, action: handleChatOpen },
         ]},
     ] : [
         { title: '', items: [
             { path: '/parent/dashboard', label: 'Главная' },
             { path: '#chat', label: 'Сообщения', badge: chatUnread, action: handleChatOpen },
-            { path: '/parent/profile', label: 'Профиль' },
         ]},
     ];
 
@@ -288,6 +299,7 @@ const Sidebar = () => {
         'Инструменты': <DrawIcon />,
         'Финансы': <MoneyIcon />,
         'Группы': <GroupIcon />,
+        'Специальности': <School />, // ✅ ИСПРАВЛЕНО
         'Курсы': <BookIcon />,
         'Банк заданий': <AssignmentIcon />,
         'Материалы': <FolderIcon />,
@@ -303,6 +315,8 @@ const Sidebar = () => {
         'Турнир': <EmojiEventsIcon />,
         'Мой ЕГЭ': <TrackChangesIcon />,
         'ЕГЭ Чек-лист': <TrackChangesIcon />,
+        'Прогресс': <StarsIcon />,
+        'Магазин': <ShoppingBagIcon />,
     };
 
     const isActive = (path) => !path.startsWith('http') && !path.startsWith('#') && location.pathname === path;
@@ -371,7 +385,6 @@ const Sidebar = () => {
                                         {iconMap[item.label] || <DashboardIcon />}
                                     </ListItemIcon>
                                     <ListItemText primary={item.label} sx={{ '& .MuiTypography-root': { fontSize: 14, fontWeight: active ? 600 : 400 } }} />
-                                    {/* ✅ Бейдж непрочитанных сообщений */}
                                     {item.badge > 0 && (
                                         <Chip
                                             label={item.badge > 99 ? '99+' : item.badge}
@@ -408,6 +421,8 @@ const Sidebar = () => {
             </LogoBox>
 
             {renderMenu()}
+
+            {isStudent && <PointsBalance studentId={studentId} fullName={user?.fullName} />}
 
             <UserSection>
                 <NotificationBell />
@@ -449,7 +464,6 @@ const Sidebar = () => {
                 </SidebarContainer>
             )}
 
-            {/* ✅ МОДАЛКА С ЧАТОМ */}
             <Dialog
                 open={chatOpen}
                 onClose={() => setChatOpen(false)}

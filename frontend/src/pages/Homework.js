@@ -44,8 +44,7 @@ import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import { format, isAfter, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-
-// ========== СТИЛИЗОВАННЫЕ КОМПОНЕНТЫ ==========
+import NickWithCosmetics from '../components/NickWithCosmetics';
 
 const HomeworkCard = styled(Card)(({ borderColor }) => ({
     borderRadius: '16px',
@@ -133,8 +132,6 @@ const TypeSelectorBox = styled(Box)(({ active, color }) => ({
     },
 }));
 
-// ========== УТИЛИТЫ ==========
-
 function getAvatarColor(name) {
     const colors = ['#4F46E5', '#7C3AED', '#EC4899', '#EF4444', '#F59E0B', '#10B981', '#059669', '#3B82F6', '#2563EB', '#6366F1'];
     let hash = 0;
@@ -173,13 +170,11 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 function Homework() {
     const { user } = useAuth();
     useEffect(() => { document.title = 'EdSpace — Домашние задания'; }, []);
     const isTutor = user?.role === 'tutor' || user?.role === 'ROLE_TUTOR';
 
-    // ========== СОСТОЯНИЯ ==========
     const [loading, setLoading] = useState(true);
     const [homeworkList, setHomeworkList] = useState([]);
     const [students, setStudents] = useState([]);
@@ -188,7 +183,6 @@ function Homework() {
 
     const [activeType, setActiveType] = useState('HOMEWORK');
 
-    // Отображение
     const [viewMode, setViewMode] = useState('table');
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
@@ -200,13 +194,11 @@ function Homework() {
     const [sortField, setSortField] = useState('dueDate');
     const [sortDirection, setSortDirection] = useState('asc');
 
-    // Диалоги
     const [openAssign, setOpenAssign] = useState(false);
     const [openSubmit, setOpenSubmit] = useState(false);
     const [openCheck, setOpenCheck] = useState(false);
     const [openBankPicker, setOpenBankPicker] = useState(false);
 
-    // Формы
     const [newHomework, setNewHomework] = useState({
         studentId: '',
         task: '',
@@ -221,13 +213,11 @@ function Homework() {
     const [grade, setGrade] = useState({ grade: 0, feedback: '', returnForRevision: false });
     const [selectedHomework, setSelectedHomework] = useState(null);
 
-    // Файлы
     const [filesToUpload, setFilesToUpload] = useState([]);
     const [isDragActive, setIsDragActive] = useState(false);
     const [assignFiles, setAssignFiles] = useState([]);
     const [isAssignDragActive, setIsAssignDragActive] = useState(false);
 
-    // Банк заданий
     const [bankTab, setBankTab] = useState(0);
     const [bankTasks, setBankTasks] = useState([]);
     const [bankVariants, setBankVariants] = useState([]);
@@ -243,7 +233,6 @@ function Homework() {
         }
     }, [openSubmit]);
 
-    // ========== ЗАГРУЗКА ДАННЫХ ==========
     const loadBankItems = async () => {
         setBankLoading(true);
         try {
@@ -273,7 +262,6 @@ function Homework() {
         } catch (err) {}
     };
 
-    // ========== ДЕЙСТВИЯ ==========
     const handleAssign = async () => {
         if (!newHomework.studentId || !newHomework.task) return;
         try {
@@ -369,7 +357,6 @@ function Homework() {
         try { await axiosInstance.delete(`/homework/${id}`); loadHomework(); } catch (err) { setError('Ошибка удаления'); }
     };
 
-    // ========== DRAG-N-DROP ==========
     const handleDragEnter = useCallback((e, setter) => {
         e.preventDefault(); e.stopPropagation();
         setter(true);
@@ -425,7 +412,6 @@ function Homework() {
         fileSetter(prev => prev.filter((_, i) => i !== index));
     };
 
-    // ========== УТИЛИТЫ ==========
     const getStatusConfig = (status) => {
         const configs = {
             'ASSIGNED':  { label: 'Назначено',  color: '#1E40AF', bg: '#EFF6FF', dot: '#3B82F6' },
@@ -447,7 +433,6 @@ function Homework() {
     const countHomework = homeworkOnly.length;
     const countMock = examsOnly.length;
 
-    // ========== ФИЛЬТРАЦИЯ И СОРТИРОВКА ==========
     const filteredAndSorted = useMemo(() => {
         let result = activeType === 'HOMEWORK' ? [...homeworkOnly] : [...examsOnly];
 
@@ -801,14 +786,13 @@ function Homework() {
                                             <StyledTableRow key={hw.id} overdue={overdue}>
                                                 {isTutor && (
                                                     <StyledTableCell>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                            <Avatar sx={{ width: 32, height: 32, bgcolor: getAvatarColor(hw.student?.fullName || '?'), fontSize: 12, fontWeight: 600 }}>
-                                                                {getInitials(hw.student?.fullName || '?')}
-                                                            </Avatar>
-                                                            <Typography sx={{ fontWeight: 500, color: '#1F2937', fontSize: '14px' }}>
-                                                                {hw.student?.fullName || 'Ученик'}
-                                                            </Typography>
-                                                        </Box>
+                                                        <NickWithCosmetics
+                                                            studentId={hw.student?.id}
+                                                            name={hw.student?.fullName || 'Ученик'}
+                                                            avatar={hw.student?.avatar}
+                                                            avatarSize={32}
+                                                            fontSize="14px"
+                                                        />
                                                     </StyledTableCell>
                                                 )}
                                                 <StyledTableCell>
@@ -964,11 +948,14 @@ function Homework() {
                                                     )}
                                                 </Box>
                                                 {isTutor && (
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-                                                        <Avatar sx={{ width: 34, height: 34, bgcolor: getAvatarColor(hw.student?.fullName || '?'), fontSize: 13, fontWeight: 600 }}>
-                                                            {getInitials(hw.student?.fullName || '?')}
-                                                        </Avatar>
-                                                        <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: '15px' }}>{hw.student?.fullName || 'Ученик'}</Typography>
+                                                    <Box sx={{ mb: 1.5 }}>
+                                                        <NickWithCosmetics
+                                                            studentId={hw.student?.id}
+                                                            name={hw.student?.fullName || 'Ученик'}
+                                                            avatar={hw.student?.avatar}
+                                                            avatarSize={34}
+                                                            fontSize="15px"
+                                                        />
                                                     </Box>
                                                 )}
                                                 <Typography sx={{ color: '#374151', lineHeight: 1.6, mb: 2, fontSize: '14px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', bgcolor: '#F9FAFB', p: 1.5, borderRadius: '10px' }}>{hw.task}</Typography>
@@ -1309,7 +1296,17 @@ function Homework() {
             {/* ДИАЛОГ ПРОВЕРКИ */}
             <StyledDialog open={openCheck} onClose={() => setOpenCheck(false)} maxWidth="lg" fullWidth>
                 <DialogTitle sx={{ fontSize: '18px', fontWeight: 600, px: 3, pt: 3, pb: 1 }}>
-                    {selectedHomework?.status?.toUpperCase() === 'CHECKED' ? 'Просмотр' : 'Проверить'} — {selectedHomework?.student?.fullName}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography sx={{ fontSize: '18px', fontWeight: 600 }}>
+                            {selectedHomework?.status?.toUpperCase() === 'CHECKED' ? 'Просмотр' : 'Проверить'} —
+                        </Typography>
+                        <NickWithCosmetics
+                            studentId={selectedHomework?.student?.id}
+                            name={selectedHomework?.student?.fullName || ''}
+                            showAvatar={false}
+                            fontSize="18px"
+                        />
+                    </Box>
                 </DialogTitle>
                 <DialogContent sx={{ px: 3 }}>
                     {selectedHomework && (

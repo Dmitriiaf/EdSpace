@@ -1,9 +1,10 @@
 // ========== frontend/src/components/StudentProfileCard.js ==========
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
     Box, Paper, Avatar, Typography, IconButton, Chip, Stack,
     Button, Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, CircularProgress, Tooltip, Divider,
+    Tabs, Tab, Grid,
 } from '@mui/material';
 import {
     Edit as EditIcon,
@@ -13,8 +14,10 @@ import {
     EmojiEvents as GoalIcon,
     CalendarToday as CalendarIcon,
     CheckCircle as CheckIcon,
+    Palette as PaletteIcon,
 } from '@mui/icons-material';
 import axiosInstance from '../api/axiosConfig';
+import NickWithCosmetics from './NickWithCosmetics';
 
 const CARD = '#FFFFFF';
 const INK = '#141414';
@@ -33,14 +36,20 @@ const GREEN_SOFT = '#D9F5E0';
 const PINK = '#FF5FA2';
 const PINK_SOFT = '#FFE0EE';
 
-// Пресеты увлечений
+const BG_MAP = {
+    pink_grad: 'linear-gradient(135deg,#FBCFE8,#F9A8D4)',
+    blue_grad: 'linear-gradient(135deg,#BFDBFE,#93C5FD)',
+    sunset: 'linear-gradient(135deg,#FDBA74,#F472B6)',
+    space: 'linear-gradient(135deg,#1E1B4B,#312E81)',
+    custom: '#E5E7EB',
+};
+
 const INTEREST_PRESETS = [
     '💻 Программирование', '🎮 Игры', '⚽ Спорт', '🎵 Музыка',
     '📚 Книги', '🎨 Рисование', '🎬 Кино', '🤖 Роботы',
     '🧮 Математика', '🚀 Космос', '🐱 Животные', '🍕 Еда',
 ];
 
-// Пресеты целей
 const GOAL_PRESETS = [
     'Сдать ЕГЭ на 80+',
     'Сдать ЕГЭ на 90+',
@@ -50,23 +59,61 @@ const GOAL_PRESETS = [
     'Просто для себя',
 ];
 
+const ALL_PACKS = [
+    { key: 'free',     title: '🎨 Базовые' },
+    { key: 'cats',     title: '🐱 Кошки' },
+    { key: 'dogs',     title: '🐶 Собаки' },
+    { key: 'foxes',    title: '🦊 Лисы' },
+    { key: 'robots',   title: '🤖 Роботы' },
+    { key: 'gamers',   title: '🎮 Геймеры' },
+    { key: 'mythical', title: '🐉 Мифические' },
+];
+
 export default function StudentProfileCard({ userId, fallbackName = 'Ученик' }) {
     const [profile, setProfile] = useState(null);
+    const [cosmetics, setCosmetics] = useState([]);
+    const [bgPreview, setBgPreview] = useState(null);
     const [loading, setLoading] = useState(true);
     const [editOpen, setEditOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [stats, setStats] = useState({ lessonsDone: 0, avgScore: null, daysIn: 0 });
 
-    // Форма редактирования
+    // Модалка выбора аватара
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [pickerTab, setPickerTab] = useState(0);
+    const [packItems, setPackItems] = useState({});
+    const [packLoading, setPackLoading] = useState(false);
+    const [applying, setApplying] = useState(false);
+
     const [form, setForm] = useState({
         fullName: '', school: '', grade: '', bio: '', interests: [], goal: '',
     });
 
     const avatarInputRef = useRef(null);
 
+    // ✅ Собираем доступные вкладки (free + купленные)
+    const availablePacks = useMemo(() => {
+        const purchasedKeys = cosmetics
+            .filter(c => c.itemType === 'AVATAR_PACK')
+            .map(c => c.itemKey);
+        
+        // Всегда free + купленные
+        return ALL_PACKS.filter(p => p.key === 'free' || purchasedKeys.includes(p.key));
+    }, [cosmetics]);
+
     useEffect(() => {
-        if (userId) fetchProfile();
+        if (userId) {
+            fetchProfile();
+            axiosInstance.get(`/cosmetics/active/${userId}`)
+                .then((r) => {
+                    const list = r.data || [];
+                    setCosmetics(list);
+                    const bg = list.find(c => c.itemType === 'BACKGROUND' && c.active);
+                    if (bg) setBgPreview(BG_MAP[bg.itemKey] || null);
+                })
+                .catch(() => {});
+        }
     }, [userId]);
 
     const fetchProfile = async () => {
@@ -83,14 +130,12 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
                 interests: parseInterests(data.interests),
                 goal: data.goal || '',
             });
-            // Статистика
             setStats({
                 lessonsDone: data.lessonsDone || 0,
                 avgScore: data.avgScore || null,
                 daysIn: data.daysIn || calcDaysIn(data.createdAt),
             });
         } catch (err) {
-            // тихо
         } finally {
             setLoading(false);
         }
@@ -125,8 +170,46 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
             alert('Не удалось загрузить аватар');
         } finally {
             setUploadingAvatar(false);
-            // Очистить input, чтобы можно было выбрать тот же файл повторно
             if (avatarInputRef.current) avatarInputRef.current.value = '';
+        }
+    };
+
+    const openPicker = () => {
+        setPickerOpen(true);
+        setPickerTab(0); // всегда начинаем с free
+        if (!packItems['free']) loadPack('free');
+    };
+
+    const loadPack = async (packKey) => {
+        if (packItems[packKey]) return;
+        setPackLoading(true);
+        try {
+            const res = await axiosInstance.get(`/cosmetics/packs/${packKey}`);
+            setPackItems(prev => ({ ...prev, [packKey]: res.data || [] }));
+        } catch (e) {
+        } finally {
+            setPackLoading(false);
+        }
+    };
+
+    const handlePickerTabChange = (e, v) => {
+        setPickerTab(v);
+        loadPack(availablePacks[v].key);
+    };
+
+    const applyPackAvatar = async (packKey, index) => {
+        setApplying(true);
+        try {
+            await axiosInstance.post(`/students/${userId}/avatar-from-pack`, {
+                packKey, index,
+            });
+            const url = `/uploads/avatars/packs/${packKey}/${index}.jpg`;
+            setProfile(prev => ({ ...prev, avatar: url }));
+            setPickerOpen(false);
+        } catch (e) {
+            alert('Не удалось установить аватар: ' + (e.response?.data?.error || e.message));
+        } finally {
+            setApplying(false);
         }
     };
 
@@ -171,14 +254,24 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
     const name = profile?.fullName || fallbackName;
     const initials = name.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase();
     const interests = parseInterests(profile?.interests);
+    const FRAME_MAP = {
+        silver:  { border: '3px solid #C0C0C0' },
+        gold_fr: { border: '3px solid #FFD700' },
+        diamond: { border: '3px solid #67E8F9', boxShadow: '0 0 16px #67E8F9' },
+        fire:    { border: '3px solid #F97316', boxShadow: '0 0 16px #EF4444' },
+        royal:   { border: '3px solid #7C3AED', boxShadow: '0 0 16px #7C3AED' },
+    };
+    const activeFrame = cosmetics.find((c) => c.itemType === 'AVATAR_FRAME');
+    const frameStyle = activeFrame ? FRAME_MAP[activeFrame.itemKey] || {} : { border: `3px solid ${LIME}` };
 
     return (
         <>
             <Paper sx={{
-                p: 3, borderRadius: 4, bgcolor: CARD,
+                p: 3, borderRadius: 4,
+                background: bgPreview || CARD,
                 border: `1px solid ${LINE}`, overflow: 'hidden',
+                transition: 'background 0.3s ease',
             }}>
-                {/* Аватар + имя */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2.5 }}>
                     <Box sx={{ position: 'relative' }}>
                         <Avatar
@@ -188,7 +281,7 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
                                 bgcolor: PURPLE_SOFT, color: PURPLE,
                                 fontWeight: 800, fontSize: '2.4rem',
                                 cursor: 'pointer',
-                                border: `3px solid ${LIME}`,
+                                ...frameStyle,
                                 transition: 'transform 0.2s ease',
                                 '&:hover': { transform: 'scale(1.03)' },
                             }}
@@ -221,34 +314,54 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
                             onChange={handleAvatarUpload}
                         />
                     </Box>
-                    <Typography sx={{ mt: 2.5, fontWeight: 800, fontSize: '1.35rem', color: INK, textAlign: 'center', letterSpacing: '-0.02em' }}>
-                        {name}
-                    </Typography>
+                    <Box sx={{ mt: 2.5, display: 'flex', justifyContent: 'center' }}>
+                        <NickWithCosmetics
+                            studentId={userId}
+                            name={name}
+                            showAvatar={false}
+                            fontSize="1.35rem"
+                        />
+                    </Box>
                     {(profile?.school || profile?.grade) && (
                         <Typography sx={{ color: INK_MUTED, fontSize: '0.85rem', mt: 0.5, textAlign: 'center' }}>
                             {[profile?.grade && `${profile.grade} класс`, profile?.school].filter(Boolean).join(' · ')}
                         </Typography>
                     )}
-                    <Button
-                        size="small"
-                        startIcon={<EditIcon sx={{ fontSize: 15 }} />}
-                        onClick={() => setEditOpen(true)}
-                        sx={{
-                            mt: 2, textTransform: 'none', color: PURPLE,
-                            fontWeight: 600, fontSize: '0.82rem',
-                            borderRadius: 100, px: 2, py: 0.75,
-                            bgcolor: PURPLE_SOFT,
-                            '&:hover': { bgcolor: '#DDD3FF' },
-                        }}
-                    >
-                        Редактировать профиль
-                    </Button>
+                    <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                        <Button
+                            size="small"
+                            startIcon={<PaletteIcon sx={{ fontSize: 15 }} />}
+                            onClick={openPicker}
+                            sx={{
+                                textTransform: 'none', color: PURPLE,
+                                fontWeight: 600, fontSize: '0.82rem',
+                                borderRadius: 100, px: 2, py: 0.75,
+                                bgcolor: 'rgba(255,255,255,0.85)',
+                                '&:hover': { bgcolor: '#DDD3FF' },
+                            }}
+                        >
+                            Выбрать аватар
+                        </Button>
+                        <Button
+                            size="small"
+                            startIcon={<EditIcon sx={{ fontSize: 15 }} />}
+                            onClick={() => setEditOpen(true)}
+                            sx={{
+                                textTransform: 'none', color: PURPLE,
+                                fontWeight: 600, fontSize: '0.82rem',
+                                borderRadius: 100, px: 2, py: 0.75,
+                                bgcolor: 'rgba(255,255,255,0.85)',
+                                '&:hover': { bgcolor: '#DDD3FF' },
+                            }}
+                        >
+                            Редактировать
+                        </Button>
+                    </Stack>
                 </Box>
 
                 <Divider sx={{ my: 2.5, borderColor: LINE }} />
 
-                {/* О себе */}
-                <Box sx={{ mb: 2.5 }}>
+                <Box sx={{ mb: 2.5, p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.7)' }}>
                     <Typography sx={{ fontSize: '0.7rem', color: INK_MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.75 }}>
                         О себе
                     </Typography>
@@ -261,9 +374,8 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
                     </Typography>
                 </Box>
 
-                {/* Увлечения */}
                 {interests.length > 0 && (
-                    <Box sx={{ mb: 2.5 }}>
+                    <Box sx={{ mb: 2.5, p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.7)' }}>
                         <Typography sx={{ fontSize: '0.7rem', color: INK_MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
                             Увлечения
                         </Typography>
@@ -284,7 +396,6 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
                     </Box>
                 )}
 
-                {/* Цель */}
                 {profile?.goal && (
                     <Box sx={{
                         p: 2, borderRadius: 3, mb: 2.5,
@@ -305,7 +416,6 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
 
                 <Divider sx={{ my: 2.5, borderColor: LINE }} />
 
-                {/* Мини-статистика */}
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.25 }}>
                     <MiniStat icon={<CheckIcon sx={{ fontSize: 16 }} />} value={stats.lessonsDone} label="уроков" color={GREEN} bg={GREEN_SOFT} />
                     <MiniStat icon={<GoalIcon sx={{ fontSize: 16 }} />} value={stats.avgScore ?? '—'} label="средн." color={AMBER} bg={AMBER_SOFT} />
@@ -313,7 +423,91 @@ export default function StudentProfileCard({ userId, fallbackName = 'Учени�
                 </Box>
             </Paper>
 
-            {/* Диалог редактирования */}
+            {/* МОДАЛКА ВЫБОРА АВАТАРА */}
+            <Dialog
+                open={pickerOpen}
+                onClose={() => !applying && setPickerOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 3 } }}
+            >
+                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography fontWeight={800}>Выбери аватар</Typography>
+                    <IconButton onClick={() => setPickerOpen(false)} disabled={applying} size="small">
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Кликни на понравившуюся картинку — она станет твоим аватаром. Купленные наборы доступны в отдельных вкладках.
+                    </Typography>
+                    <Tabs
+                        value={pickerTab}
+                        onChange={handlePickerTabChange}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                        sx={{ mb: 2, '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, minWidth: 'auto', px: 1.5 } }}
+                    >
+                        {availablePacks.map((p) => <Tab key={p.key} label={p.title} />)}
+                    </Tabs>
+
+                    {packLoading && !packItems[availablePacks[pickerTab]?.key] ? (
+                        <Box sx={{ py: 4, textAlign: 'center' }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                gap: 2,
+                                flexWrap: 'wrap',
+                                justifyContent: 'center',
+                                py: 1,
+                                minHeight: 240,
+                            }}
+                        >
+                            {(packItems[availablePacks[pickerTab]?.key] || []).map((url, idx) => {
+                                const index = idx + 1;
+                                return (
+                                    <Box
+                                        key={index}
+                                        onClick={() => !applying && applyPackAvatar(availablePacks[pickerTab].key, index)}
+                                        sx={{
+                                            width: 100,
+                                            height: 100,
+                                            borderRadius: 2,
+                                            overflow: 'hidden',
+                                            cursor: applying ? 'not-allowed' : 'pointer',
+                                            border: '2px solid #EAEAEA',
+                                            transition: 'all 0.15s ease',
+                                            opacity: applying ? 0.5 : 1,
+                                            position: 'relative',
+                                            flexShrink: 0,
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                                            '&:hover': {
+                                                transform: applying ? 'none' : 'scale(1.05)',
+                                                borderColor: '#7B5CFA',
+                                            },
+                                        }}
+                                    >
+                                        <img
+                                            src={`/api${url}`}
+                                            alt={`Аватар ${index}`}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'cover',
+                                                display: 'block',
+                                            }}
+                                        />
+                                    </Box>
+                                );
+                            })}
+                        </Box>
+                    )}
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth
                 PaperProps={{ sx: { borderRadius: 4 } }}>
                 <DialogTitle sx={{ p: 3, pb: 1 }}>

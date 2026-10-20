@@ -4,6 +4,7 @@ import com.example.demo.entity.GameScore;
 import com.example.demo.entity.Student;
 import com.example.demo.repository.GameScoreRepository;
 import com.example.demo.repository.StudentRepository;
+import com.example.demo.service.AchievementService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +33,9 @@ public class GameController {
 
     @Autowired
     private StudentRepository studentRepository;
+
+    @Autowired
+    private AchievementService achievementService;
 
     // ========== СОХРАНИТЬ РЕКОРД ==========
     @PostMapping("/score")
@@ -68,6 +72,16 @@ public class GameController {
                 }
                 gameScoreRepository.save(existing);
                 isRecord = true;
+            }
+
+            // 🎮 Выдача ачивок за игру
+            try {
+                if ("flappy".equalsIgnoreCase(game)) {
+                    if (score >= 10) achievementService.unlock(currentUserId, "FLAPPY_10");
+                    if (score >= 50) achievementService.unlock(currentUserId, "FLAPPY_50");
+                }
+            } catch (Exception e) {
+                log.warn("Ошибка при выдаче ачивок за игру: {}", e.getMessage());
             }
 
             return ResponseEntity.ok(Map.of(

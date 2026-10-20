@@ -10,4 +10,6 @@ import java.util.List;
 public interface EgeChecklistItemRepository extends JpaRepository<EgeChecklistItem, Long> {
 
     List<EgeChecklistItem> findByChecklistIdOrderByTaskNumberAsc(Long checklistId);
+
+    long countByChecklistIdAndKnowsTrue(Long checklistId);
 }

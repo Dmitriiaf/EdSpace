@@ -1,4 +1,5 @@
 package com.example.demo.service;
+
 import java.util.stream.Collectors;
 import com.example.demo.entity.*;
 import com.example.demo.repository.*;
@@ -19,6 +20,9 @@ public class HomeworkService {
     private CourseRepository courseRepository;
 
     @Autowired
+    private PointsService pointsService;
+
+    @Autowired
     private TutorRepository tutorRepository;
 
     @Autowired
@@ -26,6 +30,9 @@ public class HomeworkService {
 
     @Autowired
     private StudentRepository studentRepository;
+
+    @Autowired
+    private AchievementService achievementService;
 
     public Homework saveHomework(Homework homework) {
         return homeworkRepository.save(homework);
@@ -220,6 +227,15 @@ public class HomeworkService {
         log.info("Сдача ДЗ: id={}", id);
         Homework homework = getHomeworkById(id);
         homework.setSubmittedAt(LocalDateTime.now());
+        // 🎮 Ачивка "Полуночник" (сдал после 23:00)
+        try {
+            int hour = LocalDateTime.now().getHour();
+            if (hour >= 23 || hour < 6) {
+                achievementService.unlock(homework.getStudent().getId(), "NIGHT_OWL");
+            }
+        } catch (Exception e) {
+            log.warn("Ошибка ачивки NIGHT_OWL: {}", e.getMessage());
+        }
         homework.setAttachments(attachments);
         homework.setStatus("SUBMITTED");
         Homework savedHomework = homeworkRepository.save(homework);
@@ -270,6 +286,7 @@ public class HomeworkService {
             else homework.setGrade(1);
         }
         homework.setStatus("CHECKED");
+        awardHomeworkPoints(homework);
         Homework savedHomework = homeworkRepository.save(homework);
 
         try {
@@ -283,6 +300,45 @@ public class HomeworkService {
             log.warn("Не удалось создать уведомление: {}", e.getMessage());
         }
 
+        // Ачивки за ДЗ и пробники
+        try {
+            Long studentId = homework.getStudent().getId();
+
+            if ("MOCK_EXAM".equalsIgnoreCase(homework.getType())) {
+                // Ачивки для пробников
+                achievementService.unlock(studentId, "FIRST_MOCK");
+                if (homework.getScore() != null) {
+                    if (homework.getScore() >= 80) achievementService.unlock(studentId, "MOCK_80");
+                    if (homework.getScore() >= 100) achievementService.unlock(studentId, "MOCK_100");
+                }
+            } else {
+                // Ачивки для обычных ДЗ
+                long checkedCount = homeworkRepository.countByStudentIdAndStatus(studentId, "CHECKED");
+
+                if (checkedCount == 1) {
+                    achievementService.unlock(studentId, "FIRST_HW");
+                    if (homework.getGrade() != null && homework.getGrade() == 5) {
+                        achievementService.unlock(studentId, "PERFECT_FIRST");
+                    }
+                }
+
+                if (homework.getGrade() != null && homework.getGrade() == 5) {
+                    long fiveCount = homeworkRepository.countByStudentIdAndGrade(studentId, 5);
+                    if (fiveCount >= 10) achievementService.unlock(studentId, "PERFECT_10");
+                }
+
+                if (checkedCount >= 50) achievementService.unlock(studentId, "HW_50");
+                if (checkedCount >= 100) achievementService.unlock(studentId, "HW_100");
+
+                if (homework.getCreatedAt() != null && homework.getSubmittedAt() != null) {
+                    if (homework.getCreatedAt().toLocalDate().equals(homework.getSubmittedAt().toLocalDate())) {
+                        achievementService.unlock(studentId, "SPEEDY");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Ошибка при выдаче ачивок: {}", e.getMessage());
+        }
         return savedHomework;
     }
 
@@ -322,6 +378,7 @@ public class HomeworkService {
         }
         if (feedback != null) homework.setFeedback(feedback);
         homework.setStatus("CHECKED");
+        awardHomeworkPoints(homework);
         Homework savedHomework = homeworkRepository.save(homework);
 
         try {
@@ -333,6 +390,35 @@ public class HomeworkService {
             );
         } catch (Exception e) {
             log.warn("Не удалось создать уведомление: {}", e.getMessage());
+        }
+
+        // Ачивки за ДЗ
+        try {
+            Long studentId = homework.getStudent().getId();
+            long checkedCount = homeworkRepository.countByStudentIdAndStatus(studentId, "CHECKED");
+
+            if (checkedCount == 1) {
+                achievementService.unlock(studentId, "FIRST_HW");
+                if (homework.getGrade() != null && homework.getGrade() == 5) {
+                    achievementService.unlock(studentId, "PERFECT_FIRST");
+                }
+            }
+
+            if (homework.getGrade() != null && homework.getGrade() == 5) {
+                long fiveCount = homeworkRepository.countByStudentIdAndGrade(studentId, 5);
+                if (fiveCount >= 10) achievementService.unlock(studentId, "PERFECT_10");
+            }
+
+            if (checkedCount >= 50) achievementService.unlock(studentId, "HW_50");
+            if (checkedCount >= 100) achievementService.unlock(studentId, "HW_100");
+
+            if (homework.getCreatedAt() != null && homework.getSubmittedAt() != null) {
+                if (homework.getCreatedAt().toLocalDate().equals(homework.getSubmittedAt().toLocalDate())) {
+                    achievementService.unlock(studentId, "SPEEDY");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Ошибка при выдаче ачивок за ДЗ: {}", e.getMessage());
         }
 
         return savedHomework;
@@ -528,5 +614,45 @@ public class HomeworkService {
 
         log.info("История оценок: {} записей", timeline.size());
         return timeline;
+    }
+
+    /**
+     * Начисление баллов за проверенное ДЗ или пробник.
+     * Обычное ДЗ: на 5 → +5, на 4 → +3.
+     * Пробник (MOCK_EXAM): score 60–79 → +15, 80–99 → +30, 100 → +100.
+     */
+    private void awardHomeworkPoints(Homework homework) {
+        try {
+            if (homework == null || homework.getStudent() == null) return;
+            Long studentId = homework.getStudent().getId();
+            Long hwId = homework.getId();
+
+            if ("MOCK_EXAM".equalsIgnoreCase(homework.getType())) {
+                Integer score = homework.getScore();
+                if (score == null) return;
+                int amount = 0;
+                String reason = null;
+                if (score >= 100) { amount = 100; reason = "MOCK_100"; }
+                else if (score >= 80) { amount = 30; reason = "MOCK_80_99"; }
+                else if (score >= 60) { amount = 15; reason = "MOCK_60_79"; }
+                if (amount > 0) {
+                    pointsService.award(studentId, amount, reason, hwId);
+                }
+                return;
+            }
+
+            // Обычное ДЗ
+            Integer grade = homework.getGrade();
+            if (grade == null) return;
+            int amount = 0;
+            String reason = null;
+            if (grade == 5) { amount = 5; reason = "HOMEWORK_5"; }
+            else if (grade == 4) { amount = 3; reason = "HOMEWORK_4"; }
+            if (amount > 0) {
+                pointsService.award(studentId, amount, reason, hwId);
+            }
+        } catch (Exception e) {
+            log.warn("Не удалось начислить баллы за ДЗ {}: {}", homework.getId(), e.getMessage());
+        }
     }
 }

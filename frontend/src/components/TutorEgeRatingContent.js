@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import NickWithCosmetics from './NickWithCosmetics';
 
 // ========== ПАЛИТРА ==========
 const BG_ALT = '#F5F5F7';
@@ -177,15 +178,15 @@ export default function TutorEgeRatingContent({ onStudentClick }) {
                                                 <Medallion color={medalColor} size={64}>
                                                     {place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉'}
                                                 </Medallion>
-                                                <Typography sx={{
-                                                    mt: 2,
-                                                    fontSize: '1.05rem',
-                                                    fontWeight: 800,
-                                                    color: INK,
-                                                    letterSpacing: '-0.01em',
-                                                }}>
-                                                    {row.fullName}
-                                                </Typography>
+                                                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                                                    <NickWithCosmetics
+                                                        studentId={row.studentId}
+                                                        name={row.fullName}
+                                                        avatar={null}
+                                                        showAvatar={false}
+                                                        fontSize="1.05rem"
+                                                    />
+                                                </Box>
                                                 <Typography sx={{
                                                     fontSize: '1.8rem',
                                                     fontWeight: 900,
@@ -297,30 +298,19 @@ export default function TutorEgeRatingContent({ onStudentClick }) {
                                                         )}
                                                     </TableCell>
                                                     <TableCell sx={{ py: 1.5 }}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                            <Avatar sx={{
-                                                                width: 36, height: 36,
-                                                                bgcolor: PURPLE_SOFT,
-                                                                color: PURPLE,
-                                                                fontWeight: 700,
-                                                                fontSize: '0.85rem',
-                                                            }}>
-                                                                {row.fullName?.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()}
-                                                            </Avatar>
-                                                            <Box>
-                                                                <Typography sx={{
-                                                                    fontSize: '0.92rem',
-                                                                    fontWeight: 600,
-                                                                    color: INK,
-                                                                }}>
-                                                                    {row.fullName}
+                                                        <Box>
+                                                            <NickWithCosmetics
+                                                                studentId={row.studentId}
+                                                                name={row.fullName}
+                                                                avatar={null}
+                                                                avatarSize={36}
+                                                                fontSize="0.92rem"
+                                                            />
+                                                            {row.grade && (
+                                                                <Typography sx={{ fontSize: '0.72rem', color: INK_MUTED, mt: 0.3 }}>
+                                                                    {row.grade} класс
                                                                 </Typography>
-                                                                {row.grade && (
-                                                                    <Typography sx={{ fontSize: '0.72rem', color: INK_MUTED }}>
-                                                                        {row.grade} класс
-                                                                    </Typography>
-                                                                )}
-                                                            </Box>
+                                                            )}
                                                         </Box>
                                                     </TableCell>
                                                     <TableCell align="center" sx={{ py: 1.5 }}>

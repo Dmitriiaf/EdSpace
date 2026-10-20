@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import NickWithCosmetics from '../components/NickWithCosmetics';
 
 // ========== ПАЛИТРА ==========
 const BG = '#FAFAFA';
@@ -494,28 +495,21 @@ function StudentTournament() {
                                                             </TableCell>
                                                             <TableCell sx={{ py: 1.25 }}>
                                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                    <Avatar sx={{
-                                                                        width: 28, height: 28,
-                                                                        bgcolor: PURPLE_SOFT, color: PURPLE,
-                                                                        fontSize: '0.7rem', fontWeight: 700,
-                                                                    }}>
-                                                                        {p.student?.fullName?.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()}
-                                                                    </Avatar>
-                                                                    <Typography sx={{
-                                                                        fontSize: '0.85rem',
-                                                                        fontWeight: isMe ? 700 : 500,
-                                                                        color: INK,
-                                                                    }}>
-                                                                        {p.student?.fullName || 'Ученик'}
-                                                                        {isMe && (
-                                                                            <Box component="span" sx={{
-                                                                                ml: 0.75, fontSize: '0.7rem',
-                                                                                color: PURPLE, fontWeight: 700,
-                                                                            }}>
-                                                                                (ты)
-                                                                            </Box>
-                                                                        )}
-                                                                    </Typography>
+                                                                    <NickWithCosmetics
+                                                                        studentId={p.student?.id}
+                                                                        name={p.student?.fullName || 'Ученик'}
+                                                                        avatar={p.student?.avatar}
+                                                                        avatarSize={28}
+                                                                        fontSize="0.85rem"
+                                                                    />
+                                                                    {isMe && (
+                                                                        <Box component="span" sx={{
+                                                                            fontSize: '0.7rem',
+                                                                            color: PURPLE, fontWeight: 700,
+                                                                        }}>
+                                                                            (ты)
+                                                                        </Box>
+                                                                    )}
                                                                 </Box>
                                                             </TableCell>
                                                             {[p.round1Score, p.round2Score, p.round3Score, p.round4Score].map((score, i) => (

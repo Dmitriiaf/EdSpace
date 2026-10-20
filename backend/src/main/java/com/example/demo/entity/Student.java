@@ -1,4 +1,3 @@
-// ========== backend/src/main/java/com/example/demo/entity/Student.java (ИСПРАВЛЕННАЯ ВЕРСИЯ) ==========
 package com.example.demo.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -60,7 +59,7 @@ public class Student {
     private String parentName;
     private String parentPhone;
 
-    // ===== Профиль ученика (НОВОЕ) =====
+    // ===== Профиль ученика =====
     @Column(name = "avatar", length = 500)
     private String avatar;
 
@@ -123,6 +122,13 @@ public class Student {
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
+    // ===== 🎮 Геймификация =====
+    @Column(name = "points_balance", nullable = false)
+    private Integer pointsBalance = 0;
+
+    @Column(name = "points_total", nullable = false)
+    private Integer pointsTotal = 0;
+
     public Student() {}
 
     public Student(String fullName, String email, String phone,
@@ -170,6 +176,8 @@ public class Student {
     public Boolean getArchived() { return archived; }
     public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
     public LocalDateTime getLockedUntil() { return lockedUntil; }
+    public Integer getPointsBalance() { return pointsBalance; }
+    public Integer getPointsTotal() { return pointsTotal; }
 
     // Сеттеры
     public Boolean getEgeRatingEnabled() { return egeRatingEnabled; }
@@ -207,6 +215,8 @@ public class Student {
     public void setLockedUntil(LocalDateTime lockedUntil) { this.lockedUntil = lockedUntil; }
     public void setEgeRatingEnabled(Boolean egeRatingEnabled) { this.egeRatingEnabled = egeRatingEnabled; }
     public void setEgeStudent(Boolean egeStudent) { this.egeStudent = egeStudent; }
+    public void setPointsBalance(Integer pointsBalance) { this.pointsBalance = pointsBalance; }
+    public void setPointsTotal(Integer pointsTotal) { this.pointsTotal = pointsTotal; }
 
     // ✅ Вспомогательные методы
     public boolean isLocked() {

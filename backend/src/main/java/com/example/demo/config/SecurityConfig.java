@@ -112,8 +112,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/homework/file/**").permitAll()
                         .requestMatchers("/ws-board/**").permitAll()
                         .requestMatchers("/api/boards/*/save-canvas").permitAll()
-                        .requestMatchers("/uploads/**").permitAll()
-
+                        .requestMatchers("/uploads/**", "/api/uploads/**").permitAll()
                         // Профиль ученика: явно разрешаем POST и PATCH
                         .requestMatchers(HttpMethod.POST, "/api/students/*/avatar").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/students/*/profile").authenticated()

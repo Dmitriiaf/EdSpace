@@ -23,6 +23,7 @@ import { format, addMinutes, parse, startOfWeek, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import axiosInstance from '../api/axiosConfig';
 import LessonRoom from './LessonRoom';
+import NickWithCosmetics from './NickWithCosmetics';
 import { getAllLessons, replaceCancelledWithResurrect, getCompletedLessons } from '../services/api';
 
 // ========== КОНСТАНТЫ ==========
@@ -117,7 +118,6 @@ const StyledButton = styled(Button)({
 function LessonNotesBlock({ selectedLesson, previousLesson }) {
     return (
         <>
-            {/* Собственные заметки урока (для завершённых / начатых) */}
             {selectedLesson?.notes && (
                 <Box sx={{ bgcolor: '#F9FAFB', borderRadius: 2, p: 2, mb: 2 }}>
                     <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', mb: 0.5 }}>
@@ -139,7 +139,6 @@ function LessonNotesBlock({ selectedLesson, previousLesson }) {
                 </Box>
             )}
 
-            {/* Предпросмотр из прошлого завершённого урока */}
             {previousLesson && (previousLesson.notes || previousLesson.nextLessonPlan) && (
                 <>
                     {previousLesson.notes && (
@@ -641,8 +640,13 @@ function UnifiedSchedule({
                                             <Chip label={statusStyle.label} size="small" sx={{ fontSize: '10px', height: 20, bgcolor: statusStyle.bg, color: statusStyle.text }} />
                                         </Box>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                            <Avatar sx={{ width: 24, height: 24, bgcolor: getAvatarColor(lesson.student?.fullName), fontSize: 11 }}>{getInitials(lesson.student?.fullName)}</Avatar>
-                                            <Typography sx={{ fontWeight: 500, fontSize: '14px' }}>{lesson.student?.fullName || 'Пробное'}</Typography>
+                                            <NickWithCosmetics
+                                                studentId={lesson.student?.id}
+                                                name={lesson.student?.fullName || 'Пробное'}
+                                                avatar={lesson.student?.avatar}
+                                                avatarSize={24}
+                                                fontSize="14px"
+                                            />
                                         </Box>
                                         {lesson.course && <Typography sx={{ fontSize: '12px', color: '#6B7280', mt: 0.3 }}>{lesson.course.name} • {lesson.duration || 60} мин</Typography>}
                                         {studentRate && lesson.status !== 'CANCELLED' && <Typography sx={{ fontSize: '15px', fontWeight: 600, color: '#10B981', mt: 0.5 }}>{studentRate} ₽</Typography>}

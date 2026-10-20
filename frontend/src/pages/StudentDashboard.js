@@ -10,6 +10,7 @@ import {
     Breadcrumbs, Link as MuiLink, Tabs, Tab,
     FormControl, Select, MenuItem
 } from '@mui/material';
+import NickWithCosmetics from '../components/NickWithCosmetics';
 import { styled, keyframes } from '@mui/material/styles';
 import { formatLessonTime } from '../utils/timezone';
 import { Payment as PaymentIcon } from '@mui/icons-material';
@@ -620,12 +621,24 @@ function StudentDashboard() {
                             }}>
                                 <Box>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-                                        <Typography sx={{
+                                        <Box sx={{
+                                            display: 'flex', alignItems: 'center', gap: 1,
                                             fontSize: { xs: '1.6rem', md: '2rem' },
                                             fontWeight: 800, letterSpacing: '-0.03em', color: INK,
                                         }}>
-                                            Привет, {user?.fullName?.split(' ')[0] || 'друг'} 👋
-                                        </Typography>
+                                            <Box component="span" sx={{ fontSize: { xs: '1.6rem', md: '2rem' }, fontWeight: 800, color: INK }}>
+                                                Привет,
+                                            </Box>
+                                            <Box component="span" sx={{ fontSize: { xs: '1.6rem', md: '2rem' }, fontWeight: 800 }}>
+                                                <NickWithCosmetics
+                                                    studentId={user?.allIds?.[0] || user?.id}
+                                                    name={user?.fullName?.split(' ')[0] || 'друг'}
+                                                    showAvatar={false}
+                                                    fontSize="inherit"
+                                                />
+                                            </Box>
+                                            <Box component="span" sx={{ fontSize: { xs: '1.6rem', md: '2rem' } }}>👋</Box>
+                                        </Box>
 
                                         <Chip
                                             icon={<Box component="span" sx={{ fontSize: '0.85rem' }}>🏆</Box>}

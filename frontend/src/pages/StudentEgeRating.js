@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosConfig';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import NickWithCosmetics from '../components/NickWithCosmetics';
 
 // ========== ПАЛИТРА ==========
 const BG_ALT = '#F5F5F7';
@@ -113,7 +114,6 @@ export default function EgeRatingContent() {
 
     return (
         <>
-            {/* КНОПКА ОБНОВИТЬ */}
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
                 <StyledButton
                     variant="outlined"
@@ -128,7 +128,6 @@ export default function EgeRatingContent() {
                 </StyledButton>
             </Box>
 
-            {/* ПУСТО */}
             {rating.length === 0 && (
                 <Reveal delay={0.05}>
                     <Paper sx={{
@@ -262,20 +261,23 @@ export default function EgeRatingContent() {
                                                 <Medallion color={medalColor} size={64}>
                                                     {place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉'}
                                                 </Medallion>
-                                                <Typography sx={{
-                                                    mt: 2,
-                                                    fontSize: '1.05rem',
-                                                    fontWeight: 800,
-                                                    color: INK,
-                                                    letterSpacing: '-0.01em',
-                                                }}>
-                                                    {row.fullName}
+                                                
+                                                {/* Аватарка + Ник в ТОП-3 */}
+                                                <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                    <NickWithCosmetics
+                                                        studentId={row.studentId}
+                                                        name={row.fullName}
+                                                        avatar={row.avatar}
+                                                        avatarSize={48}
+                                                        fontSize="1.05rem"
+                                                    />
                                                     {isMe && (
-                                                        <Box component="span" sx={{ ml: 1, fontSize: '0.75rem', color: PURPLE, fontWeight: 700 }}>
+                                                        <Box component="span" sx={{ mt: 0.5, fontSize: '0.75rem', color: PURPLE, fontWeight: 700 }}>
                                                             (ты)
                                                         </Box>
                                                     )}
-                                                </Typography>
+                                                </Box>
+
                                                 <Typography sx={{
                                                     fontSize: '1.8rem',
                                                     fontWeight: 900,
@@ -387,35 +389,26 @@ export default function EgeRatingContent() {
                                                         )}
                                                     </TableCell>
                                                     <TableCell sx={{ py: 1.5 }}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                            <Avatar sx={{
-                                                                width: 36, height: 36,
-                                                                bgcolor: PURPLE_SOFT,
-                                                                color: PURPLE,
-                                                                fontWeight: 700,
-                                                                fontSize: '0.85rem',
-                                                            }}>
-                                                                {row.fullName?.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()}
-                                                            </Avatar>
-                                                            <Box>
-                                                                <Typography sx={{
-                                                                    fontSize: '0.92rem',
-                                                                    fontWeight: isMe ? 800 : 600,
-                                                                    color: INK,
-                                                                }}>
-                                                                    {row.fullName}
-                                                                    {isMe && (
-                                                                        <Box component="span" sx={{ ml: 0.75, fontSize: '0.72rem', color: PURPLE, fontWeight: 700 }}>
-                                                                            (ты)
-                                                                        </Box>
-                                                                    )}
-                                                                </Typography>
-                                                                {row.grade && (
-                                                                    <Typography sx={{ fontSize: '0.72rem', color: INK_MUTED }}>
-                                                                        {row.grade} класс
-                                                                    </Typography>
+                                                        <Box>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <NickWithCosmetics
+                                                                    studentId={row.studentId}
+                                                                    name={row.fullName}
+                                                                    avatar={row.avatar}
+                                                                    avatarSize={36}
+                                                                    fontSize="0.92rem"
+                                                                />
+                                                                {isMe && (
+                                                                    <Box component="span" sx={{ fontSize: '0.72rem', color: PURPLE, fontWeight: 700 }}>
+                                                                        (ты)
+                                                                    </Box>
                                                                 )}
                                                             </Box>
+                                                            {row.grade && (
+                                                                <Typography sx={{ fontSize: '0.72rem', color: INK_MUTED, mt: 0.3 }}>
+                                                                    {row.grade} класс
+                                                                </Typography>
+                                                            )}
                                                         </Box>
                                                     </TableCell>
                                                     <TableCell align="center" sx={{ py: 1.5 }}>

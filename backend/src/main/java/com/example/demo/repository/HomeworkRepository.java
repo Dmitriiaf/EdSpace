@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 
 @Repository
@@ -13,6 +14,12 @@ public interface HomeworkRepository extends JpaRepository<Homework, Long> {
     List<Homework> findByStudentId(Long studentId);
     List<Homework> findByStudentIdAndStatus(Long studentId, String status);
     List<Homework> findByTutorId(Long tutorId);
+
+    long countByStudentId(Long studentId);
+    long countByStudentIdAndGrade(Long studentId, Integer grade);
+    long countByStudentIdAndStatus(Long studentId, String status);
+
+    List<Homework> findByStudentIdAndTypeOrderByCreatedAtDesc(Long studentId, String type);
 
     @Transactional
     void deleteByStudentId(Long studentId);

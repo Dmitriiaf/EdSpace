@@ -26,6 +26,8 @@ public class TournamentService {
     private final TournamentRepository tournamentRepository;
     private final TournamentParticipantRepository participantRepository;
     private final StudentRepository studentRepository;
+    private final PointsService pointsService;
+    private final AchievementService achievementService;
 
     // ========== ТУРНИРЫ ==========
 
@@ -53,9 +55,23 @@ public class TournamentService {
     @Transactional
     public Tournament updateTournament(Long id, Map<String, Object> updates) {
         Tournament t = getTournamentById(id);
+        String oldStatus = t.getStatus();
+
         if (updates.get("name") != null) t.setName((String) updates.get("name"));
         if (updates.get("status") != null) t.setStatus((String) updates.get("status"));
-        return tournamentRepository.save(t);
+
+        t = tournamentRepository.save(t);
+
+        // 🎮 Призы за места — при переходе ACTIVE → любой другой статус (FINISHED и т.п.)
+        String newStatus = t.getStatus();
+        boolean justFinished = "ACTIVE".equalsIgnoreCase(oldStatus)
+                && newStatus != null
+                && !"ACTIVE".equalsIgnoreCase(newStatus);
+        if (justFinished) {
+            awardTournamentPlaces(t.getId());
+        }
+
+        return t;
     }
 
     @Transactional
@@ -101,8 +117,28 @@ public class TournamentService {
     public TournamentParticipant approveParticipant(Long participantId, boolean approved) {
         TournamentParticipant p = participantRepository.findById(participantId)
                 .orElseThrow(() -> new RuntimeException("Участник не найден"));
+
+        String oldStatus = p.getStatus();
         p.setStatus(approved ? "APPROVED" : "REJECTED");
-        return participantRepository.save(p);
+        p = participantRepository.save(p);
+
+        // 🎮 +20 за одобренное участие (только при переходе в APPROVED)
+        if (approved && !"APPROVED".equals(oldStatus)) {
+            try {
+                pointsService.award(
+                        p.getStudent().getId(),
+                        20,
+                        "TOURNAMENT_JOIN",
+                        p.getId()
+                );
+                achievementService.unlock(p.getStudent().getId(), "TOURNAMENT_JOIN");
+            } catch (Exception e) {
+                log.warn("Не удалось начислить баллы за участие в турнире (participantId={}): {}",
+                        p.getId(), e.getMessage());
+            }
+        }
+
+        return p;
     }
 
     @Transactional
@@ -216,6 +252,56 @@ public class TournamentService {
             return Integer.parseInt(s);
         } catch (NumberFormatException e) {
             return null;
+        }
+    }
+
+    /**
+     * Начисляет баллы за 1/2/3 место после завершения турнира.
+     * 1 место → +200, 2 → +100, 3 → +50.
+     * Защита от повторного начисления — в PointsService (studentId + reason + relatedId).
+     */
+    private void awardTournamentPlaces(Long tournamentId) {
+        try {
+            List<TournamentParticipant> participants = participantRepository.findByTournamentId(tournamentId);
+
+            for (TournamentParticipant p : participants) {
+                if (p.getPlace() == null) continue;
+                if (!"APPROVED".equals(p.getStatus())) continue;
+
+                int amount = 0;
+                String reason = null;
+                String achievementKey = null;
+
+                if (p.getPlace() == 1) {
+                    amount = 200; reason = "TOURNAMENT_1"; achievementKey = "TOURNAMENT_1";
+                } else if (p.getPlace() == 2) {
+                    amount = 100; reason = "TOURNAMENT_2"; achievementKey = "TOURNAMENT_2";
+                } else if (p.getPlace() == 3) {
+                    amount = 50; reason = "TOURNAMENT_3"; achievementKey = "TOURNAMENT_3";
+                }
+
+                if (amount > 0) {
+                    pointsService.award(
+                            p.getStudent().getId(),
+                            amount,
+                            reason,
+                            p.getId()
+                    );
+                    achievementService.unlock(p.getStudent().getId(), achievementKey);
+                }
+            }
+
+            // Ачивка за лучший прогресс (максимальный averageProgress)
+            TournamentParticipant bestProgress = participants.stream()
+                    .filter(p -> "APPROVED".equals(p.getStatus()) && p.getAverageProgress() != null)
+                    .max(Comparator.comparing(TournamentParticipant::getAverageProgress))
+                    .orElse(null);
+            if (bestProgress != null) {
+                achievementService.unlock(bestProgress.getStudent().getId(), "TOURNAMENT_PROGRESS");
+            }
+
+        } catch (Exception e) {
+            log.warn("Не удалось начислить баллы за турнир {}: {}", tournamentId, e.getMessage());
         }
     }
 }
